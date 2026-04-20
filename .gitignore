@@ -14,6 +14,8 @@ node_modules
 # Build & Logs (AIOS)
 dist/
 build/
+.next/
+.turbo/
 *.log
 logs/
 
