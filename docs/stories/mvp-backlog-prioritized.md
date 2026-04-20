@@ -4,7 +4,7 @@
 **Fontes:** `docs/prd.md`, `docs/architecture.md`, `docs/front-end-spec.md`  
 **Autor:** SM (River / AIOS)  
 **Data:** 2026-04-20  
-**Versão:** 0.3 — refinamento pós-revisão PO (P04↔P08, P06 polling, P14 headers, índice)
+**Versão:** 0.4 — alinhamento DoR/PO (dependências explícitas, riscos, critérios de corte)
 
 ---
 
@@ -49,6 +49,28 @@ Cada história deve cumprir **antes** de entrar em sprint:
 4. **Executor** e **quality gate** preenchidos; risco ou integração externa mencionados em Dev Notes.
 5. Estado **Draft** → **Approved** apenas após `*validate-story-draft` (PO).
 
+### Ciclo de vida (estados no backlog)
+
+| Estado | Significado |
+| ------ | ----------- |
+| **Draft** | Conteúdo em elaboração; **não** pronto para sprint até PO aprovar. |
+| **Approved** | DoR cumprida; PO validou (`*validate-story-draft`); pode entrar em sprint. |
+| **Ready for Dev** | Aprovada e priorizada para implementação imediata (opcional — equipa pode usar só Approved). |
+| **In Progress** | Em desenvolvimento. |
+| **Ready for Review** | Implementação entregue; aguarda QA / merge. |
+| **Done** | Aceite em produção ou critério de “feito” da equipa. |
+
+*Nota:* histórias neste ficheiro podem permanecer **Draft** no texto enquanto o código já evoluiu (ex.: P01) — o PO deve sincronizar estado quando fizer sentido.
+
+### Modelo mínimo por história (checklist PO)
+
+Cada secção **Pxx** deve incluir, quando aplicável:
+
+1. **Dependências (DoR)** — predecessoras **Done** ou **waived** (registar waived em nota).
+2. **Referências** — apontador curto a `docs/prd.md`, `docs/architecture.md`, `docs/front-end-spec.md` (secções ou FR).
+3. **Risco / integração** — uma linha em **Dev Notes** ou bloco **Riscos (DoR)** se houver integração externa, PII ou decisão reversível.
+4. **Critérios de corte** — evitar a palavra “opcional” sem alternativa binária: ou está **fora do âmbito** desta história, ou tem **AC numerado** que o valida.
+
 ### Índice de artefactos
 
 - **Fonte única do backlog MVP:** este ficheiro (`mvp-backlog-prioritized.md`). Ficheiros por história em `docs/stories/*.md` são **opcionais**; quando existirem, regenerar índice com `*stories-index` (PO).
@@ -87,6 +109,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Ready for Review  
 
+**Dependências (DoR):** Nenhuma (história raiz).
+
+**Referências (DoR):** `docs/architecture.md` — *Repository Structure*, *Tech Stack*; matriz FR/NFR neste documento (NFR5–NFR10 / pipeline).
+
+**Riscos (DoR):** Baixo — stack standard; sem dados pessoais.
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -118,17 +146,52 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 - **Arquitetura:** `docs/architecture.md` — secções *Repository Structure*, *Unified Project Structure*, *Development Workflow*.
 - **Stack:** Node LTS, TypeScript; sem inventar serviços além do descrito.
-- **Testing:** smoke manual do health; teste automatizado opcional nesta história (Vitest no app web).
+- **Testing:** smoke manual de **GET /api/health** (200 + JSON mínimo) obrigatório antes de marcar **Done**. Teste automatizado (Vitest/Playwright) **não** faz parte do âmbito obrigatório desta história; se for acrescentado mais tarde, deve validar explicitamente status e corpo (evitar “opcional” sem critério — DoR).
 
 ### Testing
 
-- Correr CI localmente: `pnpm lint && pnpm build` (ou equivalente definido no root).
+- Correr CI localmente na raiz: `pnpm lint && pnpm typecheck && pnpm build` (equivalente ao workflow GitHub Actions).
+
+### QA Results
+
+**Revisor:** QA (Quinn) · **Data:** 2026-04-20  
+**Âmbito:** Story **P01** (este ficheiro contém o backlog completo; apenas P01 foi implementada no código na data da revisão).
+
+**Decisão de gate:** **PASS** (ressalvas menores abaixo).
+
+#### Rastreio aos Acceptance Criteria (P01)
+
+| AC | Resultado | Notas |
+| -- | --------- | ----- |
+| 1 | PASS | Monorepo com Turborepo (`turbo.json`), pnpm (`pnpm-workspace.yaml`, `packageManager`), `apps/web` e `packages/shared` (`@repo/shared`), alinhado a `docs/architecture.md`. |
+| 2 | PASS | `.github/workflows/ci.yml` executa `pnpm lint`, `pnpm typecheck` e `pnpm build` em `pull_request` e `push` para `main`. |
+| 3 | PASS | Rota `GET /api/health` em `apps/web/src/app/api/health/route.ts` devolve 200 e JSON com `status: "ok"` (campo extra `app` não viola o critério). |
+| 4 | PASS | `README.md` na raiz documenta `pnpm install` e `pnpm dev`. |
+| 5 | PASS | Proteção da branch default descrita no README, com nota adequada quando o remoto/GitHub ainda não aplica regra. |
+
+#### Evidência (comandos na raiz do repositório)
+
+- `pnpm lint` — concluído sem erros.
+- `pnpm typecheck` — concluído sem erros.
+- `pnpm build` — concluído com sucesso (inclui `/api/health` no output de rotas).
+
+#### Ressalvas e risco
+
+- **Gate de arquitetura:** O backlog indica **quality_gate: @architect**; esta revisão cobre testabilidade dos AC e pipeline, não substitui uma passagem explícita do architect sobre fronteiras de pacotes se ainda não existir.
+- **Teste automatizado do health:** A story admite teste opcional; não há teste Vitest/Playwright dedicado — aceitável para P01, opcional registar como melhoria futura.
+- **Restante do backlog (P02–P14):** Fora do âmbito desta revisão.
 
 ---
 
 ## P02 — Story 1.2: Autenticação de conta (registo, login, sessão)
 
 **Status:** Draft  
+
+**Dependências (DoR):** P01 concluída (**waived** pelo PO apenas se CI/monorepo já existir noutro ramo — documentar).
+
+**Referências (DoR):** `docs/prd.md` (FR1, FR2); `docs/architecture.md` (*Authentication and Authorization*); `docs/front-end-spec.md` (fluxos auth e recuperação).
+
+**Riscos (DoR):** Médio — segredos (`AUTH_SECRET`), hashing de passwords, anti-enumeração em reset; email transacional depende de provider (dev vs prod).
 
 **Executor Assignment**
 
@@ -173,6 +236,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P02 (sessão e rotas de auth funcionais).
+
+**Referências (DoR):** `docs/prd.md` (Epic 1.3); `docs/front-end-spec.md` (*Site Map*, labels); `docs/architecture.md` (middleware / App Router).
+
+**Riscos (DoR):** Baixo a médio — regressões de redirect e landmarks WCAG.
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -212,6 +281,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 ## P04 — Story 2.1: Modelo de dados e API REST de empresas
 
 **Status:** Draft  
+
+**Dependências (DoR):** P03 (grupo autenticado e identidade de conta disponível para `account_id`).
+
+**Referências (DoR):** `docs/prd.md` (FR3–FR5, FR4); `docs/architecture.md` (*Data Models — Company*, *API Specification*, `ApiErrorBody`).
+
+**Riscos (DoR):** Médio — validação CNPJ e unicidade; migrações em Neon/Postgres.
 
 **Executor Assignment**
 
@@ -258,6 +333,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P04 (empresas persistidas e API base).
+
+**Referências (DoR):** `docs/prd.md` (FR15, FR16); `docs/architecture.md` (*Data Models — Job*); `docs/front-end-spec.md` (dashboard / colunas).
+
+**Riscos (DoR):** Médio — contrato `lastJob` deve permanecer estável para P06; performance de agregação (evitar N+1).
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -299,6 +380,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P04 e P05 (API empresas + `lastJob`).
+
+**Referências (DoR):** `docs/prd.md` (FR16, FR3); `docs/front-end-spec.md` (*Dashboard*, *Wireframes*).
+
+**Riscos (DoR):** Médio — polling condicional e UX de estados `pending`/`running`; alinhamento com P08 quando job imediato existir.
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -339,7 +426,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 ## P14 — Story (transversal): LGPD mínimo, auditoria append-only e rate limit
 
 **Status:** Draft  
-**Pré-requisitos:** P02, P03 concluídos — **executar esta história antes de P07 e P10** (ver tabela de priorização).
+
+**Dependências (DoR):** P02, P03 concluídos. **Ordem de implementação:** executar **imediatamente após P06** (antes de P07 e P10) — ver tabela de priorização; não bloquear P04–P06.
+
+**Referências (DoR):** `docs/prd.md` (NFR3, NFR4); `docs/architecture.md` (*Security*, Redis/Upstash, auditoria).
+
+**Riscos (DoR):** Alto impacto legal/UX — texto `/privacidade` revisável pelo PO; headers e rate limit podem afetar integrações e testes e2e.
 
 **Executor Assignment**
 
@@ -386,7 +478,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 ## P07 — Story 2.3: UI — detalhe, edição e desativação
 
 **Status:** Draft  
-**Depende de:** P14 (auditoria e rodapé/privacidade disponíveis).
+
+**Dependências (DoR):** P06; **P14** obrigatória (auditoria `recordAudit`, rodapé com `/privacidade`, headers baseline aplicáveis).
+
+**Referências (DoR):** `docs/prd.md` (FR17); `docs/front-end-spec.md` (detalhe, fluxo desativar).
+
+**Riscos (DoR):** Médio — fluxo destrutivo (desativar); cópia de agendamento mensal dependente de P12 (AC 5 já prevê fallback).
 
 **Executor Assignment**
 
@@ -429,6 +526,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P05, P06 (fluxo de criação na UI e contrato `lastJob`); base P04 para **POST /v1/companies**.
+
+**Referências (DoR):** `docs/prd.md` (FR9); `docs/architecture.md` (*Core Workflows — Cadastro de empresa*); alinhar com notas P04↔P08 em P04.
+
+**Riscos (DoR):** Alto — transação empresa+job; idempotência e retries do cliente; deve substituir caminho único do handler P04.
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -470,6 +573,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P01 (monorepo com slot para `apps/agent-desktop` ou equivalente documentado).
+
+**Referências (DoR):** `docs/prd.md` (FR6, FR7); `docs/architecture.md` (*Unified Project Structure*, agente desktop).
+
+**Riscos (DoR):** Médio — distribuição Windows, paths locais e permissões.
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -507,7 +616,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 ## P10 — Story 3.2: Agente — pairing seguro com a conta
 
 **Status:** Draft  
-**Depende de:** P14 (auditoria e rate limit aplicáveis a rotas sensíveis).
+
+**Dependências (DoR):** P02, P09; **P14** (auditoria, rate limit em rotas sensíveis, headers onde aplicável).
+
+**Referências (DoR):** `docs/prd.md` (FR8, NFR4); `docs/architecture.md` (*Data Models* pairing/device, *API Specification*).
+
+**Riscos (DoR):** Alto — superfície de ataque em códigos de pairing e tokens; dependência de TLS e armazenamento de hashes.
 
 **Executor Assignment**
 
@@ -552,6 +666,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P08 (jobs e fila coerentes), P10 (device token e auditoria base).
+
+**Referências (DoR):** `docs/prd.md` (FR6, FR12, FR13); `docs/architecture.md` (*Agente — protocolo mínimo*, *Core Workflows*).
+
+**Riscos (DoR):** Alto — WebSocket/canal long-lived, path traversal, logs sem segredos (NFR2).
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -592,6 +712,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 
 **Status:** Draft  
 
+**Dependências (DoR):** P05 (modelo `jobs` e retries), P11 (agente executa trabalho).
+
+**Referências (DoR):** `docs/prd.md` (FR10–FR12); `docs/architecture.md` (*Deployment*, `CRON_SECRET`).
+
+**Riscos (DoR):** Médio a alto — fuso `America/São_Paulo`, idempotência mensal, Vercel Cron/segredo.
+
 **Executor Assignment**
 
 - **executor:** `@dev`
@@ -630,6 +756,12 @@ Cada história deve cumprir **antes** de entrar em sprint:
 ## P13 — Story 4.4: Conector MVP (stub ou integração única)
 
 **Status:** Draft  
+
+**Dependências (DoR):** P11 (pipeline agente/job até gravação).
+
+**Referências (DoR):** `docs/prd.md` (FR14, risco R1); `docs/architecture.md` (*Connector Service*).
+
+**Riscos (DoR):** Médio — dependência de sistemas externos; stub deve ser explicitamente “não produção” se aplicável.
 
 **Executor Assignment**
 
@@ -681,6 +813,7 @@ Cada história deve cumprir **antes** de entrar em sprint:
 | 2026-04-20 | 0.1     | Backlog MVP priorizado inicial                                              | SM AIOS  |
 | 2026-04-20 | 0.2     | Matriz FR/NFR, DoR, P14 compliance/auditoria/rate limit; AC binários P02/P05/P08; P07/P10 com auditoria; ordem P14 antes P07/P10 | SM AIOS  |
 | 2026-04-20 | 0.3     | PO: P04 AC6 + Dev Notes P04↔P08; P06 AC3 polling binário; P14 AC6 headers; índice artefactos | SM AIOS  |
+| 2026-04-20 | 0.4     | DoR/PO: ciclo de vida e checklist por história; Dependências/Referências/Riscos (DoR) em P01–P14; P01 critérios de teste sem “opcional” ambíguo; P01 Testing alinhado ao CI (typecheck) | Backlog |
 
 ---
 
