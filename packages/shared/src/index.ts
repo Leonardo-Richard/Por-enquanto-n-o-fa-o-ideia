@@ -4,3 +4,17 @@ export const APP_SLUG = "portal-automacao-nf" as const;
 export type HealthStatus = {
   status: "ok" | "degraded";
 };
+
+export {
+  sanitizeCnpj,
+  formatCnpj,
+  isValidCnpj,
+} from "./cnpj";
+
+export type {
+  Company,
+  Execution,
+  ExecutionStatus,
+  ExecutionTrigger,
+  PortalSettings,
+} from "./portal-types";
