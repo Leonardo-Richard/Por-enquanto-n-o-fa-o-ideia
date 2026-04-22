@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { usePortal } from "@/context/portal-provider";
+import { useAppSession } from "@/context/app-session";
+import { signOut } from "@/lib/auth-browser";
 
 const nav = [
   { href: "/dashboard", label: "Painel" },
@@ -13,7 +14,14 @@ const nav = [
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, logout } = usePortal();
+  const { data } = useAppSession();
+
+  async function logout() {
+    await signOut();
+    window.location.href = "/login";
+  }
+
+  const email = data?.user?.email ?? "";
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -24,7 +32,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               Portal NF
             </Link>
             <p className="mt-1 truncate text-xs text-black/50 dark:text-white/45">
-              {user?.email}
+              {email}
             </p>
           </div>
           <nav className="flex flex-1 flex-col gap-0.5 px-2">
@@ -57,7 +65,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </Link>
             <button
               type="button"
-              onClick={() => logout()}
+              onClick={() => void logout()}
               className="mt-1 w-full rounded-lg px-3 py-2 text-left text-xs text-black/60 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/[0.06]"
             >
               Sair
@@ -71,7 +79,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <span className="text-sm font-semibold">Portal NF</span>
               <button
                 type="button"
-                onClick={() => logout()}
+                onClick={() => void logout()}
                 className="text-xs text-emerald-700 dark:text-emerald-400"
               >
                 Sair

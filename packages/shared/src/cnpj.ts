@@ -4,12 +4,27 @@ export function sanitizeCnpj(input: string): string {
   return input.replace(/\D/g, "").slice(0, 14);
 }
 
+/** CNPJ mascarado para listagens (sem expor dígitos centrais). */
+export function maskCnpjDigits(digits: string): string {
+  const d = sanitizeCnpj(digits);
+  if (d.length !== 14) {
+    return d;
+  }
+  return `${d.slice(0, 2)}.***.***/${d.slice(8, 12)}-${d.slice(12, 14)}`;
+}
+
 export function formatCnpj(digits: string): string {
   const d = sanitizeCnpj(digits);
   if (d.length !== 14) {
     return d;
   }
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12, 14)}`;
+}
+
+/** Formata 14 dígitos; caso contrário devolve o texto (ex.: CNPJ mascarado da listagem). */
+export function displayCnpjLabel(value: string): string {
+  const d = sanitizeCnpj(value);
+  return d.length === 14 ? formatCnpj(d) : value;
 }
 
 const WEIGHTS_1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] as const;

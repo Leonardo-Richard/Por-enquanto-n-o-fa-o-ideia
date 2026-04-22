@@ -2,23 +2,26 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
-import { usePortal } from "@/context/portal-provider";
+import { useAppSession } from "@/context/app-session";
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { hydrated, user } = usePortal();
+export function SessionAuthGate({ children }: { children: React.ReactNode }) {
+  const { data, isPending } = useAppSession();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (hydrated && !user) {
+    if (isPending) {
+      return;
+    }
+    if (!data?.user) {
       const qs = searchParams.toString();
       const full = qs ? `${pathname}?${qs}` : pathname;
       router.replace(`/login?next=${encodeURIComponent(full)}`);
     }
-  }, [hydrated, user, router, pathname, searchParams]);
+  }, [isPending, data?.user, router, pathname, searchParams]);
 
-  if (!hydrated) {
+  if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-sm text-black/60 dark:text-white/55">
         Carregando…
@@ -26,7 +29,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) {
+  if (!data?.user) {
     return null;
   }
 

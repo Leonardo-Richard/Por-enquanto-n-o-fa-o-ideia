@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatCnpj } from "@repo/shared";
+import { displayCnpjLabel } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
 
 export default function ExecucoesPage() {
@@ -44,7 +44,7 @@ export default function ExecucoesPage() {
                     {new Date(e.startedAt).toLocaleString("pt-BR")}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs tabular-nums">
-                    {formatCnpj(e.companyCnpjDigits)}
+                    {displayCnpjLabel(e.companyCnpjDigits)}
                   </td>
                   <td className="px-4 py-3 text-xs">{triggerLabel(e.trigger)}</td>
                   <td className="px-4 py-3">

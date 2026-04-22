@@ -2,25 +2,24 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useState } from "react";
-import { formatCnpj, messageFromMonthlyRunDayParse } from "@repo/shared";
+import { useEffect, useId, useState } from "react";
+import { formatCnpj, messageFromMonthlyRunDayParse, type Company } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
+import { useAppSession } from "@/context/app-session";
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export default function EmpresaDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const { companies, pathForCompany, runSync, updateCompany, removeCompany } =
-    usePortal();
+  const { pathForCompany, runSync } = usePortal();
+  const { refetch } = useAppSession();
   const router = useRouter();
   const monthlyHelpId = useId();
   const monthlyRunDayErrorId = useId();
 
-  const company = useMemo(
-    () => companies.find((c) => c.id === id),
-    [companies, id],
-  );
+  const [company, setCompany] = useState<Company | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [tradeName, setTradeName] = useState("");
   const [systemCode, setSystemCode] = useState("");
@@ -29,26 +28,47 @@ export default function EmpresaDetailPage() {
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (company) {
-      setTradeName(company.tradeName);
-      setSystemCode(company.systemCode);
-      setMonthlyRunDay(company.monthlyRunDay);
+    if (!id) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setLoadError(null);
+      const res = await fetch(`/api/v1/companies/${id}`, { credentials: "include" });
+      if (!res.ok) {
+        if (!cancelled) {
+          setLoadError("Empresa não encontrada ou sem acesso.");
+          setCompany(null);
+        }
+        return;
+      }
+      const body = (await res.json()) as { company: Company };
+      if (cancelled) {
+        return;
+      }
+      setCompany(body.company);
+      setTradeName(body.company.tradeName);
+      setSystemCode(body.company.systemCode);
+      setMonthlyRunDay(body.company.monthlyRunDay);
       setDirty(false);
       setFieldError(null);
-    }
-  }, [company]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
-  if (!company) {
+  if (loadError || !company) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-black/65 dark:text-white/60">
-          Empresa não encontrada.
+          {loadError ?? "A carregar…"}
         </p>
         <Link
           href="/empresas"
           className="text-sm font-medium text-emerald-700 dark:text-emerald-400"
         >
-          Voltar à lista
+          Voltar ao picker
         </Link>
       </div>
     );
@@ -57,19 +77,51 @@ export default function EmpresaDetailPage() {
   const comp = company;
   const path = pathForCompany(comp);
 
-  function save() {
+  async function save() {
     setFieldError(null);
     const monthlyErr = messageFromMonthlyRunDayParse(monthlyRunDay);
     if (monthlyErr) {
       setFieldError(monthlyErr);
       return;
     }
-    updateCompany(comp.id, {
-      tradeName,
-      systemCode,
-      monthlyRunDay,
+    const res = await fetch(`/api/v1/companies/${comp.id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tradeName,
+        systemCode,
+        monthlyRunDay,
+      }),
     });
+    if (!res.ok) {
+      setFieldError("Não foi possível guardar.");
+      return;
+    }
+    const body = (await res.json()) as { company: Company };
+    setCompany(body.company);
     setDirty(false);
+  }
+
+  async function remove() {
+    if (
+      typeof window === "undefined" ||
+      !window.confirm(
+        "Remover esta empresa da plataforma? Os vínculos de membros serão removidos.",
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/v1/companies/${comp.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      window.alert("Sem permissão ou erro ao remover.");
+      return;
+    }
+    await refetch(true);
+    router.push("/empresas");
   }
 
   const monthlySelectDescribedBy = fieldError
@@ -85,12 +137,19 @@ export default function EmpresaDetailPage() {
         >
           ← Empresas
         </Link>
-        <h1 className="mt-4 font-mono text-2xl font-semibold tabular-nums tracking-tight">
-          {formatCnpj(comp.cnpjDigits)}
-        </h1>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-mono text-2xl font-semibold tabular-nums tracking-tight">
+            {formatCnpj(comp.cnpjDigits)}
+          </h1>
+          <Link
+            href={`/empresas/${comp.id}/usuarios`}
+            className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          >
+            Utilizadores →
+          </Link>
+        </div>
         <p className="mt-1 text-xs text-black/50 dark:text-white/45">
-          Cadastrada em{" "}
-          {new Date(comp.createdAt).toLocaleString("pt-BR")}
+          Cadastrada em {new Date(comp.createdAt).toLocaleString("pt-BR")}
         </p>
         <p className="mt-4 max-w-xl text-sm text-black/70 dark:text-white/65">
           Coleta automática mensal: dia <strong>{comp.monthlyRunDay}</strong>, às
@@ -191,7 +250,7 @@ export default function EmpresaDetailPage() {
           <button
             type="button"
             disabled={!dirty}
-            onClick={save}
+            onClick={() => void save()}
             className="rounded-lg bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Salvar alterações
@@ -202,14 +261,14 @@ export default function EmpresaDetailPage() {
       <section className="flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={() => runSync(comp.id, "manual")}
+          onClick={() => runSync(comp.id, "manual", comp.cnpjDigits)}
           className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-100"
         >
           Sincronizar agora
         </button>
         <button
           type="button"
-          onClick={() => runSync(comp.id, "monthly")}
+          onClick={() => runSync(comp.id, "monthly", comp.cnpjDigits)}
           className="rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/15"
         >
           Simular coleta mensal (dia {comp.monthlyRunDay})
@@ -219,17 +278,7 @@ export default function EmpresaDetailPage() {
       <section className="border-t border-black/5 pt-8 dark:border-white/10">
         <button
           type="button"
-          onClick={() => {
-            if (
-              typeof window !== "undefined" &&
-              window.confirm(
-                "Remover esta empresa e o histórico de execuções associado neste navegador?",
-              )
-            ) {
-              removeCompany(comp.id);
-              router.push("/empresas");
-            }
-          }}
+          onClick={() => void remove()}
           className="text-sm text-red-600 hover:underline dark:text-red-400"
         >
           Excluir empresa…

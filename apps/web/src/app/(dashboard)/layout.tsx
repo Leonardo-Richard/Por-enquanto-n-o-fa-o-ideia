@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { AuthGate } from "@/components/auth-gate";
+import { SessionAuthGate } from "@/components/session-auth-gate";
+import { WorkspaceGate } from "@/components/workspace-gate";
 import { DashboardShell } from "@/components/dashboard-shell";
 
 export default function DashboardGroupLayout({
@@ -15,9 +16,11 @@ export default function DashboardGroupLayout({
         </div>
       }
     >
-      <AuthGate>
-        <DashboardShell>{children}</DashboardShell>
-      </AuthGate>
+      <SessionAuthGate>
+        <WorkspaceGate>
+          <DashboardShell>{children}</DashboardShell>
+        </WorkspaceGate>
+      </SessionAuthGate>
     </Suspense>
   );
 }

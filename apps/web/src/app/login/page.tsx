@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
-import { usePortal } from "@/context/portal-provider";
+import { useAppSession } from "@/context/app-session";
+import { signInEmail } from "@/lib/auth-browser";
 
 function safeNext(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) {
@@ -12,8 +13,28 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
+async function tryAutoSelectSingleCompany() {
+  const res = await fetch("/api/v1/companies/accessible?page=1&pageSize=5", {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    return;
+  }
+  const body = (await res.json()) as { items: { id: string }[]; total: number };
+  if (body.total !== 1 || !body.items[0]) {
+    return;
+  }
+  const only = body.items[0].id;
+  await fetch("/api/v1/session/active-company", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ companyId: only }),
+  });
+}
+
 function LoginForm() {
-  const { hydrated, user, login } = usePortal();
+  const { data, isPending, refetch } = useAppSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = useMemo(
@@ -22,19 +43,40 @@ function LoginForm() {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (hydrated && user) {
-      router.replace(nextPath);
+    if (!isPending && data?.user) {
+      void (async () => {
+        await tryAutoSelectSingleCompany();
+        router.replace(nextPath);
+      })();
     }
-  }, [hydrated, user, router, nextPath]);
+  }, [isPending, data?.user, router, nextPath]);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    login(email, password);
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await signInEmail(email.trim(), password);
+      if (!r.ok) {
+        setError(r.message);
+        return;
+      }
+      await refetch();
+      await tryAutoSelectSingleCompany();
+      await refetch();
+      router.replace(nextPath);
+    } catch {
+      setError("Não foi possível entrar. Tente novamente.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  if (!hydrated) {
+  if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-black/60 dark:text-white/55">
         Carregando…
@@ -42,7 +84,7 @@ function LoginForm() {
     );
   }
 
-  if (user) {
+  if (data?.user) {
     return null;
   }
 
@@ -56,14 +98,18 @@ function LoginForm() {
           Entrar
         </h1>
         <p className="mt-2 text-center text-sm text-black/60 dark:text-white/55">
-          Demonstração local: qualquer e-mail e senha preenchem o acesso. Os
-          dados ficam neste navegador.
+          Utilize a sua conta (sessão segura em cookie HttpOnly).
         </p>
 
         <form
-          onSubmit={onSubmit}
+          onSubmit={(ev) => void onSubmit(ev)}
           className="mt-10 space-y-4 rounded-xl border border-black/5 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/[0.03]"
         >
+          {error ? (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+              {error}
+            </p>
+          ) : null}
           <div>
             <label htmlFor="email" className="text-xs font-medium text-black/70 dark:text-white/65">
               E-mail
@@ -96,11 +142,22 @@ function LoginForm() {
           </div>
           <button
             type="submit"
-            className="flex h-11 w-full items-center justify-center rounded-lg bg-[var(--foreground)] text-sm font-medium text-[var(--background)] transition-opacity hover:opacity-90"
+            disabled={busy}
+            className="flex h-11 w-full items-center justify-center rounded-lg bg-[var(--foreground)] text-sm font-medium text-[var(--background)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            Continuar
+            {busy ? "A entrar…" : "Continuar"}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-black/60 dark:text-white/55">
+          <Link href="/registo" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
+            Criar conta
+          </Link>
+          {" · "}
+          <Link href="/recuperar" className="underline-offset-2 hover:underline">
+            Esqueci a senha
+          </Link>
+        </p>
 
         <p className="mt-8 text-center text-xs text-black/50 dark:text-white/45">
           <Link href="/" className="underline-offset-2 hover:underline">

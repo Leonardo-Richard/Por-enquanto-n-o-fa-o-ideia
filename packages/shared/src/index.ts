@@ -8,8 +8,20 @@ export type HealthStatus = {
 export {
   sanitizeCnpj,
   formatCnpj,
+  displayCnpjLabel,
   isValidCnpj,
+  maskCnpjDigits,
 } from "./cnpj";
+
+export {
+  activeCompanyBodySchema,
+  companiesAccessibleQuerySchema,
+  companyCreateBodySchema,
+  membersQuerySchema,
+  memberPostBodySchema,
+  memberPatchBodySchema,
+  companyPatchBodySchema,
+} from "./api-v1";
 
 export type {
   Company,

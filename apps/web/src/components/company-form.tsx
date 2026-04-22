@@ -3,12 +3,15 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useId, useState } from "react";
 import { formatCnpj, isValidCnpj, sanitizeCnpj } from "@repo/shared";
-import { usePortal } from "@/context/portal-provider";
+import type { Company } from "@repo/shared";
+import { buildWelcomeExecution, usePortal } from "@/context/portal-provider";
+import { useAppSession } from "@/context/app-session";
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export function CompanyForm() {
-  const { addCompany } = usePortal();
+  const { appendExecution } = usePortal();
+  const { refetch } = useAppSession();
   const router = useRouter();
   const monthlyHelpId = useId();
   const [cnpj, setCnpj] = useState("");
@@ -16,8 +19,9 @@ export function CompanyForm() {
   const [systemCode, setSystemCode] = useState("");
   const [monthlyRunDay, setMonthlyRunDay] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     const digits = sanitizeCnpj(cnpj);
@@ -29,18 +33,50 @@ export function CompanyForm() {
       setError("Informe o código do sistema de origem.");
       return;
     }
-    const company = addCompany({
-      cnpjDigits: digits,
-      tradeName,
-      systemCode,
-      monthlyRunDay,
-    });
-    router.push(`/empresas/${company.id}`);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/v1/companies", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cnpjDigits: digits,
+          tradeName,
+          systemCode,
+          monthlyRunDay,
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { company?: Company; error?: { message?: string } }
+        | null;
+      if (!res.ok) {
+        setError(body?.error?.message ?? "Não foi possível guardar.");
+        return;
+      }
+      const company = body?.company;
+      if (!company) {
+        setError("Resposta inválida do servidor.");
+        return;
+      }
+      appendExecution(buildWelcomeExecution(company));
+      await fetch("/api/v1/session/active-company", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId: company.id }),
+      });
+      await refetch(true);
+      router.push(`/empresas/${company.id}`);
+    } catch {
+      setError("Erro de rede. Tente novamente.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <form
-      onSubmit={onSubmit}
+      onSubmit={(ev) => void onSubmit(ev)}
       className="space-y-5 rounded-xl border border-black/5 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/[0.03]"
     >
       <div>
@@ -132,9 +168,10 @@ export function CompanyForm() {
       <div className="flex flex-wrap gap-3">
         <button
           type="submit"
-          className="inline-flex h-11 items-center justify-center rounded-lg bg-[var(--foreground)] px-5 text-sm font-medium text-[var(--background)] transition-opacity hover:opacity-90"
+          disabled={busy}
+          className="inline-flex h-11 items-center justify-center rounded-lg bg-[var(--foreground)] px-5 text-sm font-medium text-[var(--background)] transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          Salvar e abrir detalhes
+          {busy ? "A guardar…" : "Salvar e abrir detalhes"}
         </button>
         <button
           type="button"

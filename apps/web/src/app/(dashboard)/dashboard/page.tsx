@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { formatCnpj } from "@repo/shared";
+import { displayCnpjLabel } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
+import { useAccessibleCompanies } from "@/hooks/use-accessible-companies";
 
 export default function DashboardPage() {
-  const { companies, executions, settings, runSync } = usePortal();
+  const { executions, settings, runSync } = usePortal();
+  const { companies } = useAccessibleCompanies();
 
   const lastRun = executions[0];
   const successRate =
@@ -16,6 +18,8 @@ export default function DashboardPage() {
             executions.length) *
             100,
         );
+
+  const list = companies ?? [];
 
   return (
     <div className="space-y-10">
@@ -33,7 +37,7 @@ export default function DashboardPage() {
             Empresas
           </p>
           <p className="mt-2 text-3xl font-semibold tabular-nums">
-            {companies.length}
+            {list.length}
           </p>
           <Link
             href="/empresas/nova"
@@ -74,19 +78,19 @@ export default function DashboardPage() {
           manual para testar o fluxo.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {companies.length === 0 ? (
+          {list.length === 0 ? (
             <p className="text-sm text-black/55 dark:text-white/50">
               Cadastre uma empresa para habilitar sincronizações.
             </p>
           ) : (
-            companies.map((c) => (
+            list.map((c) => (
               <button
                 key={c.id}
                 type="button"
-                onClick={() => runSync(c.id, "monthly")}
+                onClick={() => runSync(c.id, "monthly", c.cnpjMasked)}
                 className="rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-xs font-medium transition-colors hover:bg-black/[0.03] dark:border-white/15 dark:hover:bg-white/[0.04]"
               >
-                Job mensal · {formatCnpj(c.cnpjDigits)}
+                Job mensal · {c.cnpjMasked}
               </button>
             ))
           )}
@@ -106,7 +110,7 @@ export default function DashboardPage() {
         {lastRun ? (
           <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] p-4 text-sm dark:border-white/10 dark:bg-white/[0.03]">
             <p className="font-medium text-[var(--foreground)]">
-              {formatCnpj(lastRun.companyCnpjDigits)} ·{" "}
+              {displayCnpjLabel(lastRun.companyCnpjDigits)} ·{" "}
               <span className="text-black/60 dark:text-white/55">
                 {triggerLabel(lastRun.trigger)}
               </span>
