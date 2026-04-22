@@ -1,25 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { companies, companyMemberships, session as sessionTable } from "@repo/db";
+import { companies, session as sessionTable } from "@repo/db";
 import { activeCompanyBodySchema } from "@repo/shared";
 import { getDb } from "@/lib/db";
 import { isSuperadmin } from "@/lib/authz";
 import { insertAuditEvent } from "@/lib/audit";
+import { canAccessCompanyByOrgOrCompanyMembership } from "../lib/effective-company-role";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
-
-async function canAccessCompany(userId: string, companyId: string, superadmin: boolean) {
-  if (superadmin) {
-    return true;
-  }
-  const db = getDb();
-  const [row] = await db
-    .select({ one: companyMemberships.id })
-    .from(companyMemberships)
-    .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.userId, userId)))
-    .limit(1);
-  return Boolean(row);
-}
 
 export async function handlePostSessionActiveCompany(request: Request) {
   try {
@@ -48,21 +36,31 @@ export async function handlePostSessionActiveCompany(request: Request) {
     }
 
     const superadmin = isSuperadmin(session.user);
-    const allowed = await canAccessCompany(session.user.id, companyId, superadmin);
+    const allowed = await canAccessCompanyByOrgOrCompanyMembership(
+      db,
+      session.user.id,
+      companyId,
+      superadmin,
+    );
     if (!allowed) {
       return jsonError(403, "Não tem permissão para esta operação.");
     }
 
     await db
       .update(sessionTable)
-      .set({ activeCompanyId: companyId, updatedAt: new Date() })
+      .set({
+        activeCompanyId: companyId,
+        activeOrganizationId: company.organizationId,
+        updatedAt: new Date(),
+      })
       .where(eq(sessionTable.id, session.session.id));
 
     await insertAuditEvent(db, {
       actorUserId: session.user.id,
       companyId,
+      organizationId: company.organizationId,
       eventType: "active_company_set",
-      metadata: { companyId },
+      metadata: { companyId, organizationId: company.organizationId },
     });
 
     return NextResponse.json({ ok: true });

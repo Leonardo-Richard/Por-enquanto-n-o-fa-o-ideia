@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { displayCnpjLabel } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
-import { useAccessibleCompanies } from "@/hooks/use-accessible-companies";
+import { useMeSummary } from "@/hooks/use-effective-organization-id";
+import { useMonitoredCompanies } from "@/hooks/use-monitored-companies";
 
 export default function DashboardPage() {
   const { executions, settings, runSync } = usePortal();
-  const { companies } = useAccessibleCompanies();
+  const { effectiveOrganizationId } = useMeSummary();
+  const { companies } = useMonitoredCompanies(effectiveOrganizationId);
 
   const lastRun = executions[0];
   const successRate =
@@ -26,15 +28,14 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Visão geral das empresas, pastas locais e últimas execuções da
-          automação.
+          Visão geral das empresas monitoradas, pastas locais e últimas execuções da automação.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-black/5 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/[0.03]">
           <p className="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-            Empresas
+            Empresas monitoradas
           </p>
           <p className="mt-2 text-3xl font-semibold tabular-nums">
             {list.length}
@@ -71,16 +72,18 @@ export default function DashboardPage() {
       </div>
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold">Rotina mensal (dia 1º)</h2>
-        <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Em produção, cada empresa com agente ativo recebe uma coleta no dia 1º
-          ({settings.timezone}). Aqui você pode disparar uma sincronização
-          manual para testar o fluxo.
+        <h2 className="text-base font-semibold tracking-tight">Empresas monitoradas</h2>
+        <p className="mt-1 text-xs text-black/55 dark:text-white/50">
+          CNPJs da organização ativa; dispare coletas de teste por empresa.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {list.length === 0 ? (
             <p className="text-sm text-black/55 dark:text-white/50">
-              Cadastre uma empresa para habilitar sincronizações.
+              Nenhuma empresa nesta organização. Cadastre em{" "}
+              <Link href="/empresas/nova" className="font-medium text-emerald-700 dark:text-emerald-400">
+                Nova empresa monitorada
+              </Link>
+              .
             </p>
           ) : (
             list.map((c) => (
@@ -95,6 +98,14 @@ export default function DashboardPage() {
             ))
           )}
         </div>
+      </section>
+
+      <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
+        <h2 className="text-sm font-semibold">Rotina mensal (dia 1º)</h2>
+        <p className="mt-2 text-sm text-black/65 dark:text-white/60">
+          Em produção, cada empresa com agente ativo recebe uma coleta no dia 1º ({settings.timezone}). Use os botões
+          acima para disparar uma sincronização manual de teste.
+        </p>
       </section>
 
       <section>

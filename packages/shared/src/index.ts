@@ -15,6 +15,7 @@ export {
 
 export {
   activeCompanyBodySchema,
+  activeOrganizationBodySchema,
   companiesAccessibleQuerySchema,
   companyCreateBodySchema,
   membersQuerySchema,

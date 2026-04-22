@@ -3,21 +3,17 @@ import type { user as userTable } from "@repo/db";
 
 export type AuthUserRow = InferSelectModel<typeof userTable>;
 
-export function isSuperadmin(user: Pick<AuthUserRow, "isSuperadmin">): boolean {
+export function isSuperadmin(user: Pick<AuthUserRow, "isSuperadmin"> | { isSuperadmin?: boolean | null }): boolean {
   return user.isSuperadmin === true;
 }
 
-export function canListCompany(
-  user: Pick<AuthUserRow, "isSuperadmin" | "id">,
-  hasMembership: boolean,
-): boolean {
+type AuthzUser = Pick<AuthUserRow, "isSuperadmin" | "id"> | { id: string; isSuperadmin?: boolean | null };
+
+export function canListCompany(user: AuthzUser, hasMembership: boolean): boolean {
   return isSuperadmin(user) || hasMembership;
 }
 
-export function canManageUsers(
-  user: Pick<AuthUserRow, "isSuperadmin" | "id">,
-  role: "user" | "admin" | null,
-): boolean {
+export function canManageUsers(user: AuthzUser, role: "user" | "admin" | null): boolean {
   if (isSuperadmin(user)) {
     return true;
   }

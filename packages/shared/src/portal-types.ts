@@ -4,6 +4,8 @@ export type ExecutionTrigger = "signup" | "monthly" | "manual";
 
 export type Company = {
   id: string;
+  /** Tenant (organização) dona da empresa monitorada. */
+  organizationId: string;
   cnpjDigits: string;
   tradeName: string;
   systemCode: string;

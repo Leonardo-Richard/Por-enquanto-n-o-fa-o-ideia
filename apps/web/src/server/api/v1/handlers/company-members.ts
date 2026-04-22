@@ -6,17 +6,9 @@ import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { canManageUsers } from "@/lib/authz";
 import { insertAuditEvent } from "@/lib/audit";
+import { loadEffectiveCompanyRole } from "../lib/effective-company-role";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
-
-async function callerRoleInCompany(actorId: string, companyId: string) {
-  const db = getDb();
-  const [row] = await db
-    .select({ role: companyMemberships.companyRole })
-    .from(companyMemberships)
-    .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.userId, actorId)));
-  return row?.role ?? null;
-}
 
 export async function handleGetCompanyMembers(request: Request, companyId: string) {
   try {
@@ -25,7 +17,8 @@ export async function handleGetCompanyMembers(request: Request, companyId: strin
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
 
-    const role = await callerRoleInCompany(session.user.id, companyId);
+    const db = getDb();
+    const role = await loadEffectiveCompanyRole(db, session.user.id, companyId);
     if (!canManageUsers(session.user, role)) {
       return jsonError(403, "Não tem permissão para esta operação.");
     }
@@ -38,7 +31,6 @@ export async function handleGetCompanyMembers(request: Request, companyId: strin
     const { page, pageSize, q } = parsed.data;
     const offset = (page - 1) * pageSize;
 
-    const db = getDb();
     const search =
       q?.trim() &&
       or(ilike(user.email, `%${q.trim()}%`), ilike(user.name, `%${q.trim()}%`));
@@ -75,8 +67,9 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
 
-    const role = await callerRoleInCompany(session.user.id, companyId);
-    if (!canManageUsers(session.user, role)) {
+    const dbPost = getDb();
+    const rolePost = await loadEffectiveCompanyRole(dbPost, session.user.id, companyId);
+    if (!canManageUsers(session.user, rolePost)) {
       return jsonError(403, "Não tem permissão para esta operação.");
     }
 
@@ -93,8 +86,7 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
       return jsonError(400, msg);
     }
 
-    const db = getDb();
-    const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+    const [company] = await dbPost.select().from(companies).where(eq(companies.id, companyId)).limit(1);
     if (!company) {
       return jsonError(404, "Empresa não encontrada.");
     }
@@ -104,11 +96,11 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
 
     if (body.mode === "link") {
       const email = body.email.trim().toLowerCase();
-      const [target] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+      const [target] = await dbPost.select().from(user).where(eq(user.email, email)).limit(1);
       if (!target) {
         return jsonError(404, "Utilizador não encontrado com este email.");
       }
-      const [existing] = await db
+      const [existing] = await dbPost
         .select({ id: companyMemberships.id })
         .from(companyMemberships)
         .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.userId, target.id)))
@@ -116,15 +108,16 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
       if (existing) {
         return jsonError(409, "Utilizador já pertence a esta empresa.");
       }
-      await db.insert(companyMemberships).values({
+      await dbPost.insert(companyMemberships).values({
         companyId,
         userId: target.id,
         companyRole,
       });
-      await insertAuditEvent(db, {
+      await insertAuditEvent(dbPost, {
         actorUserId: session.user.id,
         targetUserId: target.id,
         companyId,
+        organizationId: company.organizationId,
         eventType: "membership_created",
         metadata: { mode: "link", companyRole },
       });
@@ -132,7 +125,7 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
     }
 
     const email = body.email.trim().toLowerCase();
-    const [dup] = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1);
+    const [dup] = await dbPost.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1);
     if (dup) {
       return jsonError(409, "Já existe conta com este email.");
     }
@@ -153,21 +146,22 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
       );
     }
 
-    const [createdUser] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    const [createdUser] = await dbPost.select().from(user).where(eq(user.email, email)).limit(1);
     if (!createdUser) {
       return jsonError(500, "Utilizador criado mas não encontrado na base.");
     }
 
-    await db.insert(companyMemberships).values({
+    await dbPost.insert(companyMemberships).values({
       companyId,
       userId: createdUser.id,
       companyRole,
     });
 
-    await insertAuditEvent(db, {
+    await insertAuditEvent(dbPost, {
       actorUserId: session.user.id,
       targetUserId: createdUser.id,
       companyId,
+      organizationId: company.organizationId,
       eventType: "membership_created",
       metadata: { mode: "create", companyRole },
     });

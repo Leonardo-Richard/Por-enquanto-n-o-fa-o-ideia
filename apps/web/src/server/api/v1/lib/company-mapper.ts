@@ -5,6 +5,7 @@ import type { Company } from "@repo/shared";
 export function rowToCompany(row: InferSelectModel<typeof companiesTable>): Company {
   return {
     id: row.id,
+    organizationId: row.organizationId,
     cnpjDigits: row.cnpjDigits,
     tradeName: row.tradeName,
     systemCode: row.systemCode,

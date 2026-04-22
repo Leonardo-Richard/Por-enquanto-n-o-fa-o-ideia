@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAppSession } from "@/context/app-session";
 import { signOut } from "@/lib/auth-browser";
 
 const nav = [
   { href: "/dashboard", label: "Painel" },
-  { href: "/empresas", label: "Empresas" },
+  { href: "/empresas", label: "Organização" },
   { href: "/execucoes", label: "Execuções" },
   { href: "/configuracoes", label: "Configurações" },
 ] as const;
@@ -15,6 +16,25 @@ const nav = [
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data } = useAppSession();
+  const [orgName, setOrgName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/v1/me", { credentials: "include" });
+        const j = (await res.json().catch(() => null)) as { activeOrganizationName?: string | null } | null;
+        if (!cancelled && res.ok && j?.activeOrganizationName) {
+          setOrgName(j.activeOrganizationName);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, data?.user?.id]);
 
   async function logout() {
     await signOut();
@@ -34,6 +54,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <p className="mt-1 truncate text-xs text-black/50 dark:text-white/45">
               {email}
             </p>
+            {orgName ? (
+              <p className="mt-2 text-xs text-black/55 dark:text-white/50">
+                Organização: <span className="font-medium text-black/75 dark:text-white/70">{orgName}</span>
+              </p>
+            ) : null}
+            <Link
+              href="/empresas"
+              className="mt-2 inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              Trocar organização
+            </Link>
           </div>
           <nav className="flex flex-1 flex-col gap-0.5 px-2">
             {nav.map((item) => {

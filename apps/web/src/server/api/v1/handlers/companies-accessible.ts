@@ -1,12 +1,23 @@
 import { and, count, eq, ilike, inArray, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { companies, companyMemberships } from "@repo/db";
+import { companies, companyMemberships, organizationMemberships } from "@repo/db";
 import { companiesAccessibleQuerySchema, maskCnpjDigits } from "@repo/shared";
 import { getDb } from "@/lib/db";
 import { canManageUsers, isSuperadmin } from "@/lib/authz";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
+
+function strongerRole(
+  a: "user" | "admin" | null | undefined,
+  b: "user" | "admin" | null | undefined,
+): "user" | "admin" | null {
+  const x = a ?? null;
+  const y = b ?? null;
+  if (x === "admin" || y === "admin") return "admin";
+  if (x === "user" || y === "user") return "user";
+  return null;
+}
 
 export async function handleGetCompaniesAccessible(request: Request) {
   try {
@@ -36,7 +47,7 @@ export async function handleGetCompaniesAccessible(request: Request) {
       : undefined;
 
     type CompanyRow = InferSelectModel<typeof companies>;
-    type Row = CompanyRow & { membershipRole?: "user" | "admin" };
+    type Row = CompanyRow & { membershipRole?: "user" | "admin" | null };
 
     let companyRows: Row[];
 
@@ -49,34 +60,48 @@ export async function handleGetCompaniesAccessible(request: Request) {
       const base = db
         .select({
           company: companies,
-          role: companyMemberships.companyRole,
+          companyRole: companyMemberships.companyRole,
+          orgRole: organizationMemberships.orgRole,
         })
         .from(companies)
         .innerJoin(
+          organizationMemberships,
+          and(
+            eq(organizationMemberships.organizationId, companies.organizationId),
+            eq(organizationMemberships.userId, userId),
+          ),
+        )
+        .leftJoin(
           companyMemberships,
           and(eq(companyMemberships.companyId, companies.id), eq(companyMemberships.userId, userId)),
         );
       const joined = searchCond ? base.where(searchCond) : base;
       const rows = await joined.limit(pageSize).offset(offset);
-      companyRows = rows.map((r: { company: CompanyRow; role: "user" | "admin" }) => ({
-        ...r.company,
-        membershipRole: r.role,
-      }));
+      companyRows = rows.map(
+        (r: {
+          company: CompanyRow;
+          companyRole: "user" | "admin" | null;
+          orgRole: "user" | "admin";
+        }) => ({
+          ...r.company,
+          membershipRole: strongerRole(r.companyRole, r.orgRole),
+        }),
+      );
     }
 
-    const ids = companyRows.map((c) => c.id);
-    const countMap = new Map<string, number>();
-    if (ids.length > 0) {
+    const orgIds = [...new Set(companyRows.map((c) => c.organizationId))];
+    const orgMemberCount = new Map<string, number>();
+    if (orgIds.length > 0) {
       const countRows = await db
         .select({
-          companyId: companyMemberships.companyId,
+          organizationId: organizationMemberships.organizationId,
           cnt: count(),
         })
-        .from(companyMemberships)
-        .where(inArray(companyMemberships.companyId, ids))
-        .groupBy(companyMemberships.companyId);
+        .from(organizationMemberships)
+        .where(inArray(organizationMemberships.organizationId, orgIds))
+        .groupBy(organizationMemberships.organizationId);
       for (const r of countRows) {
-        countMap.set(r.companyId, Number(r.cnt));
+        orgMemberCount.set(r.organizationId, Number(r.cnt));
       }
     }
 
@@ -84,7 +109,7 @@ export async function handleGetCompaniesAccessible(request: Request) {
 
     const items = companyRows.map((company) => {
       const roleForFlags = superUser ? null : company.membershipRole ?? null;
-      const memberCount = countMap.get(company.id) ?? 0;
+      const memberCount = orgMemberCount.get(company.organizationId) ?? 0;
       return {
         id: company.id,
         tradeName: company.tradeName,
@@ -97,7 +122,15 @@ export async function handleGetCompaniesAccessible(request: Request) {
       };
     });
 
-    return NextResponse.json({ items });
+    return NextResponse.json(
+      { items },
+      {
+        headers: {
+          Deprecation: "true",
+          Link: '</api/v1/organizations/accessible>; rel="alternate"',
+        },
+      },
+    );
   } catch (e) {
     return toPublicApiError(e);
   }

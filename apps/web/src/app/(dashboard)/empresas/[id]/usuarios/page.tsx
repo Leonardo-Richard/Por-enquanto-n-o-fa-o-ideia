@@ -1,5 +1,6 @@
 "use client";
 
+import type { Company } from "@repo/shared";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useId, useState } from "react";
@@ -24,6 +25,8 @@ export default function EmpresaUsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [orgResolveError, setOrgResolveError] = useState<string | null>(null);
 
   const [mode, setMode] = useState<"link" | "create">("link");
   const [email, setEmail] = useState("");
@@ -34,7 +37,7 @@ export default function EmpresaUsuariosPage() {
 
   const [removeTarget, setRemoveTarget] = useState<MemberRow | null>(null);
 
-  async function load() {
+  async function load(orgId: string) {
     setLoading(true);
     setError(null);
     setForbidden(false);
@@ -42,7 +45,7 @@ export default function EmpresaUsuariosPage() {
     if (q.trim()) {
       qs.set("q", q.trim());
     }
-    const res = await fetch(`/api/v1/companies/${companyId}/members?${qs}`, {
+    const res = await fetch(`/api/v1/organizations/${orgId}/members?${qs}`, {
       credentials: "include",
     });
     if (res.status === 403) {
@@ -66,9 +69,33 @@ export default function EmpresaUsuariosPage() {
     if (!companyId) {
       return;
     }
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarregar ao mudar empresa
+    let cancelled = false;
+    void (async () => {
+      setOrgResolveError(null);
+      const res = await fetch(`/api/v1/companies/${companyId}`, { credentials: "include" });
+      if (cancelled) {
+        return;
+      }
+      if (!res.ok) {
+        setOrgResolveError("Empresa não encontrada ou sem acesso.");
+        setOrganizationId(null);
+        return;
+      }
+      const body = (await res.json()) as { company: Company };
+      setOrganizationId(body.company.organizationId);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId || !organizationId) {
+      return;
+    }
+    void load(organizationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarregar ao mudar empresa/org
+  }, [companyId, organizationId]);
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
@@ -83,7 +110,11 @@ export default function EmpresaUsuariosPage() {
             name: name.trim(),
             companyRole: role,
           };
-    const res = await fetch(`/api/v1/companies/${companyId}/members`, {
+    if (!organizationId) {
+      setFormError("Organização ainda não carregada.");
+      return;
+    }
+    const res = await fetch(`/api/v1/organizations/${organizationId}/members`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -97,11 +128,14 @@ export default function EmpresaUsuariosPage() {
     setEmail("");
     setPassword("");
     setName("");
-    await load();
+    await load(organizationId);
   }
 
   async function patchRole(userId: string, companyRole: "user" | "admin") {
-    const res = await fetch(`/api/v1/companies/${companyId}/members/${userId}`, {
+    if (!organizationId) {
+      return;
+    }
+    const res = await fetch(`/api/v1/organizations/${organizationId}/members/${userId}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -116,15 +150,15 @@ export default function EmpresaUsuariosPage() {
       window.alert("Erro ao atualizar.");
       return;
     }
-    await load();
+    await load(organizationId);
   }
 
   async function confirmRemove() {
-    if (!removeTarget) {
+    if (!removeTarget || !organizationId) {
       return;
     }
     const res = await fetch(
-      `/api/v1/companies/${companyId}/members/${removeTarget.userId}`,
+      `/api/v1/organizations/${organizationId}/members/${removeTarget.userId}`,
       { method: "DELETE", credentials: "include" },
     );
     if (res.status === 409) {
@@ -137,7 +171,21 @@ export default function EmpresaUsuariosPage() {
       return;
     }
     setRemoveTarget(null);
-    await load();
+    await load(organizationId);
+  }
+
+  if (orgResolveError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Utilizadores</h1>
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {orgResolveError}
+        </p>
+        <Link href="/empresas" className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+          Voltar
+        </Link>
+      </div>
+    );
   }
 
   if (forbidden) {
@@ -163,10 +211,10 @@ export default function EmpresaUsuariosPage() {
         >
           ← Empresa
         </Link>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Utilizadores</h1>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Utilizadores da organização</h1>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          A conta global do utilizador permanece na plataforma; aqui remove apenas o vínculo
-          com esta empresa.
+          A conta global do utilizador permanece na plataforma; aqui remove apenas o vínculo com esta organização
+          (empresa monitorada: contexto fiscal).
         </p>
       </div>
 
@@ -282,7 +330,7 @@ export default function EmpresaUsuariosPage() {
           </div>
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => organizationId && void load(organizationId)}
             className="h-10 rounded-lg border border-black/15 px-4 text-sm dark:border-white/20"
           >
             Aplicar

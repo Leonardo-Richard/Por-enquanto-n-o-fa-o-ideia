@@ -1,21 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { companies, companyMemberships } from "@repo/db";
+import { companies } from "@repo/db";
 import { companyPatchBodySchema } from "@repo/shared";
 import { getDb } from "@/lib/db";
 import { canListCompany, canMutateCompanyBusinessData, isSuperadmin } from "@/lib/authz";
+import { loadEffectiveCompanyRole } from "../lib/effective-company-role";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { rowToCompany } from "../lib/company-mapper";
 import { getAuthedSession } from "../lib/session";
-
-async function loadMembershipRole(userId: string, companyId: string) {
-  const db = getDb();
-  const [row] = await db
-    .select({ role: companyMemberships.companyRole })
-    .from(companyMemberships)
-    .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.userId, userId)));
-  return row?.role ?? null;
-}
+import { getEffectiveOrganizationId } from "../lib/active-org";
 
 export async function handleGetCompanyById(request: Request, companyId: string) {
   try {
@@ -30,7 +23,12 @@ export async function handleGetCompanyById(request: Request, companyId: string) 
       return jsonError(404, "Empresa não encontrada.");
     }
 
-    const role = await loadMembershipRole(session.user.id, companyId);
+    const eff = await getEffectiveOrganizationId(db, session);
+    if (!isSuperadmin(session.user) && eff !== company.organizationId) {
+      return jsonError(404, "Empresa não encontrada.");
+    }
+
+    const role = await loadEffectiveCompanyRole(db, session.user.id, companyId);
     const hasMembership = role !== null;
     if (!canListCompany(session.user, hasMembership)) {
       return jsonError(404, "Empresa não encontrada.");
@@ -49,7 +47,8 @@ export async function handlePatchCompanyById(request: Request, companyId: string
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
 
-    const role = await loadMembershipRole(session.user.id, companyId);
+    const db = getDb();
+    const role = await loadEffectiveCompanyRole(db, session.user.id, companyId);
     if (!canMutateCompanyBusinessData(role)) {
       if (isSuperadmin(session.user) && !role) {
         return jsonError(403, "Não tem permissão para esta operação.");
@@ -75,9 +74,13 @@ export async function handlePatchCompanyById(request: Request, companyId: string
       return jsonError(400, "Nenhum campo para atualizar.");
     }
 
-    const db = getDb();
     const [existing] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
     if (!existing) {
+      return jsonError(404, "Empresa não encontrada.");
+    }
+
+    const eff = await getEffectiveOrganizationId(db, session);
+    if (!isSuperadmin(session.user) && eff !== existing.organizationId) {
       return jsonError(404, "Empresa não encontrada.");
     }
 
@@ -108,14 +111,19 @@ export async function handleDeleteCompanyById(request: Request, companyId: strin
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
 
-    const role = await loadMembershipRole(session.user.id, companyId);
+    const db = getDb();
+    const role = await loadEffectiveCompanyRole(db, session.user.id, companyId);
     if (!canMutateCompanyBusinessData(role)) {
       return jsonError(403, "Não tem permissão para esta operação.");
     }
 
-    const db = getDb();
     const [existing] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
     if (!existing) {
+      return jsonError(404, "Empresa não encontrada.");
+    }
+
+    const eff = await getEffectiveOrganizationId(db, session);
+    if (!isSuperadmin(session.user) && eff !== existing.organizationId) {
       return jsonError(404, "Empresa não encontrada.");
     }
 

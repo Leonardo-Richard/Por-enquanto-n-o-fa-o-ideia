@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useAccessibleCompanies } from "@/hooks/use-accessible-companies";
+import { useAccessibleOrganizations } from "@/hooks/use-accessible-organizations";
 import { useAppSession } from "@/context/app-session";
 import {
   classifyThrownFetchError,
@@ -19,7 +19,12 @@ function PickerInner() {
   const searchParams = useSearchParams();
   const nextParam = useMemo(() => searchParams.get("next") ?? "", [searchParams]);
   const searchLabelId = useId();
-  const { companies, loading, issue: companiesIssue, reload: reloadCompanies } = useAccessibleCompanies();
+  const {
+    organizations,
+    loading,
+    issue: companiesIssue,
+    reload: reloadCompanies,
+  } = useAccessibleOrganizations();
   const { refetch: refetchSession } = useAppSession();
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -88,32 +93,32 @@ function PickerInner() {
   }, [showRetry, combinedIssue?.message]);
 
   useEffect(() => {
-    if (loading || !companies) {
+    if (loading || !organizations) {
       return;
     }
-    if (companies.length === 1) {
-      const only = companies[0]!.id;
+    if (organizations.length === 1) {
+      const only = organizations[0]!.id;
       void (async () => {
-        await fetch("/api/v1/session/active-company", {
+        await fetch("/api/v1/session/active-organization", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companyId: only }),
+          body: JSON.stringify({ organizationId: only }),
         });
         await refetchSession(true);
         router.replace(nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard");
       })();
     }
-  }, [loading, companies, router, nextParam, refetchSession]);
+  }, [loading, organizations, router, nextParam, refetchSession]);
 
-  async function openCompany(id: string) {
+  async function openOrganization(id: string) {
     setBusyId(id);
     try {
-      await fetch("/api/v1/session/active-company", {
+      await fetch("/api/v1/session/active-organization", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId: id }),
+        body: JSON.stringify({ organizationId: id }),
       });
       await refetchSession(true);
       router.replace(nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard");
@@ -123,15 +128,15 @@ function PickerInner() {
   }
 
   const filtered =
-    companies?.filter((c) => {
+    organizations?.filter((o) => {
       if (!q.trim()) {
         return true;
       }
       const n = q.trim().toLowerCase();
       return (
-        c.tradeName.toLowerCase().includes(n) ||
-        c.cnpjMasked.toLowerCase().includes(n) ||
-        c.systemCode.toLowerCase().includes(n)
+        o.name.toLowerCase().includes(n) ||
+        (o.tradeName?.toLowerCase().includes(n) ?? false) ||
+        (o.taxIdMasked?.toLowerCase().includes(n) ?? false)
       );
     }) ?? [];
 
@@ -195,34 +200,35 @@ function PickerInner() {
     );
   }
 
-  if (companies && companies.length === 1) {
+  if (organizations && organizations.length === 1) {
     return (
       <p className="text-sm text-black/60 dark:text-white/55" role="status">
-        A definir empresa única…
+        A definir organização única…
       </p>
     );
   }
 
-  const emptyNonSuper = companies && companies.length === 0 && me && !me.isSuperadmin;
+  const emptyNonSuper = organizations && organizations.length === 0 && me && !me.isSuperadmin;
 
   return (
     <div className="space-y-8">
+      <LegacyEmpresasRouteBanner />
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Escolha sua Empresa</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Escolha sua organização</h1>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Pesquise pelo nome ou CNPJ e abra o contexto em que deseja trabalhar.
+          Pesquise pelo nome da organização e abra o contexto em que deseja trabalhar.
         </p>
       </div>
 
       {emptyNonSuper ? (
         <p className="text-sm text-black/65 dark:text-white/60">
-          Não tem acesso a nenhuma empresa. Peça a um administrador para o convidar.
+          Não tem acesso a nenhuma organização. Peça a um administrador para o convidar.
         </p>
       ) : null}
 
       <div className="max-w-md space-y-2">
         <label htmlFor="q-emp" id={searchLabelId} className="text-xs font-medium text-black/70 dark:text-white/65">
-          Pesquisar empresas
+          Pesquisar organizações
         </label>
         <input
           id="q-emp"
@@ -230,46 +236,51 @@ function PickerInner() {
           onChange={(e) => setQ(e.target.value)}
           aria-labelledby={searchLabelId}
           className="w-full rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
-          placeholder="Nome, CNPJ ou código"
+          placeholder="Nome ou CNPJ da organização"
         />
       </div>
 
       <ul className="grid gap-3 sm:grid-cols-2">
-        {filtered.map((c) => (
+        {filtered.map((o) => (
           <li
-            key={c.id}
+            key={o.id}
             className="flex flex-col rounded-xl border border-black/5 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.03]"
           >
-            <p className="font-medium">{c.tradeName}</p>
-            <p className="mt-1 font-mono text-xs text-black/60 tabular-nums dark:text-white/55">
-              {c.cnpjMasked}
-            </p>
+            <p className="font-medium">{o.name}</p>
+            {o.tradeName ? (
+              <p className="mt-1 text-xs text-black/55 dark:text-white/50">{o.tradeName}</p>
+            ) : null}
+            {o.taxIdMasked ? (
+              <p className="mt-1 font-mono text-xs text-black/60 tabular-nums dark:text-white/55">
+                {o.taxIdMasked}
+              </p>
+            ) : null}
             <p className="mt-1 text-xs text-black/50 dark:text-white/45">
-              {c.memberCount} membro(s)
+              {o.memberCount} membro(s)
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={busyId === c.id}
-                onClick={() => void openCompany(c.id)}
+                disabled={busyId === o.id}
+                onClick={() => void openOrganization(o.id)}
                 className="inline-flex h-9 items-center justify-center rounded-lg bg-[var(--foreground)] px-4 text-xs font-medium text-[var(--background)] disabled:opacity-50"
               >
-                {busyId === c.id ? "A abrir…" : "Acessar"}
+                {busyId === o.id ? "A abrir…" : "Acessar"}
               </button>
-              {c.canOpenCompanyAdmin ? (
+              {o.canOpenOrgAdmin ? (
                 <Link
-                  href={`/empresas/${c.id}`}
+                  href="/dashboard"
                   className="inline-flex h-9 items-center justify-center rounded-lg border border-black/15 px-4 text-xs font-medium dark:border-white/20"
                 >
-                  Admin
+                  Painel
                 </Link>
               ) : null}
-              {c.canManageUsers ? (
+              {o.canManageUsers ? (
                 <Link
-                  href={`/empresas/${c.id}/usuarios`}
+                  href="/dashboard"
                   className="inline-flex h-9 items-center justify-center rounded-lg border border-black/15 px-4 text-xs font-medium dark:border-white/20"
                 >
-                  Utilizadores
+                  Empresas monitoradas
                 </Link>
               ) : null}
             </div>
@@ -279,9 +290,50 @@ function PickerInner() {
 
       <p className="text-sm">
         <Link href="/empresas/nova" className="font-medium text-emerald-700 dark:text-emerald-400">
-          Nova empresa
+          Nova empresa monitorada
         </Link>
       </p>
+    </div>
+  );
+}
+
+const BANNER_KEY = "org-fiscal-copy-v1";
+
+function LegacyEmpresasRouteBanner() {
+  const [dismissed, setDismissed] = useState(true);
+  useEffect(() => {
+    try {
+      setDismissed(window.localStorage.getItem(BANNER_KEY) === "1");
+    } catch {
+      setDismissed(false);
+    }
+  }, []);
+  if (dismissed) {
+    return null;
+  }
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 p-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-50"
+      role="status"
+    >
+      <p>
+        Esta rota passou a ser o contexto de <strong>organização</strong>. As empresas com CNPJ monitorado ficam no
+        painel após escolher a organização.
+      </p>
+      <button
+        type="button"
+        className="self-end text-xs font-medium underline"
+        onClick={() => {
+          try {
+            window.localStorage.setItem(BANNER_KEY, "1");
+          } catch {
+            /* ignore */
+          }
+          setDismissed(true);
+        }}
+      >
+        Entendi, ocultar
+      </button>
     </div>
   );
 }

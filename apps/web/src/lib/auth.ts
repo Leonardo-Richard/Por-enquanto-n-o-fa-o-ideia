@@ -63,13 +63,18 @@ function buildAuth() {
           required: false,
           input: false,
         },
+        activeOrganizationId: {
+          type: "string",
+          required: false,
+          input: false,
+        },
       },
     },
     plugins: [nextCookies()],
   });
 }
 
-type AuthInstance = ReturnType<typeof betterAuth>;
+type AuthInstance = ReturnType<typeof buildAuth>;
 
 let authSingleton: AuthInstance | undefined;
 
@@ -82,6 +87,14 @@ function getAuthInstance(): AuthInstance {
 
 /** Lazy: só liga à base quando a primeira operação de auth é pedida (FR3 / SB-01). */
 export const auth = new Proxy({} as AuthInstance, {
+  has(_target, prop) {
+    // `toNextJsHandler` faz `'handler' in auth ? auth.handler(request) : auth(request)`.
+    // O alvo vazio faria `handler` parecer ausente e o código chamaria `auth()` (erro).
+    // Não chamar getAuthInstance() aqui: preserva lazy init e evita exigir DATABASE_URL
+    // só por causa do operador `in`.
+    if (prop === "handler") return true;
+    return prop in (getAuthInstance() as object);
+  },
   get(_target, prop, receiver) {
     const inst = getAuthInstance();
     const value = Reflect.get(inst as object, prop, receiver) as unknown;

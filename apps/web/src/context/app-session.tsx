@@ -20,6 +20,7 @@ export type AppSessionUser = {
 export type AppSessionRow = {
   id: string;
   activeCompanyId?: string | null;
+  activeOrganizationId?: string | null;
 };
 
 export type AppSessionData = {

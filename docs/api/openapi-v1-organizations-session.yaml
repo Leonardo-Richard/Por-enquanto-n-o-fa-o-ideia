@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: Portal NF — API v1 (organizações e sessão)
+  version: 0.1.0
+  description: |
+    Contrato parcial (ORG-04 / ORG-03). Rotas sob `/api/v1/` com prefixo de deploy real conforme `apps/web`.
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Desenvolvimento local
+
+paths:
+  /organizations/accessible:
+    get:
+      summary: Organizações acessíveis ao utilizador
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        canOpenOrgAdmin: { type: boolean }
+                        canManageUsers: { type: boolean }
+
+  /organizations/{organizationId}/members:
+    get:
+      summary: Membros da organização
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Sem permissão ou org alheia
+
+    post:
+      summary: Convidar / criar membro (modo link ou create)
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [mode, email]
+                  properties:
+                    mode: { const: link }
+                    email: { type: string, format: email }
+                    companyRole: { type: string, enum: [user, admin] }
+                - type: object
+                  required: [mode, email, password, name]
+                  properties:
+                    mode: { const: create }
+                    email: { type: string, format: email }
+                    password: { type: string, minLength: 8 }
+                    name: { type: string }
+                    companyRole: { type: string, enum: [user, admin] }
+      responses:
+        "201": { description: Criado }
+        "403": { description: Proibido }
+        "409": { description: Conflito }
+
+  /organizations/{organizationId}/members/{userId}:
+    patch:
+      summary: Atualizar membro (papel org em `companyRole` no JSON por compatibilidade LER)
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                companyRole: { type: string, enum: [user, admin] }
+                jobTitle: { type: string, nullable: true }
+                department: { type: string, nullable: true }
+                phone: { type: string, nullable: true }
+      responses:
+        "200": { description: OK }
+        "409":
+          description: Último administrador da organização
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LastAdminError"
+    delete:
+      summary: Remover membro da organização
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Removido }
+        "409":
+          description: Último administrador
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LastAdminError"
+
+  /organizations/{organizationId}/monitored-companies:
+    get:
+      summary: Empresas monitoradas no âmbito da organização
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: OK }
+        "403": { description: Isolamento multi-tenant }
+
+  /session/active-organization:
+    post:
+      summary: Definir organização ativa na sessão
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId]
+              properties:
+                organizationId: { type: string, format: uuid }
+      responses:
+        "204": { description: Sem corpo }
+        "403": { description: Sem membership na org }
+
+  /session/active-company:
+    post:
+      summary: Definir empresa ativa (legado ORG-03)
+      deprecated: true
+      description: |
+        Preferir `POST /session/active-organization`. Este endpoint mantém `activeCompanyId`
+        e **obriga** `activeOrganizationId = companies.organization_id` da empresa (sem 410 no MVP).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companyId]
+              properties:
+                companyId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+        "403": { description: Sem acesso à empresa/org }
+
+components:
+  schemas:
+    LastAdminError:
+      type: object
+      properties:
+        message: { type: string }
+        error:
+          type: object
+          properties:
+            code: { const: last_admin }

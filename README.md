@@ -50,9 +50,15 @@ Com o dev server a correr (`pnpm dev`), o endpoint público responde em:
 - `apps/web` — Next.js (App Router, API routes)
 - `packages/shared` — tipos e constantes partilhados (`@repo/shared`)
 
+## Multi-tenant (ORG-09) — ACL
+
+- Acesso a empresas monitoradas considera **`organization_memberships`** e `company_memberships` (papel efectivo = o mais permissivo entre vínculo na organização dona do CNPJ e vínculo na empresa).
+- `GET /api/v1/companies/accessible` filtra por **membership na organização**; resposta inclui cabeçalhos `Deprecation` e `Link` para `GET /api/v1/organizations/accessible` (rota preferida).
+- Contrato OpenAPI (parcial): `docs/api/openapi-v1-organizations-session.yaml`.
+
 ## CI
 
-O workflow `.github/workflows/ci.yml` executa **lint**, **typecheck** e **build** em pushes e pull requests para `main`.
+O workflow `.github/workflows/ci.yml` executa **lint**, **typecheck**, **testes** (`pnpm test` com Postgres de serviço e `DATABASE_URL`) e **build** em pushes e pull requests para `main`.
 
 ### Branch default protegida
 

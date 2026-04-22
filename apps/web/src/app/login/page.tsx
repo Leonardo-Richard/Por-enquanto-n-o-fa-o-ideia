@@ -13,23 +13,23 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
-async function tryAutoSelectSingleCompany() {
-  const res = await fetch("/api/v1/companies/accessible?page=1&pageSize=5", {
+async function tryAutoSelectSingleOrganization() {
+  const res = await fetch("/api/v1/organizations/accessible?page=1&pageSize=5", {
     credentials: "include",
   });
   if (!res.ok) {
     return;
   }
-  const body = (await res.json()) as { items: { id: string }[]; total: number };
-  if (body.total !== 1 || !body.items[0]) {
+  const body = (await res.json()) as { items: { id: string }[] };
+  if (body.items?.length !== 1 || !body.items[0]) {
     return;
   }
   const only = body.items[0].id;
-  await fetch("/api/v1/session/active-company", {
+  await fetch("/api/v1/session/active-organization", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ companyId: only }),
+    body: JSON.stringify({ organizationId: only }),
   });
 }
 
@@ -49,7 +49,7 @@ function LoginForm() {
   useEffect(() => {
     if (!isPending && data?.user) {
       void (async () => {
-        await tryAutoSelectSingleCompany();
+        await tryAutoSelectSingleOrganization();
         router.replace(nextPath);
       })();
     }
@@ -66,7 +66,7 @@ function LoginForm() {
         return;
       }
       await refetch();
-      await tryAutoSelectSingleCompany();
+      await tryAutoSelectSingleOrganization();
       await refetch();
       router.replace(nextPath);
     } catch {

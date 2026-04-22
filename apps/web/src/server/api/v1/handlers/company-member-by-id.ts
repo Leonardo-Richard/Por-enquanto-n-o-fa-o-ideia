@@ -7,17 +7,9 @@ import { getDb } from "@/lib/db";
 import { canManageUsers } from "@/lib/authz";
 import { wouldViolateLastAdmin } from "@/lib/last-admin";
 import { insertAuditEvent } from "@/lib/audit";
+import { loadEffectiveCompanyRole } from "../lib/effective-company-role";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
-
-async function callerRoleInCompany(actorId: string, companyId: string) {
-  const db = getDb();
-  const [row] = await db
-    .select({ role: companyMemberships.companyRole })
-    .from(companyMemberships)
-    .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.userId, actorId)));
-  return row?.role ?? null;
-}
 
 async function countAdmins(db: Db, companyId: string) {
   const [row] = await db
@@ -38,7 +30,8 @@ export async function handlePatchCompanyMember(
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
 
-    const role = await callerRoleInCompany(session.user.id, companyId);
+    const db = getDb();
+    const role = await loadEffectiveCompanyRole(db, session.user.id, companyId);
     if (!canManageUsers(session.user, role)) {
       return jsonError(403, "Não tem permissão para esta operação.");
     }
@@ -61,7 +54,6 @@ export async function handlePatchCompanyMember(
       return jsonError(400, "Nenhum campo para atualizar.");
     }
 
-    const db = getDb();
     const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
     if (!company) {
       return jsonError(404, "Empresa não encontrada.");
@@ -102,6 +94,7 @@ export async function handlePatchCompanyMember(
         actorUserId: session.user.id,
         targetUserId,
         companyId,
+        organizationId: company.organizationId,
         eventType: "membership_role_changed",
         metadata: { companyRole: patch.companyRole },
       });
@@ -114,7 +107,7 @@ export async function handlePatchCompanyMember(
 }
 
 export async function handleDeleteCompanyMember(
-  _request: Request,
+  request: Request,
   companyId: string,
   targetUserId: string,
 ) {
@@ -124,12 +117,12 @@ export async function handleDeleteCompanyMember(
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
 
-    const role = await callerRoleInCompany(session.user.id, companyId);
+    const db = getDb();
+    const role = await loadEffectiveCompanyRole(db, session.user.id, companyId);
     if (!canManageUsers(session.user, role)) {
       return jsonError(403, "Não tem permissão para esta operação.");
     }
 
-    const db = getDb();
     const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
     if (!company) {
       return jsonError(404, "Empresa não encontrada.");
@@ -160,6 +153,7 @@ export async function handleDeleteCompanyMember(
       actorUserId: session.user.id,
       targetUserId,
       companyId,
+      organizationId: company.organizationId,
       eventType: "membership_removed",
       metadata: {},
     });

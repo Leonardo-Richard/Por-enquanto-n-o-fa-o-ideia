@@ -5,6 +5,10 @@ export const activeCompanyBodySchema = z.object({
   companyId: z.string().uuid(),
 });
 
+export const activeOrganizationBodySchema = z.object({
+  organizationId: z.string().uuid(),
+});
+
 export const companiesAccessibleQuerySchema = z.object({
   q: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),

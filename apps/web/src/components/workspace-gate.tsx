@@ -6,6 +6,10 @@ import { useAppSession } from "@/context/app-session";
 
 const ALLOW_NO_ACTIVE = new Set(["/empresas", "/empresas/nova"]);
 
+function hasWorkspaceContext(session: { activeCompanyId?: string | null; activeOrganizationId?: string | null }) {
+  return Boolean(session.activeOrganizationId ?? session.activeCompanyId);
+}
+
 function needsActiveCompany(pathname: string): boolean {
   if (ALLOW_NO_ACTIVE.has(pathname)) {
     return false;
@@ -33,8 +37,7 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
     if (!needsActiveCompany(pathname)) {
       return;
     }
-    const active = data.session.activeCompanyId ?? null;
-    if (!active) {
+    if (!hasWorkspaceContext(data.session)) {
       const qs = searchParams.toString();
       const next = qs ? `${pathname}?${qs}` : pathname;
       router.replace(`/empresas?next=${encodeURIComponent(next)}`);
@@ -45,10 +48,10 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  if (needsActiveCompany(pathname) && !data.session.activeCompanyId) {
+  if (needsActiveCompany(pathname) && !hasWorkspaceContext(data.session)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-sm text-black/60 dark:text-white/55">
-        A preparar contexto da empresa…
+        A preparar contexto da organização…
       </div>
     );
   }

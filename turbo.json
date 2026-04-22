@@ -12,7 +12,9 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": ["^test"],
+      "passThroughEnv": ["DATABASE_URL", "BETTER_AUTH_SECRET"],
+      "env": ["DATABASE_URL"]
     },
     "dev": {
       "cache": false,

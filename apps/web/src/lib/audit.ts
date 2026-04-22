@@ -6,6 +6,7 @@ type AuditEventType =
   | "membership_removed"
   | "membership_role_changed"
   | "active_company_set"
+  | "active_organization_set"
   | "superadmin_access_company";
 
 export async function insertAuditEvent(
@@ -14,6 +15,7 @@ export async function insertAuditEvent(
     actorUserId: string;
     targetUserId?: string | null;
     companyId?: string | null;
+    organizationId?: string | null;
     eventType: AuditEventType;
     metadata: Record<string, unknown>;
   },
@@ -22,6 +24,7 @@ export async function insertAuditEvent(
     actorUserId: input.actorUserId,
     targetUserId: input.targetUserId ?? null,
     companyId: input.companyId ?? null,
+    organizationId: input.organizationId ?? null,
     eventType: input.eventType,
     metadata: input.metadata,
   });
