@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from "react";
 import { formatCnpj, messageFromMonthlyRunDayParse, type Company } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
+import { AdnSyncPanel } from "./adn-sync-panel";
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
@@ -156,6 +157,8 @@ export default function EmpresaDetailPage() {
           06:00 (América/São Paulo).
         </p>
       </div>
+
+      <AdnSyncPanel company={comp} />
 
       <section className="rounded-xl border border-black/5 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/[0.03]">
         <h2 className="text-sm font-semibold">Pasta local prevista</h2>

@@ -4,7 +4,7 @@ import type { Db } from "@repo/db";
 import { organizationMemberships, organizations } from "@repo/db";
 import { memberPatchBodySchema } from "@repo/shared";
 import { getDb } from "@/lib/db";
-import { canManageUsers, isSuperadmin } from "@/lib/authz";
+import { canManageUsers } from "@/lib/authz";
 import { wouldViolateLastAdmin } from "@/lib/last-admin";
 import { insertAuditEvent } from "@/lib/audit";
 import { jsonError, toPublicApiError } from "../lib/errors";

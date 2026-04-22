@@ -7,7 +7,11 @@ type AuditEventType =
   | "membership_role_changed"
   | "active_company_set"
   | "active_organization_set"
-  | "superadmin_access_company";
+  | "superadmin_access_company"
+  | "adn_sync_requested"
+  | "adn_sync_completed"
+  | "adn_sync_failed"
+  | "adn_artifact_downloaded";
 
 export async function insertAuditEvent(
   db: Db,

@@ -6,7 +6,8 @@ Este documento descreve a arquitetura técnica unificada (web, API, workers, age
 
 **Documentos de entrada:** `docs/prd.md` (**v0.2+**), `docs/front-end-spec.md` (v0.3+), incremento **agendamento por empresa:** `docs/architecture-agendamento-por-empresa.md`, `docs/front-end-spec-agendamento-por-empresa.md`, `docs/prd-atualizacao-agendamento-por-empresa.md`.  
 **Incremento login, empresa ativa e papéis:** `docs/architecture-login-empresas-roles.md`, `docs/front-end-spec-login-empresas-roles.md`, `docs/prd-atualizacao-login-empresas-roles.md`.  
-**Incremento organização vs. empresas monitoradas:** `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md`, `docs/front-end-spec-dois-niveis-organizacao-vs-empresas-fiscais.md`, `docs/prd-atualizacao-dois-niveis-organizacao-vs-empresas-fiscais.md`.
+**Incremento organização vs. empresas monitoradas:** `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md`, `docs/front-end-spec-dois-niveis-organizacao-vs-empresas-fiscais.md`, `docs/prd-atualizacao-dois-niveis-organizacao-vs-empresas-fiscais.md`.  
+**Incremento ADN / NFS-e (worker + Storage):** `docs/architecture-integracao-nfse-dist-adn.md`, `docs/front-end-spec-integracao-nfse-dist-adn.md`, `docs/prd-integracao-nfse-dist-adn.md`.
 
 ### Starter Template ou Projeto Existente
 
@@ -17,6 +18,7 @@ Este documento descreve a arquitetura técnica unificada (web, API, workers, age
 
 | Date       | Version | Description                                              | Author        |
 | ---------- | ------- | -------------------------------------------------------- | ------------- |
+| 2026-04-22 | 0.5     | Referência ao incremento **ADN / NFS-e**; ver `docs/architecture-integracao-nfse-dist-adn.md` | Architect (AIOS) |
 | 2026-04-22 | 0.4     | Referência ao incremento **organização vs. empresas monitoradas**; ver `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md` | Architect (AIOS) |
 | 2026-04-22 | 0.3     | Referência ao incremento **login, memberships e papéis**; ver `docs/architecture-login-empresas-roles.md` | Architect (AIOS) |
 | 2026-04-22 | 0.2     | Referência ao incremento **monthly_run_day** por empresa; DDL e fluxo mensal atualizados; ver `docs/architecture-agendamento-por-empresa.md` | Architect (AIOS) |
