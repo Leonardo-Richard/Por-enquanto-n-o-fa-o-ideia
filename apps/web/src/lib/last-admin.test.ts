@@ -1,19 +1,5 @@
 import { describe, expect, it } from "vitest";
-
-/** Espelha a regra: não pode ficar 0 admins. */
-function wouldViolateLastAdmin(
-  adminCount: number,
-  targetIsAdmin: boolean,
-  action: "demote" | "remove",
-): boolean {
-  if (!targetIsAdmin) {
-    return false;
-  }
-  if (adminCount <= 1) {
-    return action === "demote" || action === "remove";
-  }
-  return false;
-}
+import { wouldViolateLastAdmin } from "./last-admin";
 
 describe("último admin", () => {
   it("bloqueia rebaixar único admin", () => {

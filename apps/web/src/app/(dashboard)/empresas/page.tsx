@@ -2,31 +2,90 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useId, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAccessibleCompanies } from "@/hooks/use-accessible-companies";
 import { useAppSession } from "@/context/app-session";
+import {
+  classifyThrownFetchError,
+  FE_API_COPY,
+  messageForFailedResponse,
+  type FeApiFailureKind,
+} from "@/lib/fe-api-error";
+
+type MeIssue = { kind: FeApiFailureKind; message: string } | null;
 
 function PickerInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextParam = useMemo(() => searchParams.get("next") ?? "", [searchParams]);
   const searchLabelId = useId();
-  const { companies, loading, error, reload } = useAccessibleCompanies();
+  const { companies, loading, issue: companiesIssue, reload: reloadCompanies } = useAccessibleCompanies();
   const { refetch: refetchSession } = useAppSession();
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [me, setMe] = useState<{ isSuperadmin: boolean } | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
+  const [meIssue, setMeIssue] = useState<MeIssue>(null);
+  const retryButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    void (async () => {
+  const loadMe = useCallback(async () => {
+    setMeLoading(true);
+    setMeIssue(null);
+    try {
       const res = await fetch("/api/v1/me", { credentials: "include" });
+      const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
+        const { kind, text } = messageForFailedResponse(res.status, body);
+        setMeIssue({ kind, message: text });
+        setMe(null);
         return;
       }
-      const body = (await res.json()) as { isSuperadmin?: boolean };
-      setMe({ isSuperadmin: Boolean(body.isSuperadmin) });
-    })();
+      const parsed = body as { isSuperadmin?: boolean };
+      setMe({ isSuperadmin: Boolean(parsed.isSuperadmin) });
+    } catch (e) {
+      const net = classifyThrownFetchError(e);
+      if (net === "network") {
+        setMeIssue({ kind: "network", message: FE_API_COPY.network });
+      } else {
+        setMeIssue({ kind: "5xx", message: FE_API_COPY.service5xx });
+      }
+      setMe(null);
+    } finally {
+      setMeLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadMe();
+  }, [loadMe]);
+
+  const combinedIssue =
+    [meIssue, companiesIssue].find((i) => i?.kind === "401") ??
+    [meIssue, companiesIssue].find((i) => i?.kind === "403") ??
+    meIssue ??
+    companiesIssue ??
+    null;
+
+  useEffect(() => {
+    if (combinedIssue?.kind === "401") {
+      router.replace(`/login?next=${encodeURIComponent(nextParam || "/empresas")}`);
+    }
+  }, [combinedIssue?.kind, nextParam, router]);
+
+  const showRetry =
+    combinedIssue !== null &&
+    combinedIssue.kind !== "401" &&
+    combinedIssue.kind !== "403";
+
+  useEffect(() => {
+    if (!showRetry) {
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      retryButtonRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showRetry, combinedIssue?.message]);
 
   useEffect(() => {
     if (loading || !companies) {
@@ -76,7 +135,7 @@ function PickerInner() {
       );
     }) ?? [];
 
-  if (loading) {
+  if (loading || meLoading) {
     return (
       <div className="space-y-4" aria-busy="true">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-black/[0.06] dark:bg-white/[0.08]" />
@@ -92,18 +151,47 @@ function PickerInner() {
     );
   }
 
-  if (error) {
+  if (combinedIssue && combinedIssue.kind !== "401") {
+    const is403 = combinedIssue.kind === "403";
     return (
-      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-800 dark:text-red-100" role="alert">
-        <p>{error}</p>
-        <button
-          type="button"
-          onClick={() => void reload()}
-          className="mt-3 text-sm font-medium underline"
-        >
-          Tentar novamente
-        </button>
+      <div
+        className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-800 dark:text-red-100"
+        role="alert"
+        aria-live="polite"
+      >
+        <p>{combinedIssue.message}</p>
+        {!is403 ? (
+          <button
+            ref={retryButtonRef}
+            type="button"
+            aria-label={FE_API_COPY.retryAriaLabel}
+            onClick={() => {
+              void loadMe();
+              void reloadCompanies();
+            }}
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[var(--foreground)] px-4 text-sm font-medium text-[var(--background)]"
+          >
+            Tentar novamente
+          </button>
+        ) : (
+          <p className="mt-4">
+            <Link
+              href="/dashboard"
+              className="text-sm font-medium text-emerald-800 underline dark:text-emerald-300"
+            >
+              Voltar ao painel
+            </Link>
+          </p>
+        )}
       </div>
+    );
+  }
+
+  if (combinedIssue?.kind === "401") {
+    return (
+      <p className="text-sm text-black/65 dark:text-white/60" role="status" aria-live="polite">
+        A redirecionar para o início de sessão…
+      </p>
     );
   }
 

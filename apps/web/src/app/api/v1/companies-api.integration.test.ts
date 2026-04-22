@@ -13,11 +13,11 @@ import {
 } from "@repo/db";
 import { getDb } from "@/lib/db";
 
-vi.mock("@/app/api/v1/_lib/session", () => ({
+vi.mock("@/server/api/v1/lib/session", () => ({
   getAuthedSession: vi.fn(),
 }));
 
-import { getAuthedSession } from "@/app/api/v1/_lib/session";
+import { getAuthedSession } from "@/server/api/v1/lib/session";
 import { GET as getCompany } from "@/app/api/v1/companies/[companyId]/route";
 import { PATCH as patchCompany } from "@/app/api/v1/companies/[companyId]/route";
 import { GET as getMembers } from "@/app/api/v1/companies/[companyId]/members/route";

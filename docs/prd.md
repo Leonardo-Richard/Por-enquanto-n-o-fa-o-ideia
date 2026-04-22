@@ -1,5 +1,16 @@
 # Portal de Automação de Notas Fiscais (por empresa) — Product Requirements Document (PRD)
 
+**Fontes:** `docs/brief.md` (visão de produto), `docs/briefing-atualizacao-supabase-separacao-fe-be.md` (plataforma de dados e camadas FE/BE). Estado do código: monorepo Next.js (App Router), Drizzle em `packages/db`, APIs em `apps/web/src/app/api/`.
+
+## Introdução brownfield (contexto do repositório)
+
+- **Análise:** documentação existente em `docs/` + código carregado no IDE (sem output formal de *document-project*).
+- **Tipo de incremento:** integração com sistema externo (Supabase como hospedeiro PostgreSQL) + reforço de **disciplina arquitetural** (UI sem acesso direto à base).
+- **Impacto:** moderado a significativo — altera variáveis de ambiente, destino das migrações e documentação de deploy; não muda por si só as regras de negócio de NF descritas nos FR1–FR18.
+- **Objetivos deste incremento:** um único projeto Supabase como **fonte de verdade** do Postgres em ambientes alvo; `DATABASE_URL` (pooler transacional) alinhado ao mesmo projeto que `NEXT_PUBLIC_SUPABASE_URL`; ausência de segredos em repositório; componentes de UI sem `getDb()` / `DATABASE_URL`.
+
+---
+
 ## Goals and Background Context
 
 ### Goals
@@ -21,6 +32,7 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 
 | Date       | Version | Description                                              | Author   |
 | ---------- | ------- | -------------------------------------------------------- | -------- |
+| 2026-04-22 | 0.3     | Supabase como Postgres alvo; variáveis `NEXT_PUBLIC_*` + `DATABASE_URL`; fronteira FE/BE; FR19–FR24, NFR11–NFR15, CR1–CR5; **Epic 5** e atualização de premissas técnicas. Base: `docs/briefing-atualizacao-supabase-separacao-fe-be.md`. | PM (AIOS) |
 | 2026-04-22 | 0.2     | Agendamento mensal **por empresa** (dia 1–28, default 1); novas stories 2.4 e 4.3 atualizada; FR10/FR18; apêndice. Ver `docs/brief-atualizacao-agendamento-por-empresa.md`. | PM (AIOS) |
 | 2026-04-20 | 0.1     | Versão inicial do PRD a partir de `docs/brief.md`        | PM (AIOS) |
 
@@ -48,6 +60,12 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 16. **FR16 — Listagem de empresas:** Tela com lista de empresas da conta, com acesso a detalhes e histórico resumido de execuções.
 17. **FR17 — Edição e desativação:** Permitir editar nome fantasia e código do sistema onde não houver conflito; permitir desativar empresa para interromper agendamentos futuros sem apagar histórico (comportamento exato de “arquivar” vs “excluir” — MVP: **desativar** obrigatório, exclusão física opcional/fase 2).
 18. **FR18 — Dia da automação mensal (configuração):** No cadastro e na edição da empresa, o utilizador deve definir o **dia de execução mensal** (1–28). A UI deve explicar que o horário segue **FR11** (fuso América/São Paulo). Valores inválidos são bloqueados com mensagem clara na UI e na API.
+19. **FR19 — Postgres no Supabase:** O sistema deve poder operar com a base de dados alojada no **mesmo projeto Supabase** referenciado por `NEXT_PUBLIC_SUPABASE_URL`, utilizando `DATABASE_URL` com string de ligação ao **Transaction pooler** (modo adequado a ligações curtas desde Route Handlers / serverless), com TLS.
+20. **FR20 — Variáveis públicas do projeto:** Quando funcionalidades de cliente usarem o SDK do Supabase, `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` devem estar definidas no ambiente de execução do browser; valores reais **não** são versionados no Git — apenas documentados em `.env.example` e configurados em `.env.local` / painel de deploy.
+21. **FR21 — Migrações alinhadas ao remoto:** O schema aplicado ao Postgres do projeto Supabase deve corresponder às migrações versionadas do repositório (ex.: `db/migrations/` ou fluxo acordado pela equipa), antes de apontar utilizadores reais ao ambiente.
+22. **FR22 — Health e diagnóstico:** O endpoint de health (ou equivalente) deve refletir ligação válida à base quando `DATABASE_URL` estiver configurado (comportamento de falha explícito, sem fallback silencioso para outra base salvo flag explícita de desenvolvimento).
+23. **FR23 — Fronteira UI ↔ dados:** Componentes sob `apps/web/src/app/**` (páginas), `components/**` e `hooks/**` **não** importam `getDb()`, `createDb` nem módulos que exijam `DATABASE_URL`. Toda escrita/leitura relacional passa por API servidor, Server Actions que delegam em serviços, ou — se aprovado em ADR — cliente `supabase-js` **apenas** para operações cobertas por RLS e requisito explícito de produto.
+24. **FR24 — Autenticação (Supabase vs Better Auth):** O MVP de conta continua a usar o fornecedor de auth já integrado (**Better Auth**), salvo **épico/ADR** explícito que migre para Supabase Auth. É proibido misturar dois fornecedores de sessão sem plano de migração documentado.
 
 ### Non Functional
 
@@ -61,6 +79,19 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 8. **NFR8 — Observabilidade:** Backend com logs estruturados e correlação por `job_id` / `empresa_id` / `conta_id`.
 9. **NFR9 — Retentativas:** Política padrão: retentativas exponenciais para falhas transitórias, com teto máximo de **7 dias** após o dia agendado para o job mensal (revisável).
 10. **NFR10 — Cliente local Windows:** Instalador ou pacote de distribuição para Windows na prioridade do MVP; arquitetura do agente preparada para evolução macOS/Linux.
+11. **NFR11 — Segredos:** Nenhuma `service_role`, password de base ou token de terceiros em ficheiros versionados, nem em bundles de cliente. Rotação de chaves após exposição acidental.
+12. **NFR12 — Pooler e concorrência:** `DATABASE_URL` em produção usa configuração compatível com **muitas ligações curtas** (pooler transacional Supabase); limites de pool no cliente Drizzle/postgres alinhados à documentação do deploy (ex.: Vercel).
+13. **NFR13 — RLS (condicional):** Se **Nível B** (queries diretas via `supabase-js` ao PostgREST) for ativado para tabelas de negócio, cada tabela exposta deve ter **RLS** e políticas revistas em par com QA; até lá, o caminho predefinido é servidor → Drizzle com authz na aplicação (como hoje).
+14. **NFR14 — CI e E2E:** Pipelines e testes de integração que dependem de base devem documentar se usam Postgres local, container ou projeto Supabase de staging; não falhar silenciosamente por env ausente.
+15. **NFR15 — Documentação de onboarding:** README ou doc de desenvolvimento com passos: criar projeto Supabase → copiar URI do pooler → definir env → aplicar migrações → validar health.
+
+### Compatibility (brownfield)
+
+1. **CR1 — APIs existentes:** Rotas `apps/web/src/app/api/v1/*` e `api/auth/*` mantêm contratos JSON estáveis; alterações que quebrem clientes exigem versionamento ou período de deprecação acordado.
+2. **CR2 — Schema:** Migrações não removem colunas usadas por código em produção sem estratégia de deploy em duas fases ou compatibilidade retroativa.
+3. **CR3 — UI:** Padrões de dashboard, formulários e acessibilidade (WCAG AA) permanecem; novas telas seguem o mesmo sistema de componentes.
+4. **CR4 — Integrações:** Agente, filas e workers continuam a consumir as mesmas entidades lógicas (`empresa`, `job`, conta); mudar o host do Postgres não altera o contrato com o agente.
+5. **CR5 — Documentação arquitetural:** `docs/architecture.md` e derivados devem ser atualizados pelo **@architect** para refletir “Supabase (Postgres)” em vez de presupostos anteriores (ex.: Neon), quando este PRD for aprovado.
 
 ---
 

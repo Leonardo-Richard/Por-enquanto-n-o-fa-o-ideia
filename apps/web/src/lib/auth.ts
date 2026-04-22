@@ -23,46 +23,71 @@ function getSecret(): string {
   return s ?? "dev-dev-dev-dev-dev-dev-dev-dev-12-3456-7890-abcd";
 }
 
-export const auth = betterAuth({
-  database: drizzleAdapter(getDb(), {
-    provider: "pg",
-    schema: {
-      user: schema.user,
-      session: schema.session,
-      account: schema.account,
-      verification: schema.verification,
-    },
-  }),
-  baseURL: getBaseUrl(),
-  secret: getSecret(),
-  trustedOrigins: [getBaseUrl()],
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 8,
-    sendResetPassword: async ({ user, url }) => {
-      if (process.env.NODE_ENV === "development") {
-        console.info("[recuperar-senha]", user.email, url);
-      }
-    },
-  },
-  user: {
-    additionalFields: {
-      isSuperadmin: {
-        type: "boolean",
-        required: false,
-        defaultValue: false,
-        input: false,
+function buildAuth() {
+  return betterAuth({
+    database: drizzleAdapter(getDb(), {
+      provider: "pg",
+      schema: {
+        user: schema.user,
+        session: schema.session,
+        account: schema.account,
+        verification: schema.verification,
+      },
+    }),
+    baseURL: getBaseUrl(),
+    secret: getSecret(),
+    trustedOrigins: [getBaseUrl()],
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 8,
+      sendResetPassword: async ({ user, url }) => {
+        if (process.env.NODE_ENV === "development") {
+          console.info("[recuperar-senha]", user.email, url);
+        }
       },
     },
-  },
-  session: {
-    additionalFields: {
-      activeCompanyId: {
-        type: "string",
-        required: false,
-        input: false,
+    user: {
+      additionalFields: {
+        isSuperadmin: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
+          input: false,
+        },
       },
     },
+    session: {
+      additionalFields: {
+        activeCompanyId: {
+          type: "string",
+          required: false,
+          input: false,
+        },
+      },
+    },
+    plugins: [nextCookies()],
+  });
+}
+
+type AuthInstance = ReturnType<typeof betterAuth>;
+
+let authSingleton: AuthInstance | undefined;
+
+function getAuthInstance(): AuthInstance {
+  if (!authSingleton) {
+    authSingleton = buildAuth();
+  }
+  return authSingleton;
+}
+
+/** Lazy: só liga à base quando a primeira operação de auth é pedida (FR3 / SB-01). */
+export const auth = new Proxy({} as AuthInstance, {
+  get(_target, prop, receiver) {
+    const inst = getAuthInstance();
+    const value = Reflect.get(inst as object, prop, receiver) as unknown;
+    if (typeof value === "function") {
+      return (value as (...args: unknown[]) => unknown).bind(inst);
+    }
+    return value;
   },
-  plugins: [nextCookies()],
 });
