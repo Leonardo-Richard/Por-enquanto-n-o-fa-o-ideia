@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Company, Execution, PortalSettings } from "@repo/shared";
+import { hydrateMonthlyRunDay } from "@repo/shared";
 
 const STORAGE_KEY = "portal-automacao-nf.data.v1";
 
@@ -52,7 +53,17 @@ function loadPersisted(): Persisted {
     const parsed = JSON.parse(raw) as Persisted;
     return {
       user: parsed.user ?? null,
-      companies: Array.isArray(parsed.companies) ? parsed.companies : [],
+      companies: Array.isArray(parsed.companies)
+        ? parsed.companies.map((row) => {
+            const c = row as Company;
+            return {
+              ...c,
+              monthlyRunDay: hydrateMonthlyRunDay(
+                (c as { monthlyRunDay?: unknown }).monthlyRunDay,
+              ),
+            };
+          })
+        : [],
       executions: Array.isArray(parsed.executions) ? parsed.executions : [],
       settings: { ...defaultSettings, ...parsed.settings },
     };
@@ -78,10 +89,11 @@ type PortalContextValue = {
     cnpjDigits: string;
     tradeName: string;
     systemCode: string;
+    monthlyRunDay?: number;
   }) => Company;
   updateCompany: (
     id: string,
-    patch: Partial<Pick<Company, "tradeName" | "systemCode">>,
+    patch: Partial<Pick<Company, "tradeName" | "systemCode" | "monthlyRunDay">>,
   ) => void;
   removeCompany: (id: string) => void;
   runSync: (companyId: string, trigger: Execution["trigger"]) => void;
@@ -141,6 +153,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       cnpjDigits: string;
       tradeName: string;
       systemCode: string;
+      monthlyRunDay?: number;
     }) => {
       const id =
         typeof crypto !== "undefined" && crypto.randomUUID
@@ -151,6 +164,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         cnpjDigits: input.cnpjDigits,
         tradeName: input.tradeName.trim(),
         systemCode: input.systemCode.trim(),
+        monthlyRunDay: hydrateMonthlyRunDay(input.monthlyRunDay),
         createdAt: new Date().toISOString(),
       };
       const startedAt = new Date().toISOString();
@@ -176,9 +190,21 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   );
 
   const updateCompany = useCallback(
-    (id: string, patch: Partial<Pick<Company, "tradeName" | "systemCode">>) => {
+    (
+      id: string,
+      patch: Partial<Pick<Company, "tradeName" | "systemCode" | "monthlyRunDay">>,
+    ) => {
       setCompanies((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        prev.map((c) => {
+          if (c.id !== id) {
+            return c;
+          }
+          const next = { ...c, ...patch };
+          if (patch.monthlyRunDay !== undefined) {
+            next.monthlyRunDay = hydrateMonthlyRunDay(patch.monthlyRunDay);
+          }
+          return next;
+        }),
       );
     },
     [],

@@ -6,7 +6,7 @@
 
 - Permitir que usuários cadastrem múltiplas empresas (CNPJ) com um **código do sistema** de origem das notas fiscais, com dados vinculados à conta autenticada.
 - Automatizar a coleta de NF e a **organização local** em pastas **por empresa**, com convenção estável: **CNPJ (somente dígitos)** e subpasta pelo **código do sistema**.
-- Disparar coleta **ao concluir o cadastro** da empresa e **no dia 1º de cada mês** (rotina mensal), com política clara quando o cliente local estiver indisponível.
+- Disparar coleta **ao concluir o cadastro** da empresa e **mensalmente no dia do mês configurado por empresa** (padrão **dia 1**, intervalo **1–28**), com política clara quando o cliente local estiver indisponível.
 - Entregar um **componente local** (agente desktop prioritário para Windows) que efetue escrita em disco por um **canal seguro** com o backend.
 - Estabelecer base de **segurança e privacidade** (LGPD): mínimo de dados, credenciais protegidas, auditoria de acesso e criptografia em trânsito e em repouso onde aplicável.
 - Fornecir **visibilidade mínima** de execução (última execução, sucesso/falha, mensagem de erro legível) já no MVP, como fundação para alertas pós-MVP.
@@ -21,6 +21,7 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 
 | Date       | Version | Description                                              | Author   |
 | ---------- | ------- | -------------------------------------------------------- | -------- |
+| 2026-04-22 | 0.2     | Agendamento mensal **por empresa** (dia 1–28, default 1); novas stories 2.4 e 4.3 atualizada; FR10/FR18; apêndice. Ver `docs/brief-atualizacao-agendamento-por-empresa.md`. | PM (AIOS) |
 | 2026-04-20 | 0.1     | Versão inicial do PRD a partir de `docs/brief.md`        | PM (AIOS) |
 
 ---
@@ -38,7 +39,7 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 7. **FR7 — Configuração da pasta raiz:** O usuário deve definir no **cliente local** o caminho da pasta raiz onde as subpastas por CNPJ serão criadas; o backend não precisa validar o path, apenas receber metadados necessários ao pairing.
 8. **FR8 — Pairing do agente:** O usuário deve conseguir associar o agente local à sua conta de forma segura (ex.: código de emparelhamento de curta duração ou fluxo equivalente).
 9. **FR9 — Gatilho pós-cadastro:** Ao concluir com sucesso o cadastro de uma nova empresa, o sistema deve enfileirar uma **execução imediata** de coleta para aquela empresa (assíncrona em relação à UI).
-10. **FR10 — Gatilho mensal:** Deve existir agendamento **no dia 1º de cada mês**, por empresa, executando a coleta conforme a configuração vigente.
+10. **FR10 — Gatilho mensal por empresa:** Deve existir agendamento **recorrente mensal por empresa ativa**, executando a coleta no **dia do mês** definido para aquela empresa (intervalo **1–28**; padrão **1** na criação e para dados legados sem valor), no fuso e horário de **FR11**.
 11. **FR11 — Fuso e horário do job mensal:** O agendamento mensal usa **timezone América/São_Paulo**; horário padrão **06:00** (ajustável em versão futura). Deve ficar explícito na UI que o horário é neste fuso.
 12. **FR12 — Execução com cliente offline:** Se não houver agente disponível no horário agendado, o job permanece **pendente** e deve ser **retentado automaticamente** com backoff até limite configurável (ver NFRs); a UI deve mostrar “pendente / aguardando cliente”.
 13. **FR13 — Entrega ao agente:** O backend deve enviar ao agente instruções suficientes para executar o download e gravar no path acordado (contrato de comando documentado na arquitetura).
@@ -46,6 +47,7 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 15. **FR15 — Status de execução:** Para cada execução, o usuário deve ver na web: estado (sucesso, falha, pendente), timestamp da última tentativa e mensagem de erro resumida quando houver falha.
 16. **FR16 — Listagem de empresas:** Tela com lista de empresas da conta, com acesso a detalhes e histórico resumido de execuções.
 17. **FR17 — Edição e desativação:** Permitir editar nome fantasia e código do sistema onde não houver conflito; permitir desativar empresa para interromper agendamentos futuros sem apagar histórico (comportamento exato de “arquivar” vs “excluir” — MVP: **desativar** obrigatório, exclusão física opcional/fase 2).
+18. **FR18 — Dia da automação mensal (configuração):** No cadastro e na edição da empresa, o utilizador deve definir o **dia de execução mensal** (1–28). A UI deve explicar que o horário segue **FR11** (fuso América/São Paulo). Valores inválidos são bloqueados com mensagem clara na UI e na API.
 
 ### Non Functional
 
@@ -108,7 +110,7 @@ Sem identidade visual fechada neste PRD; usar sistema de design neutro e profiss
 ### Service Architecture
 
 - **API** para autenticação e CRUD de empresas.  
-- **Workers / fila** para jobs de coleta e agendamento do dia 1º.  
+- **Workers / fila** para jobs de coleta e agendamento mensal **por dia configurado na empresa** (1–28).  
 - **Serviço de agendamento** confiável (cron gerenciado + fila; idempotência por empresa + período).  
 - **Canal persistente e seguro** entre agente e backend (WebSocket seguro, streaming ou polling de longo prazo — decisão do arquiteto).  
 - **Armazenamento:** base relacional para entidades e estado de jobs; object storage apenas se necessário para artefatos (fase posterior).
@@ -131,9 +133,9 @@ Sem identidade visual fechada neste PRD; usar sistema de design neutro e profiss
 ## Epic List
 
 1. **Epic 1 — Fundação do produto e autenticação:** Estabelecer repositório, pipelines, app web mínimo, autenticação de conta e página de saúde/visibilidade de deploy.  
-2. **Epic 2 — Gestão de empresas na web:** CRUD de empresas com validação de CNPJ, unicidade por conta, normalização e UX de listagem/detalhe.  
+2. **Epic 2 — Gestão de empresas na web:** CRUD de empresas com validação de CNPJ, unicidade por conta, normalização, **dia mensal da automação (1–28)** e UX de listagem/detalhe.  
 3. **Epic 3 — Agente desktop e pipeline local:** Instalação/pairing, seleção de pasta raiz, criação da árvore `CNPJ/código-sistema`, recebimento de comandos e gravação segura.  
-4. **Epic 4 — Orquestração de coletas:** Fila de jobs, gatilho pós-cadastro, agendamento do dia 1º (America/São_Paulo), retentativas, status e erros expostos na UI.
+4. **Epic 4 — Orquestração de coletas:** Fila de jobs, gatilho pós-cadastro, agendamento mensal **por dia configurado na empresa** (America/São_Paulo), retentativas, status e erros expostos na UI.
 
 ---
 
@@ -207,6 +209,17 @@ Sem identidade visual fechada neste PRD; usar sistema de design neutro e profiss
 2. Ação de desativar impede novos agendamentos e mostra estado “inativa” na lista.  
 3. Tentativa de criar duplicata continua bloqueada após reativação futura (se implementada) sem violar unicidade.
 
+### Story 2.4 — Dia da automação mensal por empresa
+
+**User story:** Como utilizador, quero escolher o **dia do mês (1–28)** em que a coleta recorrente corre **para cada empresa**, para alinhar ao calendário de cada cliente, mantendo o **padrão dia 1** quando não altero nada.
+
+**Acceptance Criteria:**
+
+1. No **cadastro** e na **edição** da empresa, campo visível para o dia (selector ou input validado) com intervalo **1–28** e default **1**.  
+2. Texto de ajuda referencia que o horário é o de **FR11** (ex.: 06:00 em `America/São_Paulo`).  
+3. API persiste o valor com a empresa; rejeição **400** com mensagem clara para fora do intervalo ou tipo inválido.  
+4. Empresas já existentes sem o campo persistido comportam-se como dia **1** até o utilizador gravar uma edição.
+
 ---
 
 ## Epic 3 — Agente desktop e pipeline local
@@ -247,7 +260,7 @@ Sem identidade visual fechada neste PRD; usar sistema de design neutro e profiss
 
 ## Epic 4 — Orquestração de coletas
 
-**Objetivo ampliado:** Enfileirar trabalhos na criação da empresa, agendar mensalmente no fuso definido, retentar quando o agente estiver offline e expor status na web.
+**Objetivo ampliado:** Enfileirar trabalhos na criação da empresa, agendar mensalmente **no dia configurado por empresa (1–28, default 1)** no fuso definido, retentar quando o agente estiver offline e expor status na web.
 
 ### Story 4.1 — Fila de jobs e estados
 
@@ -269,15 +282,17 @@ Sem identidade visual fechada neste PRD; usar sistema de design neutro e profiss
 2. Falhas no enfileiramento são visíveis ao usuário.  
 3. Idempotência: recriação acidental não deve duplicar jobs indevidos (chave de idempotência).
 
-### Story 4.3 — Agendamento dia 1º e retentativas
+### Story 4.3 — Agendamento mensal por dia da empresa e retentativas
 
-**User story:** Como usuário, quero que no dia 1º de cada mês o sistema tente coletar sem me lembrar manualmente.
+**User story:** Como utilizador, quero que, em cada mês, o sistema tente coletar **no dia que configurei para aquela empresa** (por omissão dia **1**), sem me lembrar manualmente.
 
 **Acceptance Criteria:**
 
-1. Scheduler cria jobs mensais por empresa ativa em **America/São_Paulo** às **06:00** do dia 1º.  
-2. Se o agente estiver offline, job fica pendente e retenta conforme NFR9.  
-3. Após limite de retentativas, estado `falha` com mensagem orientando verificar agente/rede.
+1. O scheduler calcula `scheduled_for` em **America/São_Paulo** às **06:00** no **dia D** guardado na empresa (**D ∈ [1,28]**; omissão ou legado = **1**).  
+2. **Idempotência:** não é criado um segundo job `scheduled_monthly` para o mesmo **empresa + mês civil de referência** (chave de idempotência alinhada ao modelo em `docs/architecture.md`).  
+3. **Alteração do dia durante o mês:** se o job mensal do mês corrente **ainda não tiver sido materializado** na fila (pendente de tick), a primeira enfileiração deve usar o **D atual**; se já existir job mensal enfileirado ou terminal para esse mês, a alteração de D **só afeta meses seguintes** (sem segunda execução no mesmo mês por mudança de configuração).  
+4. Se o agente estiver offline à hora agendada, o job fica pendente e retenta conforme **NFR9**.  
+5. Após limite de retentativas, estado `falha` com mensagem a orientar verificar agente/rede.
 
 ### Story 4.4 — Integração mínima de conector
 
@@ -311,7 +326,7 @@ Com base neste PRD, produzir wireframes de baixa fidelidade para: dashboard de e
 
 ### Architect Prompt
 
-A partir deste PRD, desenhar arquitetura alvo: monorepo, serviços API + worker, fila e agendamento do job mensal com timezone, contrato versionado com o agente Windows, modelo de credenciais e ameaças (STRIDE resumido), escolha de DB e estratégia de idempotência de jobs. Incluir sequência de implementação alinhada aos épicos 1–4 e critérios de prontidão para produção (observabilidade, backups, política de segredos).
+A partir deste PRD, desenhar arquitetura alvo: monorepo, serviços API + worker, fila e agendamento do job mensal com **dia D por empresa (1–28)** e timezone, contrato versionado com o agente Windows, modelo de credenciais e ameaças (STRIDE resumido), escolha de DB e estratégia de idempotência de jobs (incl. chave por empresa + período mensal). Incluir sequência de implementação alinhada aos épicos 1–4 e critérios de prontidão para produção (observabilidade, backups, política de segredos).
 
 ---
 
@@ -320,11 +335,11 @@ A partir deste PRD, desenhar arquitetura alvo: monorepo, serviços API + worker,
 | Tema                         | Decisão no PRD                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------- |
 | Formato de pastas            | `{raiz}/{14 dígitos}/{codigo-sistema sanitizado}/`                            |
-| Job mensal                   | Dia 1º, 06:00, `America/Sao_Paulo`; retentativas se agente offline             |
+| Job mensal                   | **Dia D por empresa** (**D** ∈ 1–28, default **1**), **06:00**, `America/Sao_Paulo`; retentativas se agente offline |
 | CNPJ em pastas               | Somente dígitos (14), sem máscara                                               |
 | Cliente local                | Agente desktop Windows prioritário; pairing obrigatório                       |
 | Conector “sistema de origem” | MVP exige pelo menos um conector; expansão por novos conectores               |
 
 ---
 
-— Documento alinhado ao template `prd-template-v2` (AIOS). Última atualização: 2026-04-20.
+— Documento alinhado ao template `prd-template-v2` (AIOS). Última atualização: 2026-04-22.

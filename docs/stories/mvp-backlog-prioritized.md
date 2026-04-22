@@ -1,10 +1,10 @@
 # Backlog MVP — User stories priorizadas
 
 **Produto:** Portal de Automação de Notas Fiscais (por empresa)  
-**Fontes:** `docs/prd.md`, `docs/architecture.md`, `docs/front-end-spec.md`  
+**Fontes:** `docs/prd.md`, `docs/architecture.md`, `docs/front-end-spec.md`; incremento **agendamento por empresa:** `docs/prd-atualizacao-agendamento-por-empresa.md`, `docs/architecture-agendamento-por-empresa.md`, `docs/front-end-spec-agendamento-por-empresa.md`, `docs/stories/incremento-agendamento-por-empresa.md`  
 **Autor:** SM (River / AIOS)  
 **Data:** 2026-04-20  
-**Versão:** 0.4 — alinhamento DoR/PO (dependências explícitas, riscos, critérios de corte)
+**Versão:** 0.5 — supplemento histórias **AG-01–AG-03** (dia D mensal por empresa)
 
 ---
 
@@ -28,7 +28,7 @@
 | FR6–FR7 | P09, P11 |
 | FR8  | P10, P11 |
 | FR9  | P08 |
-| FR10–FR12 | P12, P11 |
+| FR10–FR12 | P12, P11; **FR10/FR18 (dia D por empresa)** → **AG-01–AG-03** (`incremento-agendamento-por-empresa.md`) |
 | FR13 | P11 |
 | FR14 (conector MVP) | P13 |
 | FR15–FR17 | P05, P06, P07, P08 |
@@ -73,7 +73,8 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 
 ### Índice de artefactos
 
-- **Fonte única do backlog MVP:** este ficheiro (`mvp-backlog-prioritized.md`). Ficheiros por história em `docs/stories/*.md` são **opcionais**; quando existirem, regenerar índice com `*stories-index` (PO).
+- **Fonte única do backlog MVP:** este ficheiro (`mvp-backlog-prioritized.md`). Ficheiros por história em `docs/stories/*.md` são **opcionais**; quando existirem, regenerar índice com `*stories-index` (PO).  
+- **Incremento dia D (pós PRD v0.2):** histórias detalhadas em **`docs/stories/incremento-agendamento-por-empresa.md`** (AG-01…AG-03); após **AG-03 Done**, alinhar texto de **P12** ao comportamento “dia `monthly_run_day`”, não “sempre dia 1”.
 
 ---
 
@@ -95,6 +96,9 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 | P11 | 3.3     | Agente: comandos e gravação em disco  | P08, P10               |
 | P12 | 4.3     | Agendamento mensal + retries          | P05, P11               |
 | P13 | 4.4     | Conector MVP                          | P11                    |
+| AG-01 | —     | UI + `monthlyRunDay` (portal / shared) | — (protótipo); API: após AG-02 |
+| AG-02 | —     | DB `monthly_run_day` + POST/PATCH     | P04                    |
+| AG-03 | —     | Scheduler diário SP + idempotência D  | P05, AG-02; estende P12 |
 
 **Notas:**
 
@@ -710,11 +714,13 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 
 ## P12 — Story 4.3: Agendamento mensal (dia 1, 06:00 SP) e retries
 
+> **Atualização PRD v0.2:** o dia deixa de ser fixo “1” e passa a **`companies.monthly_run_day` (1–28)**. Ver histórias **AG-01…AG-03** em `docs/stories/incremento-agendamento-por-empresa.md`. Após implementação do incremento, tratar esta secção como **agendamento mensal por dia D** e ajustar AC/story text numa revisão PO.
+
 **Status:** Draft  
 
 **Dependências (DoR):** P05 (modelo `jobs` e retries), P11 (agente executa trabalho).
 
-**Referências (DoR):** `docs/prd.md` (FR10–FR12); `docs/architecture.md` (*Deployment*, `CRON_SECRET`).
+**Referências (DoR):** `docs/prd.md` (FR10–FR12); `docs/architecture.md` (*Deployment*, `CRON_SECRET`); `docs/architecture-agendamento-por-empresa.md`.
 
 **Riscos (DoR):** Médio a alto — fuso `America/São_Paulo`, idempotência mensal, Vercel Cron/segredo.
 
@@ -799,10 +805,18 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 
 ---
 
+## Supplemento — incremento agendamento por empresa (AG-01…AG-03)
+
+Texto completo (DoR, AC, tasks, quality gate): **`docs/stories/incremento-agendamento-por-empresa.md`**.
+
+**Ordem sugerida:** **AG-01** (valor na UI e modelo local) → **AG-02** (persistência e API) → **AG-03** (worker). **AG-03** substitui a lógica “sempre dia 1” assumida em **P12**; manter retries e `CRON_SECRET` de P12.
+
+---
+
 ## CodeRabbit / qualidade (projeto)
 
 > Integração CodeRabbit: assumir **revisão manual** até `coderabbit_integration.enabled` estar ativo em `.aios-core/core-config.yaml`.  
-> Para cada PR: executar checklist de story e pedir revisão a `@architect` em histórias com impacto transversal (P01, P08, P11, P12).
+> Para cada PR: executar checklist de story e pedir revisão a `@architect` em histórias com impacto transversal (P01, P08, P11, P12, **AG-02**, **AG-03**).
 
 ---
 
@@ -814,6 +828,7 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 | 2026-04-20 | 0.2     | Matriz FR/NFR, DoR, P14 compliance/auditoria/rate limit; AC binários P02/P05/P08; P07/P10 com auditoria; ordem P14 antes P07/P10 | SM AIOS  |
 | 2026-04-20 | 0.3     | PO: P04 AC6 + Dev Notes P04↔P08; P06 AC3 polling binário; P14 AC6 headers; índice artefactos | SM AIOS  |
 | 2026-04-20 | 0.4     | DoR/PO: ciclo de vida e checklist por história; Dependências/Referências/Riscos (DoR) em P01–P14; P01 critérios de teste sem “opcional” ambíguo; P01 Testing alinhado ao CI (typecheck) | Backlog |
+| 2026-04-22 | 0.5     | Histórias **AG-01–AG-03** (`incremento-agendamento-por-empresa.md`); tabela resumo + matriz FR; nota em P12; supplemento e fontes do incremento | SM AIOS |
 
 ---
 

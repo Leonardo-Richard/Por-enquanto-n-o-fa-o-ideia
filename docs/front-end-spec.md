@@ -4,7 +4,8 @@
 
 Este documento define objetivos de experiência, arquitetura da informação, fluxos principais, wireframes conceituais, sistema de componentes e guia visual para a interface do **Portal de Automação de Notas Fiscais**. Serve de base para design visual e desenvolvimento front-end (Next.js / React / TypeScript / Tailwind, conforme PRD), garantindo experiência coesa e centrada no operador fiscal/financeiro.
 
-**Fonte de verdade de produto:** `docs/prd.md` (v0.1, 2026-04-20).
+**Fonte de verdade de produto:** `docs/prd.md` (**v0.2+**; agendamento mensal por empresa).  
+**Incremento UI/UX (dia 1–28 por empresa):** `docs/front-end-spec-agendamento-por-empresa.md`.
 
 **Escopo UX web:** autenticação, gestão de empresas, status de execuções e área de agente/pairing. **Escopo agente desktop (Windows):** fluxos mínimos descritos em secção dedicada; detalhes de implementação nativa ficam para o arquiteto/`@dev`.
 
@@ -47,6 +48,7 @@ Este documento define objetivos de experiência, arquitetura da informação, fl
 
 | Date       | Version | Description                                                         | Author        |
 | ---------- | ------- | ------------------------------------------------------------------- | ------------- |
+| 2026-04-22 | 0.2     | Referência ao incremento **agendamento por empresa** (`front-end-spec-agendamento-por-empresa.md`) e PRD v0.2 | UX (AIOS/Uma) |
 | 2026-04-20 | 0.1     | Especificação inicial a partir do PRD e template front-end-spec v2 | UX (AIOS/Uma) |
 
 ---

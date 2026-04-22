@@ -4,7 +4,7 @@
 
 Este documento descreve a arquitetura técnica unificada (web, API, workers, agente desktop e infraestrutura) do **Portal de Automação de Notas Fiscais**, servindo como referência para implementação e revisão. Combina o que tradicionalmente seriam documentos separados de backend e frontend num único modelo adequado a equipas fullstack e agentes de IA.
 
-**Documentos de entrada:** `docs/prd.md` (v0.1), `docs/front-end-spec.md` (v0.1).
+**Documentos de entrada:** `docs/prd.md` (**v0.2+**), `docs/front-end-spec.md` (v0.2+), incremento **agendamento por empresa:** `docs/architecture-agendamento-por-empresa.md`, `docs/front-end-spec-agendamento-por-empresa.md`, `docs/prd-atualizacao-agendamento-por-empresa.md`.
 
 ### Starter Template ou Projeto Existente
 
@@ -15,6 +15,7 @@ Este documento descreve a arquitetura técnica unificada (web, API, workers, age
 
 | Date       | Version | Description                                              | Author        |
 | ---------- | ------- | -------------------------------------------------------- | ------------- |
+| 2026-04-22 | 0.2     | Referência ao incremento **monthly_run_day** por empresa; DDL e fluxo mensal atualizados; ver `docs/architecture-agendamento-por-empresa.md` | Architect (AIOS) |
 | 2026-04-20 | 0.1     | Arquitetura inicial derivada do PRD e front-end-spec      | Architect (AIOS) |
 
 ---
@@ -330,9 +331,9 @@ sequenceDiagram
   participant Q as Fila/Worker
   participant AG as Agente
 
-  U->>W: Submete empresa
+  U->>W: Submete empresa (incl. monthlyRunDay opcional, default 1)
   W->>API: POST /companies
-  API->>DB: INSERT company
+  API->>DB: INSERT company (monthly_run_day)
   API->>DB: INSERT job (immediate, pending)
   API-->>W: 201 + company + job id
   Q->>DB: claim job
@@ -341,17 +342,19 @@ sequenceDiagram
   Q->>DB: UPDATE job status
 ```
 
-### Job mensal (dia 1, 06:00 America/Sao_Paulo)
+### Job mensal (dia D por empresa, 06:00 America/Sao_Paulo)
+
+O dia **D** vem de `companies.monthly_run_day` (1–28, default 1). O **tick diário** (ex.: 06:05 em `America/Sao_Paulo`) materializa jobs apenas quando o **calendário local** coincide com **D**; `idempotency_key` = `sched_monthly:{company_id}:{YYYY-MM}`. Detalhes em **`docs/architecture-agendamento-por-empresa.md`**.
 
 ```mermaid
 sequenceDiagram
-  participant CRON as Scheduler
+  participant CRON as Scheduler diário SP
   participant Q as Worker
   participant DB as Postgres
   participant AG as Agente
 
-  CRON->>Q: tick (enfileirar por empresa ativa)
-  Q->>DB: INSERT job scheduled_monthly idempotente
+  CRON->>Q: tick (empresas cujo dia local = monthly_run_day)
+  Q->>DB: INSERT job scheduled_monthly idempotente por empresa+mês
   Q->>AG: se online, entregar; senão pending + next_retry_at
 ```
 
@@ -377,6 +380,7 @@ CREATE TABLE companies (
   cnpj_digits CHAR(14) NOT NULL,
   trade_name TEXT,
   system_code TEXT NOT NULL,
+  monthly_run_day SMALLINT NOT NULL DEFAULT 1 CHECK (monthly_run_day >= 1 AND monthly_run_day <= 28),
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -462,7 +466,7 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 - **Camada HTTP:** Route Handlers finos → chamam **serviços de domínio** (`CompanyService`, `JobService`, `AgentService`).
 - **Worker:** mesmo pacote ou `apps/worker` com import dos serviços; execução via **cron HTTP protegido por secret** ou **BullMQ** consumindo Redis.
-- **Agendamento mensal:** job criado por **query idempotente** “para cada empresa ativa, criar job se não existir para período YYYY-MM” ou scheduler dedicado (Inngest/Trigger.dev como alternativa gerida).
+- **Agendamento mensal:** tick diário em `America/Sao_Paulo` que, no dia **D** = `companies.monthly_run_day`, cria job `scheduled_monthly` com **idempotência** `sched_monthly:{company_id}:{YYYY-MM}` (ver `docs/architecture-agendamento-por-empresa.md`). Alternativa gerida: Inngest/Trigger.dev com a mesma chave de deduplicação.
 
 ### Authentication and Authorization
 

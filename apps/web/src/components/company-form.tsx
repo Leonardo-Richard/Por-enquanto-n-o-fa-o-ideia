@@ -1,16 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 import { formatCnpj, isValidCnpj, sanitizeCnpj } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
+
+const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export function CompanyForm() {
   const { addCompany } = usePortal();
   const router = useRouter();
+  const monthlyHelpId = useId();
   const [cnpj, setCnpj] = useState("");
   const [tradeName, setTradeName] = useState("");
   const [systemCode, setSystemCode] = useState("");
+  const [monthlyRunDay, setMonthlyRunDay] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   function onSubmit(e: FormEvent) {
@@ -29,6 +33,7 @@ export function CompanyForm() {
       cnpjDigits: digits,
       tradeName,
       systemCode,
+      monthlyRunDay,
     });
     router.push(`/empresas/${company.id}`);
   }
@@ -86,6 +91,35 @@ export function CompanyForm() {
         />
         <p className="mt-1.5 text-xs text-black/50 dark:text-white/45">
           Identifica a origem lógica das notas; vira segmento de pasta no disco.
+        </p>
+      </div>
+      <div>
+        <label
+          htmlFor="monthlyRunDay"
+          className="text-xs font-medium text-black/70 dark:text-white/65"
+        >
+          Dia da coleta mensal
+        </label>
+        <select
+          id="monthlyRunDay"
+          aria-describedby={monthlyHelpId}
+          value={monthlyRunDay}
+          onChange={(e) => setMonthlyRunDay(Number(e.target.value))}
+          className="mt-1.5 w-full max-w-xs rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
+        >
+          {DAY_OPTIONS.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <p
+          id={monthlyHelpId}
+          className="mt-1.5 text-xs text-black/50 dark:text-white/45"
+        >
+          A coleta recorrente corre às <strong>06:00</strong> no fuso{" "}
+          <strong>América/São Paulo</strong>. Escolha o dia civil (1 a 28) em que
+          quer que o job mensal seja agendado.
         </p>
       </div>
 

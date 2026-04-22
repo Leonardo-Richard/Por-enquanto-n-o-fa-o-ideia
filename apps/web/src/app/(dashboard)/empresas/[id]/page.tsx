@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { formatCnpj } from "@repo/shared";
+import { useEffect, useId, useMemo, useState } from "react";
+import { formatCnpj, messageFromMonthlyRunDayParse } from "@repo/shared";
 import { usePortal } from "@/context/portal-provider";
+
+const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export default function EmpresaDetailPage() {
   const params = useParams();
@@ -12,6 +14,8 @@ export default function EmpresaDetailPage() {
   const { companies, pathForCompany, runSync, updateCompany, removeCompany } =
     usePortal();
   const router = useRouter();
+  const monthlyHelpId = useId();
+  const monthlyRunDayErrorId = useId();
 
   const company = useMemo(
     () => companies.find((c) => c.id === id),
@@ -20,13 +24,17 @@ export default function EmpresaDetailPage() {
 
   const [tradeName, setTradeName] = useState("");
   const [systemCode, setSystemCode] = useState("");
+  const [monthlyRunDay, setMonthlyRunDay] = useState(1);
   const [dirty, setDirty] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
 
   useEffect(() => {
     if (company) {
       setTradeName(company.tradeName);
       setSystemCode(company.systemCode);
+      setMonthlyRunDay(company.monthlyRunDay);
       setDirty(false);
+      setFieldError(null);
     }
   }, [company]);
 
@@ -50,12 +58,23 @@ export default function EmpresaDetailPage() {
   const path = pathForCompany(comp);
 
   function save() {
+    setFieldError(null);
+    const monthlyErr = messageFromMonthlyRunDayParse(monthlyRunDay);
+    if (monthlyErr) {
+      setFieldError(monthlyErr);
+      return;
+    }
     updateCompany(comp.id, {
       tradeName,
       systemCode,
+      monthlyRunDay,
     });
     setDirty(false);
   }
+
+  const monthlySelectDescribedBy = fieldError
+    ? `${monthlyHelpId} ${monthlyRunDayErrorId}`
+    : monthlyHelpId;
 
   return (
     <div className="space-y-10">
@@ -72,6 +91,10 @@ export default function EmpresaDetailPage() {
         <p className="mt-1 text-xs text-black/50 dark:text-white/45">
           Cadastrada em{" "}
           {new Date(comp.createdAt).toLocaleString("pt-BR")}
+        </p>
+        <p className="mt-4 max-w-xl text-sm text-black/70 dark:text-white/65">
+          Coleta automática mensal: dia <strong>{comp.monthlyRunDay}</strong>, às
+          06:00 (América/São Paulo).
         </p>
       </div>
 
@@ -122,6 +145,48 @@ export default function EmpresaDetailPage() {
             className="mt-1.5 w-full max-w-md rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 font-mono text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
           />
         </div>
+        <div>
+          <label
+            htmlFor="monthlyRunDay"
+            className="text-xs font-medium text-black/70 dark:text-white/65"
+          >
+            Dia da coleta mensal
+          </label>
+          <select
+            id="monthlyRunDay"
+            aria-invalid={fieldError ? true : undefined}
+            aria-describedby={monthlySelectDescribedBy}
+            value={monthlyRunDay}
+            onChange={(e) => {
+              setMonthlyRunDay(Number(e.target.value));
+              setDirty(true);
+              setFieldError(null);
+            }}
+            className="mt-1.5 w-full max-w-xs rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
+          >
+            {DAY_OPTIONS.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <p
+            id={monthlyHelpId}
+            className="mt-1.5 text-xs text-black/50 dark:text-white/45"
+          >
+            A coleta recorrente corre às <strong>06:00</strong> no fuso{" "}
+            <strong>América/São Paulo</strong>.
+          </p>
+        </div>
+        {fieldError ? (
+          <p
+            id={monthlyRunDayErrorId}
+            className="text-sm text-red-600 dark:text-red-400"
+            role="alert"
+          >
+            {fieldError}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -147,7 +212,7 @@ export default function EmpresaDetailPage() {
           onClick={() => runSync(comp.id, "monthly")}
           className="rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/15"
         >
-          Simular job do dia 1º
+          Simular coleta mensal (dia {comp.monthlyRunDay})
         </button>
       </section>
 

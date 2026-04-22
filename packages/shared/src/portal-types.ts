@@ -7,6 +7,8 @@ export type Company = {
   cnpjDigits: string;
   tradeName: string;
   systemCode: string;
+  /** Dia civil da coleta mensal em América/São Paulo (1–28). */
+  monthlyRunDay: number;
   createdAt: string;
 };
 
