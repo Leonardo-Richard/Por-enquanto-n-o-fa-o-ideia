@@ -112,8 +112,62 @@ export function AdnCertificateReadinessCard({
     );
   }
 
-  if (access === "feature_off" || access === "forbidden") {
+  if (access === "forbidden") {
     return null;
+  }
+
+  if (access === "feature_off") {
+    return (
+      <div
+        role="region"
+        aria-labelledby={`${baseId}-cert-off-title`}
+        className="mb-4 rounded-xl border border-black/8 bg-white/60 p-4 dark:border-white/12 dark:bg-white/[0.04]"
+      >
+        <h3
+          id={`${baseId}-cert-off-title`}
+          className="text-sm font-semibold text-black/90 dark:text-white/90"
+        >
+          Certificado para o ADN
+        </h3>
+        <p className="mt-2 text-sm text-black/75 dark:text-white/70">
+          O portal não encontrou o endpoint de verificação de certificado neste ambiente (por exemplo, a API de
+          registo ainda desactivada no processo Node). Defina{" "}
+          <span className="font-mono text-[11px] sm:text-xs">CERT_UPLOAD_API_ENABLED=true</span> no ficheiro{" "}
+          <span className="font-mono text-[11px] sm:text-xs">.env</span> na raiz do repositório ou em{" "}
+          <span className="font-mono text-[11px] sm:text-xs">apps/web/.env.local</span>, guarde e reinicie o{" "}
+          <span className="font-mono text-[11px] sm:text-xs">npm run dev</span>.
+        </p>
+        {runbookUrl ? (
+          <p className="mt-2 text-sm">
+            <a
+              href={runbookUrl}
+              {...runbookAnchor}
+              className="font-medium text-sky-900 underline decoration-sky-900/35 underline-offset-2 dark:text-sky-200 dark:decoration-sky-200/40"
+            >
+              Como configurar o certificado no servidor de recolha
+            </a>
+          </p>
+        ) : null}
+        {isCertUploadUiEnabled() ? (
+          <AdnCertificateRegistrationForm
+            organizationId={organizationId}
+            companyId={companyId}
+            cnpjDigits={cnpjDigits}
+            onRegistered={() => {
+              onCertificateRegistered?.();
+              void refresh();
+            }}
+          />
+        ) : (
+          <p className="mt-3 text-xs text-black/55 dark:text-white/50">
+            Para mostrar o envio de ficheiro (.pfx / .p12) aqui, active também{" "}
+            <span className="font-mono text-[11px]">NEXT_PUBLIC_CERT_UPLOAD_UI_ENABLED=true</span> e reinicie o
+            servidor de desenvolvimento.
+          </p>
+        )}
+        <p className="mt-3 text-xs text-black/55 dark:text-white/50">{SECURITY_NOTE}</p>
+      </div>
+    );
   }
 
   if (access === "error") {

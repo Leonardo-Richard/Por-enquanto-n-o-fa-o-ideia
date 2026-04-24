@@ -26,9 +26,12 @@ export function AdnSyncPanel({ company }: { company: Company }) {
     onSyncAccepted: bumpReadiness,
   });
 
-  /** Certificado + readiness: sempre que faz sentido pedir estado ao servidor (inclui org sem fila ADN). */
+  /** Certificado + readiness: sempre que não for explícito «sem permissão» (inclui org sem fila ADN e o carregamento inicial). */
   const showCertificateSection =
-    access === "active" || access === "feature_off" || access === "error";
+    access === "loading" ||
+    access === "active" ||
+    access === "feature_off" ||
+    access === "error";
 
   const runbookUrl = getAdnCertRunbookUrl();
   const runbookAnchor = runbookUrl ? runbookAnchorProps(runbookUrl) : {};
