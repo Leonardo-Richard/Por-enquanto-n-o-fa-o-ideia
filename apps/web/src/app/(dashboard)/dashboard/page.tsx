@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { displayCnpjLabel } from "@repo/shared";
+import { MonitoredCompaniesSection } from "@/components/monitored-companies-section";
 import { usePortal } from "@/context/portal-provider";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
 import { useMonitoredCompanies } from "@/hooks/use-monitored-companies";
 
 export default function DashboardPage() {
-  const { executions, settings, runSync } = usePortal();
+  const { executions, settings } = usePortal();
   const { effectiveOrganizationId } = useMeSummary();
-  const { companies } = useMonitoredCompanies(effectiveOrganizationId);
+  const monitoredQuery = useMonitoredCompanies(effectiveOrganizationId);
 
   const lastRun = executions[0];
   const successRate =
@@ -21,7 +22,7 @@ export default function DashboardPage() {
             100,
         );
 
-  const list = companies ?? [];
+  const list = monitoredQuery.companies ?? [];
 
   return (
     <div className="space-y-10">
@@ -71,34 +72,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
-        <h2 className="text-base font-semibold tracking-tight">Empresas monitoradas</h2>
-        <p className="mt-1 text-xs text-black/55 dark:text-white/50">
-          CNPJs da organização ativa; dispare coletas de teste por empresa.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {list.length === 0 ? (
-            <p className="text-sm text-black/55 dark:text-white/50">
-              Nenhuma empresa nesta organização. Cadastre em{" "}
-              <Link href="/empresas/nova" className="font-medium text-emerald-700 dark:text-emerald-400">
-                Nova empresa monitorada
-              </Link>
-              .
-            </p>
-          ) : (
-            list.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => runSync(c.id, "monthly", c.cnpjMasked)}
-                className="rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-xs font-medium transition-colors hover:bg-black/[0.03] dark:border-white/15 dark:hover:bg-white/[0.04]"
-              >
-                Job mensal · {c.cnpjMasked}
-              </button>
-            ))
-          )}
-        </div>
-      </section>
+      <MonitoredCompaniesSection query={monitoredQuery} />
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
         <h2 className="text-sm font-semibold">Rotina mensal (dia 1º)</h2>

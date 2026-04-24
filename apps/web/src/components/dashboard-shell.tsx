@@ -6,15 +6,38 @@ import { useEffect, useState } from "react";
 import { useAppSession } from "@/context/app-session";
 import { signOut } from "@/lib/auth-browser";
 
-const nav = [
-  { href: "/dashboard", label: "Painel" },
-  { href: "/empresas", label: "Organização" },
-  { href: "/execucoes", label: "Execuções" },
-  { href: "/configuracoes", label: "Configurações" },
-] as const;
+type NavItem = {
+  href: string;
+  label: string;
+  isActive: (pathname: string) => boolean;
+};
+
+const navItems: NavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Painel",
+    isActive: (p) => p === "/dashboard",
+  },
+  {
+    href: "/empresas-monitoradas",
+    label: "Empresas monitoradas",
+    isActive: (p) =>
+      p === "/empresas-monitoradas" || p.startsWith("/empresas-monitoradas/"),
+  },
+  {
+    href: "/execucoes",
+    label: "Execuções",
+    isActive: (p) => p.startsWith("/execucoes"),
+  },
+  {
+    href: "/configuracoes",
+    label: "Configurações",
+    isActive: (p) => p.startsWith("/configuracoes"),
+  },
+];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const { data } = useAppSession();
   const [orgName, setOrgName] = useState<string | null>(null);
 
@@ -67,15 +90,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
           <nav className="flex flex-1 flex-col gap-0.5 px-2">
-            {nav.map((item) => {
-              const active =
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname.startsWith(item.href);
+            {navItems.map((item) => {
+              const active = item.isActive(pathname);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={`rounded-lg px-3 py-2 text-sm transition-colors ${
                     active
                       ? "bg-emerald-600/15 font-medium text-emerald-900 dark:text-emerald-200"
@@ -117,15 +138,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <nav className="flex gap-1 overflow-x-auto px-2 pb-2">
-              {nav.map((item) => {
-                const active =
-                  item.href === "/dashboard"
-                    ? pathname === "/dashboard"
-                    : pathname.startsWith(item.href);
+              {navItems.map((item) => {
+                const active = item.isActive(pathname);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    aria-current={active ? "page" : undefined}
                     className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${
                       active
                         ? "bg-emerald-600/15 font-medium text-emerald-900 dark:text-emerald-200"

@@ -16,10 +16,18 @@ export type MonitoredCompaniesIssue = {
   message: string;
 };
 
+/** Estado devolvido por `useMonitoredCompanies` — passar ao `MonitoredCompaniesSection` para evitar fetch duplicado no Painel. */
+export type MonitoredCompaniesQuery = {
+  companies: MonitoredCompanyRow[] | null;
+  loading: boolean;
+  issue: MonitoredCompaniesIssue | null;
+  reload: () => Promise<void>;
+};
+
 /**
  * TanStack Query key sugerida: ['monitored-companies', organizationId] (ORG-08).
  */
-export function useMonitoredCompanies(organizationId: string | null | undefined) {
+export function useMonitoredCompanies(organizationId: string | null | undefined): MonitoredCompaniesQuery {
   const [data, setData] = useState<MonitoredCompanyRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<MonitoredCompaniesIssue | null>(null);
