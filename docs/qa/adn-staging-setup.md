@@ -7,6 +7,10 @@ Aplicar na base do mesmo projecto que `DATABASE_URL` (por ordem, conforme o repo
 - `db/migrations/20260425103000_adn_01_ddl.sql`
 - `db/migrations/20260427120000_org_local_download_root.sql` — pasta raiz Windows persistida (`organizations.local_download_root`) para o worker espelhar XML/PDF em disco.
 
+**Worker espelho (LM-02):** após migração e `GET`/`PATCH` em `…/adn-sync-settings` (valor na base), o `poll_jobs.py` lê `organizations.local_download_root` por job. Variável `NFSE_LOCAL_MIRROR_DISABLED=1` desactiva a cópia local sem falhar o job; o `PATCH` final do job inclui `mirrorWritten`, `mirrorFailed` e `mirrorHadFailures` em `summaryJson` quando aplicável.
+
+**Testes integração (LM-01B):** com Postgres acessível, na raiz do monorepo: `cd apps/web && npx vitest run src/app/api/v1/organization-adn-sync-settings.integration.test.ts` (requer `DATABASE_URL` no ambiente, igual ao portal).
+
 ## 2. Variáveis
 
 Ver `.env.example` (secção ADN). Obrigatório para *worker* e rotas internas:
@@ -47,7 +51,8 @@ Enviar `POST /api/internal/v1/adn/uploads/prepare` com esse corpo e cabeçalhos.
 1. `uploads:prepare` → URL PUT assinada.  
 2. `PUT` bytes no Storage.  
 3. `artifacts:commit` com `artifactDraftId`.  
-4. `PATCH /api/internal/v1/adn/jobs/:jobId` para estado / resumo.
+4. Espelho local (`mirror_local.py`) quando `local_download_root` preenchido e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`.  
+5. `PATCH /api/internal/v1/adn/jobs/:jobId` para estado / resumo (inclui contagens de espelho em `summaryJson`).
 
 ## 6. 429 no ADN nacional
 

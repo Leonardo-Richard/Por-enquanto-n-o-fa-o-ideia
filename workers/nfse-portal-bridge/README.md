@@ -39,6 +39,7 @@ pip install -r requirements.txt
 | `NFSE_DIST_CLIENTS_LOCAL_PATH` | `C:\secrets\clients.local.json` | Opcional: ficheiro com thumbprint / `senha_cert` / PFX (não versionar). |
 | `POLL_INTERVAL_SEC` | `15` | Intervalo quando não há jobs. |
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Só smoke/testes:** não chama `run_download_workflow` (valida fila + `PATCH` + uploads vazios). |
+| `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
 
 **Importante (monorepo):** o Next lê `apps/web/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 
@@ -70,7 +71,8 @@ Fluxo por job:
 3. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`).
 4. Executa `run_download_workflow()` (XML + PDF como no repositório original).
 5. Percorre `data/<CNPJ>/` e envia cada XML/PDF ao portal (`uploads/prepare` → PUT → `artifacts/commit`).
-6. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`).
+6. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{CNPJ}\{system_code}\` (`mirror_local.py`).
+7. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
 
 ## 4. Certificado e organização
 
@@ -79,5 +81,6 @@ Fluxo por job:
 
 ## 5. Limitações conhecidas
 
+- **Caminhos no portal (`local_download_root`):** prefixos **`\\?\`** / **`\\.\`** (extended path / device) e **UNC** (`\\` + servidor + partilha) são rejeitados na API com código estável (diferente de `C:\...`). O worker não usa extended paths para a raiz.
 - A UI Rich do NFSE_dist espera consola; em ambientes sem TTY pode falhar — preferir `cmd.exe` interactivo ou consola de serviço com utilizador logado.
 - Paralelismo PDF (`NFSE_DIST_PDF_WORKERS`, etc.) segue o [README upstream](https://github.com/RafaelOliveiraCf/NFSE_dist#variáveis-de-ambiente).

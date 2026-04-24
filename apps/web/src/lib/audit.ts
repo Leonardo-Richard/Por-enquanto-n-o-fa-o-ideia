@@ -11,7 +11,8 @@ type AuditEventType =
   | "adn_sync_requested"
   | "adn_sync_completed"
   | "adn_sync_failed"
-  | "adn_artifact_downloaded";
+  | "adn_artifact_downloaded"
+  | "organization_local_download_root_updated";
 
 export async function insertAuditEvent(
   db: Db,

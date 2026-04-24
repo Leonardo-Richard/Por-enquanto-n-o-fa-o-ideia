@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { displayCnpjLabel } from "@repo/shared";
 import { MonitoredCompaniesSection } from "@/components/monitored-companies-section";
 import { usePortal } from "@/context/portal-provider";
@@ -9,8 +10,51 @@ import { useMonitoredCompanies } from "@/hooks/use-monitored-companies";
 
 export default function DashboardPage() {
   const { executions, settings } = usePortal();
-  const { effectiveOrganizationId } = useMeSummary();
+  const { effectiveOrganizationId, loading: orgLoading } = useMeSummary();
   const monitoredQuery = useMonitoredCompanies(effectiveOrganizationId);
+  const [serverMirrorPath, setServerMirrorPath] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!effectiveOrganizationId) {
+      setServerMirrorPath(undefined);
+      return;
+    }
+    if (orgLoading) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/v1/organizations/${effectiveOrganizationId}/adn-sync-settings`,
+          { credentials: "include", cache: "no-store" },
+        );
+        if (!r.ok || cancelled) {
+          if (!cancelled) {
+            setServerMirrorPath(null);
+          }
+          return;
+        }
+        const j = (await r.json()) as { localDownloadRoot?: string | null };
+        if (cancelled) {
+          return;
+        }
+        const raw = j.localDownloadRoot;
+        if (typeof raw === "string" && raw.trim().length > 0) {
+          setServerMirrorPath(raw.trim());
+        } else {
+          setServerMirrorPath(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setServerMirrorPath(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveOrganizationId, orgLoading]);
 
   const lastRun = executions[0];
   const successRate =
@@ -129,20 +173,32 @@ export default function DashboardPage() {
           Agente no computador
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-emerald-900/85 dark:text-emerald-50/85">
-          O site orquestra cadastros e agendamentos; o download efetivo para{" "}
-          <code className="rounded bg-black/10 px-1 font-mono text-xs dark:bg-white/10">
-            {settings.localRootPath}
-          </code>{" "}
-          exige o componente local (Windows em prioridade). Configure o caminho
-          em{" "}
+          O site orquestra cadastros e agendamentos. A{" "}
+          <strong className="font-medium">gravação automática de XML e PDF</strong> no seu disco
+          {serverMirrorPath ? (
+            <>
+              {" "}
+              — por exemplo em{" "}
+              <code className="rounded bg-black/10 px-1 font-mono text-xs dark:bg-white/10">
+                {serverMirrorPath}
+              </code>
+            </>
+          ) : null}{" "}
+          ocorre na <strong className="font-medium">mesma máquina Windows</strong> onde está instalado o{" "}
+          <strong className="font-medium">worker de recolha ADN</strong> (com o certificado). O caminho absoluto
+          deve estar definido em{" "}
           <Link
             href="/configuracoes"
             className="font-medium underline-offset-2 hover:underline"
           >
             Configurações
-          </Link>
-          .
+          </Link>{" "}
+          → <strong className="font-medium">Pasta raiz no disco (servidor)</strong>. Para arquivo noutro PC,
+          será necessário o <strong className="font-medium">agente local</strong> (fase posterior).
         </p>
+        {serverMirrorPath === undefined && effectiveOrganizationId ? (
+          <p className="mt-2 text-xs text-emerald-900/70 dark:text-emerald-100/70">A carregar caminho do servidor…</p>
+        ) : null}
       </section>
     </div>
   );

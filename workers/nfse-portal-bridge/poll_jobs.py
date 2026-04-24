@@ -10,6 +10,7 @@ Variáveis de ambiente:
   NFSE_DIST_CLIENTS_LOCAL_PATH — Opcional; copia para clients.local.json antes da recolha
   POLL_INTERVAL_SEC     — Opcional; default 15
   NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre run_download_workflow (smoke: fila + PATCH + uploads vazios).
+  NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia XML/PDF para organizations.local_download_root (LM-02A).
   Argumentos: --once — processa no máximo um job (ou sai se a fila estiver vazia).
 """
 
@@ -25,6 +26,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from nfse_runner import run_download_workflow_once, write_clients_json
+from mirror_local import load_org_mirror_context, mirror_data_directory_to_local
 from portal_artifacts import patch_job, sync_data_directory
 
 
@@ -111,6 +113,32 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         cnpj=cnpj,
         nfse_root=nfse,
     )
+    mirror_summary: dict = {
+        "mirrorWritten": 0,
+        "mirrorFailed": 0,
+        "mirrorHadFailures": False,
+    }
+    try:
+        with psycopg.connect(dsn) as mconn:
+            ctx = load_org_mirror_context(mconn, oid, cid)
+        disabled = os.environ.get("NFSE_LOCAL_MIRROR_DISABLED", "").strip() == "1"
+        mirror_summary = mirror_data_directory_to_local(
+            root=ctx.get("root"),
+            cnpj_digits=str(ctx.get("cnpj_digits") or cnpj),
+            system_code=str(ctx.get("system_code") or ""),
+            nfse_root=nfse,
+            disabled_env=disabled,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[nfse-portal-bridge] espelho local ignorado após erro: {e!s}", flush=True)
+        err_hint = f"mirror_context:{type(e).__name__}"
+        mirror_summary = {
+            "mirrorWritten": 0,
+            "mirrorFailed": 0,
+            "mirrorHadFailures": True,
+            "mirrorErrorsSample": [f"{err_hint}:{e!s}"[:200]],
+        }
+
     patch_job(
         base_url=portal_url,
         secret=secret,
@@ -123,6 +151,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             "artifactsXml": counts["xml"],
             "artifactsPdf": counts["pdf"],
             "skipped": counts["skipped"],
+            **mirror_summary,
         },
     )
 
