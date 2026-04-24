@@ -65,7 +65,9 @@ export async function handleGetCompanyCertificate(
     if (!isCertUploadApiEnabled()) {
       return notFoundWhenApiOff();
     }
-    const gate = await resolveAdnPublicAccess(request, organizationId, companyId);
+    const gate = await resolveAdnPublicAccess(request, organizationId, companyId, {
+      requireOrgAdnSyncEnabled: false,
+    });
     if (!gate.ok) {
       return gate.response;
     }
@@ -113,7 +115,9 @@ export async function handlePostCompanyCertificate(
     if (!isCertUploadApiEnabled()) {
       return notFoundWhenApiOff();
     }
-    const gate = await resolveAdnPublicAccess(request, organizationId, companyId);
+    const gate = await resolveAdnPublicAccess(request, organizationId, companyId, {
+      requireOrgAdnSyncEnabled: false,
+    });
     if (!gate.ok) {
       return gate.response;
     }
@@ -274,7 +278,9 @@ export async function handleDeleteCompanyCertificate(
     if (!isCertUploadApiEnabled()) {
       return notFoundWhenApiOff();
     }
-    const gate = await resolveAdnPublicAccess(request, organizationId, companyId);
+    const gate = await resolveAdnPublicAccess(request, organizationId, companyId, {
+      requireOrgAdnSyncEnabled: false,
+    });
     if (!gate.ok) {
       return gate.response;
     }

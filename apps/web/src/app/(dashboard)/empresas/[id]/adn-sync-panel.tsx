@@ -6,6 +6,7 @@ import { AdnCertificateReadinessCard } from "@/app/(dashboard)/empresas/[id]/adn
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
+import { isCertUploadUiEnabled } from "@/lib/cert-upload-ui-enabled";
 
 export function AdnSyncPanel({ company }: { company: Company }) {
   const liveId = useId();
@@ -24,6 +25,10 @@ export function AdnSyncPanel({ company }: { company: Company }) {
     organizationId: company.organizationId,
     onSyncAccepted: bumpReadiness,
   });
+
+  /** Certificado + readiness: sempre que faz sentido pedir estado ao servidor (inclui org sem fila ADN). */
+  const showCertificateSection =
+    access === "active" || access === "feature_off" || access === "error";
 
   const runbookUrl = getAdnCertRunbookUrl();
   const runbookAnchor = runbookUrl ? runbookAnchorProps(runbookUrl) : {};
@@ -86,6 +91,13 @@ export function AdnSyncPanel({ company }: { company: Company }) {
         <p className="mt-3 text-xs text-amber-800 dark:text-amber-200" role="status">
           A sincronização ADN não está activa para esta organização (ou o recurso não está
           disponível). Contacte um administrador se precisar desta funcionalidade.
+          {isCertUploadUiEnabled() ? (
+            <>
+              {" "}
+              Se a API de registo de certificado estiver activa no servidor, pode enviar o ficheiro
+              abaixo mesmo antes de activar a fila ADN para a organização.
+            </>
+          ) : null}
         </p>
       ) : null}
       {access === "forbidden" ? (
@@ -99,15 +111,17 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           Não foi possível carregar o estado ADN. Tente &quot;Actualizar&quot; ou volte mais tarde.
         </p>
       ) : null}
+      {showCertificateSection ? (
+        <AdnCertificateReadinessCard
+          organizationId={company.organizationId}
+          companyId={company.id}
+          cnpjDigits={company.cnpjDigits}
+          onCertificateRegistered={bumpReadiness}
+          refreshSignal={readinessKick}
+        />
+      ) : null}
       {access === "active" ? (
         <>
-          <AdnCertificateReadinessCard
-            organizationId={company.organizationId}
-            companyId={company.id}
-            cnpjDigits={company.cnpjDigits}
-            onCertificateRegistered={bumpReadiness}
-            refreshSignal={readinessKick}
-          />
           <div className="mt-3 text-sm text-black/75 dark:text-white/70" aria-live="polite">
             {lastJob ? (
               <p>

@@ -24,11 +24,22 @@ export type AdnAccessContext = {
   orgRole: "user" | "admin" | null;
 };
 
+export type ResolveAdnPublicAccessOptions = {
+  /**
+   * Quando `false`, não exige `organizations.adnSyncEnabled` (ex.: registo de certificado
+   * com `CERT_UPLOAD_API_ENABLED` antes de activar a fila ADN na organização).
+   * Default: `true` (comportamento original para sync, artefactos, etc.).
+   */
+  requireOrgAdnSyncEnabled?: boolean;
+};
+
 export async function resolveAdnPublicAccess(
   request: Request,
   organizationId: string,
   companyId: string,
+  options?: ResolveAdnPublicAccessOptions,
 ): Promise<{ ok: true; ctx: AdnAccessContext } | { ok: false; response: NextResponse }> {
+  const requireOrgAdnSyncEnabled = options?.requireOrgAdnSyncEnabled !== false;
   const s = await getAuthedSession(request);
   if (!s) {
     return { ok: false, response: jsonError(401, "Sessão expirada. Inicie sessão novamente.") };
@@ -61,7 +72,7 @@ export async function resolveAdnPublicAccess(
   if (!org) {
     return { ok: false, response: jsonError(404, "Recurso não encontrado.") };
   }
-  if (!org.adnSyncEnabled) {
+  if (requireOrgAdnSyncEnabled && !org.adnSyncEnabled) {
     return { ok: false, response: jsonError(404, "Recurso não encontrado.") };
   }
 

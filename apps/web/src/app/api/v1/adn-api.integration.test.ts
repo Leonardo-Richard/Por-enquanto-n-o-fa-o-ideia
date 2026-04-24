@@ -689,34 +689,92 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     await db.delete(adnIngestionFailures).where(eq(adnIngestionFailures.id, failureId));
   });
 
-  it("GET certificate-readiness com ADN desactivado na organização → 404", async () => {
-    vi.mocked(getAuthedSession).mockResolvedValue({
-      user: {
-        id: ids.adminOff,
-        email: "x@y",
-        name: "Admin Off",
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        image: null,
-        isSuperadmin: false,
-      },
-      session: {
-        id: "s-cr-off",
-        userId: ids.adminOff,
-        expiresAt: new Date(),
-        token: "t",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        activeCompanyId: ids.companyOff,
-        activeOrganizationId: ids.orgOff,
-      },
-    } as Awaited<ReturnType<typeof getAuthedSession>>);
+  it("GET certificate-readiness com ADN desactivado na organização e API de upload desactivada → 404", async () => {
+    const prevCertApi = process.env.CERT_UPLOAD_API_ENABLED;
+    delete process.env.CERT_UPLOAD_API_ENABLED;
+    try {
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOff,
+          email: "x@y",
+          name: "Admin Off",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-cr-off",
+          userId: ids.adminOff,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOff,
+          activeOrganizationId: ids.orgOff,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
 
-    const res = await getCertReadiness(new Request("http://test/"), {
-      params: Promise.resolve({ organizationId: ids.orgOff, companyId: ids.companyOff }),
-    });
-    expect(res.status).toBe(404);
+      const res = await getCertReadiness(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOff, companyId: ids.companyOff }),
+      });
+      expect(res.status).toBe(404);
+    } finally {
+      if (prevCertApi === undefined) {
+        delete process.env.CERT_UPLOAD_API_ENABLED;
+      } else {
+        process.env.CERT_UPLOAD_API_ENABLED = prevCertApi;
+      }
+    }
+  });
+
+  it("GET certificate-readiness com ADN desactivado na organização e API de upload activa → 200", async () => {
+    clearAllReadinessMemoryForTests();
+    const prevCertApi = process.env.CERT_UPLOAD_API_ENABLED;
+    process.env.CERT_UPLOAD_API_ENABLED = "true";
+    try {
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOff,
+          email: "x@y",
+          name: "Admin Off",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-cr-off-upload",
+          userId: ids.adminOff,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOff,
+          activeOrganizationId: ids.orgOff,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getCertReadiness(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOff, companyId: ids.companyOff }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      const body = (await res.json()) as {
+        certificateReadiness: string;
+        canVerify: boolean;
+      };
+      expect(body.certificateReadiness).toBe("pendente_verificacao");
+      expect(body.canVerify).toBe(true);
+    } finally {
+      if (prevCertApi === undefined) {
+        delete process.env.CERT_UPLOAD_API_ENABLED;
+      } else {
+        process.env.CERT_UPLOAD_API_ENABLED = prevCertApi;
+      }
+    }
   });
 
   it("GET certificate-readiness sem sessão → 401", async () => {

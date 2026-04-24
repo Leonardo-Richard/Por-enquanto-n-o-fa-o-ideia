@@ -11,6 +11,7 @@ import {
   consumeAdnRateLimit,
   getAdnCertVerifyLimit,
 } from "@/lib/adn-rate-limit";
+import { isCertUploadApiEnabled } from "@/lib/cert-upload-env";
 import { toPublicApiError } from "@/server/api/v1/lib/errors";
 import { assertAdnOrgAdmin, resolveAdnPublicAccess, type AdnAccessContext } from "./adn-public-access";
 
@@ -48,7 +49,9 @@ export async function handleGetAdnCertificateReadiness(
   companyId: string,
 ) {
   try {
-    const gate = await resolveAdnPublicAccess(request, organizationId, companyId);
+    const gate = await resolveAdnPublicAccess(request, organizationId, companyId, {
+      requireOrgAdnSyncEnabled: !isCertUploadApiEnabled(),
+    });
     if (!gate.ok) {
       return gate.response;
     }
@@ -72,7 +75,9 @@ export async function handlePostAdnCertificateReadinessVerify(
   fetchFn: typeof fetch = fetch,
 ) {
   try {
-    const gate = await resolveAdnPublicAccess(request, organizationId, companyId);
+    const gate = await resolveAdnPublicAccess(request, organizationId, companyId, {
+      requireOrgAdnSyncEnabled: !isCertUploadApiEnabled(),
+    });
     if (!gate.ok) {
       return gate.response;
     }
