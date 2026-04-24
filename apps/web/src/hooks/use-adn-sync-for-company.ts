@@ -9,7 +9,8 @@ export type AdnSyncPanelAccess = "loading" | "active" | "feature_off" | "forbidd
 /** Semântica de `actionMsg` para estilo e a11y (feedback QA: sucesso vs erro). */
 export type AdnSyncActionTone = "none" | "success" | "error";
 
-const CONFIRM_TEXT = "Pedir sincronização ADN agora? (fila no portal)";
+const CONFIRM_TEXT =
+  "Pedir a busca de notas agora? O pedido entra na fila no portal; os ficheiros no disco dependem da pasta raiz da organização e do worker.";
 
 export type UseAdnSyncForCompanyArgs = {
   /** `company.id` da API */
@@ -74,7 +75,9 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
       const r = await postAdnSyncRequest(organizationId, companyId, crypto.randomUUID());
       if (r.kind === "accepted") {
         setActionTone("success");
-        setActionMsg("Pedido aceite. O job foi enfileirado.");
+        setActionMsg(
+          "Pedido aceite: o job foi enfileirado no portal. Quando o job concluir, os XML/PDF podem ser espelhados na pasta raiz configurada (se aplicável ao seu ambiente).",
+        );
         await refresh();
         onSyncAccepted?.();
         return;

@@ -1,12 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Company } from "@repo/shared";
 import { AdnCertificateReadinessCard } from "@/app/(dashboard)/empresas/[id]/adn-certificate-readiness-card";
+import { LocalDownloadRootCallout } from "@/app/(dashboard)/empresas/[id]/local-download-root-callout";
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
+import { useMeSummary } from "@/hooks/use-effective-organization-id";
+import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import { isCertUploadUiEnabled } from "@/lib/cert-upload-ui-enabled";
+
+function isLocalDownloadRootConfigured(root: string | null | undefined): boolean {
+  return typeof root === "string" && root.trim().length > 0;
+}
 
 export function AdnSyncPanel({ company }: { company: Company }) {
   const liveId = useId();
@@ -20,10 +28,43 @@ export function AdnSyncPanel({ company }: { company: Company }) {
     setReadinessKick((k) => k + 1);
   }, []);
 
+  const { effectiveOrganizationId, loading: meOrgLoading } = useMeSummary();
+
   const { access, lastJob, busy, actionMsg, actionTone, refresh, requestSync } = useAdnSyncForCompany({
     companyId: company.id,
     organizationId: company.organizationId,
     onSyncAccepted: bumpReadiness,
+  });
+
+  const orgAligned =
+    Boolean(company.organizationId) &&
+    Boolean(effectiveOrganizationId) &&
+    company.organizationId === effectiveOrganizationId;
+
+  useEffect(() => {
+    if (
+      process.env.NODE_ENV === "development" &&
+      !meOrgLoading &&
+      effectiveOrganizationId &&
+      company.organizationId !== effectiveOrganizationId
+    ) {
+      // Estratégia AC11: não GET settings nem callout com valores; apenas diagnóstico local.
+      console.warn(
+        "[AdnSyncPanel] company.organizationId difere da organização activa; bloco de pasta raiz omitido.",
+      );
+    }
+  }, [meOrgLoading, effectiveOrganizationId, company.organizationId]);
+
+  const settingsFetchEnabled =
+    orgAligned && !meOrgLoading && (access === "active" || access === "forbidden");
+
+  const {
+    loading: settingsLoading,
+    data: settingsData,
+    error: settingsError,
+  } = useOrganizationAdnSyncSettings({
+    organizationId: company.organizationId,
+    fetchEnabled: settingsFetchEnabled,
   });
 
   /** Certificado + readiness: sempre que não for explícito «sem permissão» (inclui org sem fila ADN e o carregamento inicial). */
@@ -75,6 +116,10 @@ export function AdnSyncPanel({ company }: { company: Company }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [helpOpen, closeHelp]);
 
+  const showAdnRootContext = settingsFetchEnabled;
+  /** Spec UX §5.1: último job e acções imediatamente após FR67/callout; certificado/readiness depois no ramo `active`. */
+  const showCertificateAfterAdnActions = access === "active";
+
   return (
     <section
       aria-labelledby={`adn-h2-${liveId}`}
@@ -83,6 +128,9 @@ export function AdnSyncPanel({ company }: { company: Company }) {
       <h2 id={`adn-h2-${liveId}`} className="text-sm font-semibold">
         Sincronização ADN
       </h2>
+      <p className="mt-1 text-xs font-medium text-black/50 dark:text-white/45">
+        Buscar notas no Ambiente Nacional
+      </p>
       <p className="mt-2 text-xs text-black/55 dark:text-white/50">
         Estado da fila de sincronização com o ambiente nacional (NFS-e). Requer a funcionalidade
         activa na organização.
@@ -114,7 +162,41 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           Não foi possível carregar o estado ADN. Tente &quot;Actualizar&quot; ou volte mais tarde.
         </p>
       ) : null}
-      {showCertificateSection ? (
+
+      {showAdnRootContext ? (
+        settingsLoading ? (
+          <p className="mt-3 text-xs text-black/50 dark:text-white/45">A carregar definições…</p>
+        ) : settingsData && !settingsError ? (
+          <>
+            <p className="mt-3 text-xs text-black/55 dark:text-white/50" role="status">
+              O pedido no portal enfileira um job de recolha no Ambiente Nacional; não transfere
+              ficheiros directamente pelo browser. Os XML e PDF no disco do servidor de recolha
+              dependem da pasta raiz configurada para a organização e do worker.
+            </p>
+            <div className="mt-2">
+              {isLocalDownloadRootConfigured(settingsData.localDownloadRoot) ? (
+                <LocalDownloadRootCallout variant="configured" />
+              ) : (
+                <LocalDownloadRootCallout variant="missing" />
+              )}
+            </div>
+          </>
+        ) : settingsError ? (
+          <p className="mt-3 text-xs text-black/55 dark:text-white/50" role="status">
+            Não foi possível carregar a pasta raiz da organização. Pode continuar a usar a fila ADN;
+            tente &quot;Actualizar&quot; ou abra{" "}
+            <Link
+              href="/configuracoes"
+              className="font-medium text-emerald-800 underline decoration-emerald-800/40 underline-offset-2 dark:text-emerald-300 dark:decoration-emerald-300/40"
+            >
+              Configurações
+            </Link>{" "}
+            para confirmar o caminho local.
+          </p>
+        ) : null
+      ) : null}
+
+      {!showCertificateAfterAdnActions && showCertificateSection ? (
         <AdnCertificateReadinessCard
           organizationId={company.organizationId}
           companyId={company.id}
@@ -143,14 +225,17 @@ export function AdnSyncPanel({ company }: { company: Company }) {
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
+              aria-label="Buscar notas agora no Ambiente Nacional"
               onClick={() => void requestSync()}
               className="rounded-lg bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] disabled:opacity-50"
             >
-              Pedir sincronização ADN
+              Buscar notas agora
             </button>
             <button
               type="button"
               disabled={busy}
+              aria-label="Actualizar estado da fila ADN"
               onClick={() => void refresh()}
               className="rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/15"
             >
@@ -176,6 +261,7 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           <button
             type="button"
             disabled={busy || access === "loading"}
+            aria-label="Actualizar estado da fila ADN"
             onClick={() => void refresh()}
             className="rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/15 disabled:opacity-50"
           >
@@ -183,6 +269,15 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           </button>
         </div>
       )}
+      {showCertificateAfterAdnActions && showCertificateSection ? (
+        <AdnCertificateReadinessCard
+          organizationId={company.organizationId}
+          companyId={company.id}
+          cnpjDigits={company.cnpjDigits}
+          onCertificateRegistered={bumpReadiness}
+          refreshSignal={readinessKick}
+        />
+      ) : null}
       {actionMsg ? (
         <p
           className={
@@ -218,6 +313,10 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           <li>
             O portal apenas enfileira pedidos; a ligação ao Ambiente Nacional corre no worker. Em
             períodos de pico, a conclusão pode demorar.
+          </li>
+          <li>
+            Com pasta raiz configurada em Configurações, o worker pode espelhar XML/PDF no disco
+            do servidor de recolha após o job concluir — fluxo assíncrono, independente do browser.
           </li>
           <li>
             O certificado digital da empresa é tratado pela infraestrutura de recolha. Saiba mais
