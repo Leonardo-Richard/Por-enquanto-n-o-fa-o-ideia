@@ -2,7 +2,10 @@
 
 ## 1. Migração
 
-Aplicar `db/migrations/20260425103000_adn_01_ddl.sql` na base do mesmo projecto que `DATABASE_URL`.
+Aplicar na base do mesmo projecto que `DATABASE_URL` (por ordem, conforme o repositório):
+
+- `db/migrations/20260425103000_adn_01_ddl.sql`
+- `db/migrations/20260427120000_org_local_download_root.sql` — pasta raiz Windows persistida (`organizations.local_download_root`) para o worker espelhar XML/PDF em disco.
 
 ## 2. Variáveis
 

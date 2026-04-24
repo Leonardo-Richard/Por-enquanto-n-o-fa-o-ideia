@@ -9,6 +9,8 @@ Variáveis de ambiente:
   NFSE_DIST_ROOT        — Opcional; default: <repo>/third_party/NFSE_dist
   NFSE_DIST_CLIENTS_LOCAL_PATH — Opcional; copia para clients.local.json antes da recolha
   POLL_INTERVAL_SEC     — Opcional; default 15
+  NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre run_download_workflow (smoke: fila + PATCH + uploads vazios).
+  Argumentos: --once — processa no máximo um job (ou sai se a fila estiver vazia).
 """
 
 from __future__ import annotations
@@ -92,7 +94,13 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     nome = str(co["trade_name"] or cnpj)
 
     write_clients_json(nfse, cnpj, nome)
-    run_download_workflow_once(nfse)
+    if os.environ.get("NFSE_BRIDGE_SKIP_NFSE_DIST", "").strip() == "1":
+        print(
+            "[nfse-portal-bridge] NFSE_BRIDGE_SKIP_NFSE_DIST=1 — a saltar run_download_workflow (smoke).",
+            flush=True,
+        )
+    else:
+        run_download_workflow_once(nfse)
 
     counts = sync_data_directory(
         base_url=portal_url,
@@ -136,15 +144,21 @@ def main() -> None:
     secret = _require_env("ADN_WORKER_HMAC_SECRET")
     nfse = _nfse_root()
     interval = int(os.environ.get("POLL_INTERVAL_SEC", "15") or "15")
+    poll_once = "--once" in sys.argv
 
     print(f"[nfse-portal-bridge] NFSE_DIST_ROOT={nfse}", flush=True)
     print(f"[nfse-portal-bridge] PORTAL_INTERNAL_URL={portal_url}", flush=True)
+    if poll_once:
+        print("[nfse-portal-bridge] Modo --once (um ciclo ou um job).", flush=True)
 
     while True:
         try:
             with psycopg.connect(dsn) as conn:
                 job = claim_next_job(conn)
             if not job:
+                if poll_once:
+                    print("[nfse-portal-bridge] Nenhum job na fila (queued + org ADN activa).", flush=True)
+                    return
                 time.sleep(interval)
                 continue
             jid = str(job["id"])
@@ -153,6 +167,8 @@ def main() -> None:
             try:
                 process_one_job(job, dsn, portal_url, secret, nfse)
                 print(f"[nfse-portal-bridge] Job {jid} concluído.", flush=True)
+                if poll_once:
+                    return
             except Exception as e:  # noqa: BLE001
                 tb = traceback.format_exc()
                 print(tb, file=sys.stderr, flush=True)
@@ -160,6 +176,8 @@ def main() -> None:
                     fail_job(portal_url, secret, oid, jid, f"{e!s}\n{tb}")
                 except Exception as e2:  # noqa: BLE001
                     print(f"[nfse-portal-bridge] Falha ao marcar job como failed: {e2}", file=sys.stderr, flush=True)
+                if poll_once:
+                    return
         except KeyboardInterrupt:
             print("[nfse-portal-bridge] Interrompido.", flush=True)
             return

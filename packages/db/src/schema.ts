@@ -36,6 +36,8 @@ export const organizations = pgTable("organizations", {
   taxIdDigits: char("tax_id_digits", { length: 14 }),
   active: boolean("active").notNull().default(true),
   adnSyncEnabled: boolean("adn_sync_enabled").notNull().default(false),
+  /** Caminho absoluto na VM do worker (ex.: C:\\NFs). Espelho: {root}/{CNPJ}/{system_code}/{chave}.xml|.pdf */
+  localDownloadRoot: text("local_download_root"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

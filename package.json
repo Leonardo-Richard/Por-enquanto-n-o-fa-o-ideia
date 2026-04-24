@@ -6,6 +6,7 @@
   "scripts": {
     "probe:pooler": "npm run probe:pooler -w web",
     "vendor:nfse-dist": "node scripts/vendor-nfse-dist.mjs",
+    "smoke:adn-bridge": "node scripts/run-adn-bridge-smoke-once.mjs",
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",

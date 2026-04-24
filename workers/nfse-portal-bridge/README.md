@@ -38,6 +38,9 @@ pip install -r requirements.txt
 | `NFSE_DIST_ROOT` | *(opcional)* | Default: `<repo>/third_party/NFSE_dist`. |
 | `NFSE_DIST_CLIENTS_LOCAL_PATH` | `C:\secrets\clients.local.json` | Opcional: ficheiro com thumbprint / `senha_cert` / PFX (não versionar). |
 | `POLL_INTERVAL_SEC` | `15` | Intervalo quando não há jobs. |
+| `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Só smoke/testes:** não chama `run_download_workflow` (valida fila + `PATCH` + uploads vazios). |
+
+**Importante (monorepo):** o Next lê `apps/web/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 
 ## 3. Arranque
 
@@ -51,6 +54,14 @@ set PORTAL_INTERNAL_URL=http://localhost:3000
 set ADN_WORKER_HMAC_SECRET=...
 python poll_jobs.py
 ```
+
+**Smoke local (sem ADN nem certificado):** na raiz do repo, com o portal activo e o mesmo `ADN_WORKER_HMAC_SECRET` em `apps/web/.env.local`:
+
+```bash
+node scripts/run-adn-bridge-smoke-once.mjs
+```
+
+Equivale a `NFSE_BRIDGE_SKIP_NFSE_DIST=1` e `python poll_jobs.py --once` (um job ou sair se a fila estiver vazia).
 
 Fluxo por job:
 
