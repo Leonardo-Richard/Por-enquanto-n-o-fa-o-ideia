@@ -2,13 +2,16 @@
  * Integração Postgres real (DATABASE_URL) — rotas públicas ADN (sync, retry-bulk).
  */
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray, or } from "drizzle-orm";
+import forge from "node-forge";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import {
   adnIngestionFailures,
   adnSyncJobs,
   auditEvents,
   companies,
+  companyCertificateAudits,
+  companyCertificates,
   companyMemberships,
   organizationMemberships,
   organizations,
@@ -28,8 +31,42 @@ import { GET as getAdnSync, POST as postAdnSync } from "@/app/api/v1/organizatio
 import { GET as getCertReadiness } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/route";
 import { POST as postCertReadinessVerify } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/verify/route";
 import { POST as postRetryBulk } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/failures/retry-bulk/route";
+import {
+  DELETE as deleteCompanyCertificate,
+  GET as getCompanyCertificate,
+  POST as postCompanyCertificate,
+} from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/certificate/route";
+import { GET as getAutomationExportJson } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/automation-export.json/route";
+import { clearCertUploadVaultMockForTests } from "@/server/cert-upload/cert-upload-vault";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
+
+function buildIntegrationPkcs12(cnpj14: string, password: string): Buffer {
+  const keys = forge.pki.rsa.generateKeyPair(512);
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = "01";
+  cert.validity.notBefore = new Date();
+  cert.validity.notAfter = new Date();
+  cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
+  const attrs: forge.pki.CertificateField[] = [
+    { name: "commonName", value: `Empresa IT ${cnpj14}` },
+    { name: "countryName", value: "BR" },
+  ];
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+  const p12Asn1 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], password, {
+    algorithm: "aes256",
+    count: 2048,
+  });
+  return Buffer.from(forge.asn1.toDer(p12Asn1).getBytes(), "binary");
+}
+
+function pkcs12File(buf: Buffer, filename: string): File {
+  const u8 = Uint8Array.from(buf);
+  return new File([new Blob([u8])], filename, { type: "application/x-pkcs12" });
+}
 
 describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
   const prefix = `adn_it_${Date.now()}_`;
@@ -137,6 +174,8 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     const orgIds = [ids.orgOn, ids.orgOff];
 
     await db.delete(adnIngestionFailures).where(inArray(adnIngestionFailures.companyId, companyIds));
+    await db.delete(companyCertificateAudits).where(inArray(companyCertificateAudits.companyId, companyIds));
+    await db.delete(companyCertificates).where(inArray(companyCertificates.companyId, companyIds));
     await db.delete(adnSyncJobs).where(inArray(adnSyncJobs.companyId, companyIds));
     await db.delete(auditEvents).where(
       or(
@@ -959,5 +998,336 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
       clearAllReadinessMemoryForTests();
       clearAdnRateLimitBucketsForTests();
     }
+  });
+
+  describe("GET …/certificate (upload ADN)", () => {
+    afterEach(() => {
+      clearCertUploadVaultMockForTests();
+    });
+
+    it("sem CERT_UPLOAD_API_ENABLED → 404", async () => {
+      const prev = process.env.CERT_UPLOAD_API_ENABLED;
+      delete process.env.CERT_UPLOAD_API_ENABLED;
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOn,
+          email: "a@b",
+          name: "Admin On",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-cert-off",
+          userId: ids.adminOn,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getCompanyCertificate(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+      });
+      expect(res.status).toBe(404);
+      if (prev === undefined) {
+        delete process.env.CERT_UPLOAD_API_ENABLED;
+      } else {
+        process.env.CERT_UPLOAD_API_ENABLED = prev;
+      }
+    });
+
+    it("com CERT_UPLOAD_API_ENABLED=true admin org GET → 200, canUpload true", async () => {
+      const prev = process.env.CERT_UPLOAD_API_ENABLED;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOn,
+          email: "a@b",
+          name: "Admin On",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-cert-on",
+          userId: ids.adminOn,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      try {
+        const res = await getCompanyCertificate(new Request("http://test/"), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+          capabilities: { canUpload: boolean };
+          status: string | null;
+        };
+        expect(j.capabilities.canUpload).toBe(true);
+        expect(j.status).toBeNull();
+      } finally {
+        if (prev === undefined) {
+          delete process.env.CERT_UPLOAD_API_ENABLED;
+        } else {
+          process.env.CERT_UPLOAD_API_ENABLED = prev;
+        }
+      }
+    });
+
+    it("RLS: existem políticas em company_certificates (catálogo)", async () => {
+      const db = getDb();
+      const rows = await db.execute(sql`
+        select policyname from pg_policies
+        where schemaname = 'public' and tablename = 'company_certificates'
+      `);
+      const list = Array.from(rows as Iterable<{ policyname: string }>);
+      expect(list.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("POST/DELETE …/certificate (UBR-05 AC3)", () => {
+    const adminSession = (): Awaited<ReturnType<typeof getAuthedSession>> =>
+      ({
+        user: {
+          id: ids.adminOn,
+          email: "a@b",
+          name: "Admin On",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-cert-post",
+          userId: ids.adminOn,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      }) as Awaited<ReturnType<typeof getAuthedSession>>;
+
+    afterEach(() => {
+      clearCertUploadVaultMockForTests();
+      clearAdnRateLimitBucketsForTests();
+    });
+
+    it("POST Content-Type não multipart → 415 CERT_UPLOAD_EXPECT_MULTIPART", async () => {
+      const prev = process.env.CERT_UPLOAD_API_ENABLED;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      vi.mocked(getAuthedSession).mockResolvedValue(adminSession());
+      try {
+        const res = await postCompanyCertificate(
+          new Request("http://test/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          }),
+          { params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }) },
+        );
+        expect(res.status).toBe(415);
+        const j = (await res.json()) as { error_code?: string };
+        expect(j.error_code).toBe("CERT_UPLOAD_EXPECT_MULTIPART");
+      } finally {
+        if (prev === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
+        else process.env.CERT_UPLOAD_API_ENABLED = prev;
+      }
+    });
+
+    it("POST senha incorrecta → 400 CERT_UPLOAD_BAD_PASSWORD", async () => {
+      const prev = process.env.CERT_UPLOAD_API_ENABLED;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      vi.mocked(getAuthedSession).mockResolvedValue(adminSession());
+      const buf = buildIntegrationPkcs12("11222333000181", "secret");
+      const fd = new FormData();
+      fd.set("file", pkcs12File(buf, "cert.pfx"));
+      fd.set("password", "wrong-password");
+      try {
+        const res = await postCompanyCertificate(new Request("http://test/", { method: "POST", body: fd }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(res.status).toBe(400);
+        const j = (await res.json()) as { error_code?: string };
+        expect(j.error_code).toBe("CERT_UPLOAD_BAD_PASSWORD");
+      } finally {
+        if (prev === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
+        else process.env.CERT_UPLOAD_API_ENABLED = prev;
+      }
+    });
+
+    it("POST CNPJ do certificado ≠ empresa → 400 CERT_UPLOAD_CNPJ_MISMATCH", async () => {
+      const prev = process.env.CERT_UPLOAD_API_ENABLED;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      vi.mocked(getAuthedSession).mockResolvedValue(adminSession());
+      const buf = buildIntegrationPkcs12("04252011000110", "pw");
+      const fd = new FormData();
+      fd.set("file", pkcs12File(buf, "cert.pfx"));
+      fd.set("password", "pw");
+      try {
+        const res = await postCompanyCertificate(new Request("http://test/", { method: "POST", body: fd }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(res.status).toBe(400);
+        const j = (await res.json()) as { error_code?: string };
+        expect(j.error_code).toBe("CERT_UPLOAD_CNPJ_MISMATCH");
+      } finally {
+        if (prev === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
+        else process.env.CERT_UPLOAD_API_ENABLED = prev;
+      }
+    });
+
+    it("POST ficheiro demasiado grande → 413", async () => {
+      const prevApi = process.env.CERT_UPLOAD_API_ENABLED;
+      const prevMax = process.env.CERT_UPLOAD_MAX_BYTES;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      process.env.CERT_UPLOAD_MAX_BYTES = "50";
+      vi.mocked(getAuthedSession).mockResolvedValue(adminSession());
+      const buf = buildIntegrationPkcs12("11222333000181", "pw");
+      const fd = new FormData();
+      fd.set("file", pkcs12File(buf, "cert.pfx"));
+      fd.set("password", "pw");
+      try {
+        const res = await postCompanyCertificate(new Request("http://test/", { method: "POST", body: fd }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(res.status).toBe(413);
+        const j = (await res.json()) as { error_code?: string };
+        expect(j.error_code).toBe("CERT_UPLOAD_FILE_TOO_LARGE");
+      } finally {
+        if (prevApi === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
+        else process.env.CERT_UPLOAD_API_ENABLED = prevApi;
+        if (prevMax === undefined) delete process.env.CERT_UPLOAD_MAX_BYTES;
+        else process.env.CERT_UPLOAD_MAX_BYTES = prevMax;
+      }
+    });
+
+    it("POST excede rate limit → 429", async () => {
+      const prevApi = process.env.CERT_UPLOAD_API_ENABLED;
+      const prevMax = process.env.CERT_UPLOAD_MAX_BYTES;
+      const prevRl = process.env.CERT_UPLOAD_RATE_MAX_PER_WINDOW;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      delete process.env.CERT_UPLOAD_MAX_BYTES;
+      process.env.CERT_UPLOAD_RATE_MAX_PER_WINDOW = "2";
+      vi.mocked(getAuthedSession).mockResolvedValue(adminSession());
+      const buf = buildIntegrationPkcs12("11222333000181", "pw1");
+      const postOnce = async () => {
+        const fd = new FormData();
+        fd.set("file", pkcs12File(buf, "cert.pfx"));
+        fd.set("password", "pw1");
+        return postCompanyCertificate(new Request("http://test/", { method: "POST", body: fd }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+      };
+      try {
+        expect((await postOnce()).status).toBe(204);
+        expect((await postOnce()).status).toBe(204);
+        const third = await postOnce();
+        expect(third.status).toBe(429);
+        const j = (await third.json()) as { error_code?: string };
+        expect(j.error_code).toBe("CERT_UPLOAD_RATE_LIMITED");
+      } finally {
+        if (prevApi === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
+        else process.env.CERT_UPLOAD_API_ENABLED = prevApi;
+        if (prevMax === undefined) delete process.env.CERT_UPLOAD_MAX_BYTES;
+        else process.env.CERT_UPLOAD_MAX_BYTES = prevMax;
+        if (prevRl === undefined) delete process.env.CERT_UPLOAD_RATE_MAX_PER_WINDOW;
+        else process.env.CERT_UPLOAD_RATE_MAX_PER_WINDOW = prevRl;
+      }
+    });
+
+    it("POST válido → 204; DELETE idempotente → 204", async () => {
+      const prev = process.env.CERT_UPLOAD_API_ENABLED;
+      process.env.CERT_UPLOAD_API_ENABLED = "true";
+      vi.mocked(getAuthedSession).mockResolvedValue(adminSession());
+      const buf = buildIntegrationPkcs12("11222333000181", "goodpw");
+      const fd = new FormData();
+      fd.set("file", pkcs12File(buf, "cert.pfx"));
+      fd.set("password", "goodpw");
+      try {
+        const res = await postCompanyCertificate(new Request("http://test/", { method: "POST", body: fd }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(res.status).toBe(204);
+        const d1 = await deleteCompanyCertificate(new Request("http://test/", { method: "DELETE" }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(d1.status).toBe(204);
+        const d2 = await deleteCompanyCertificate(new Request("http://test/", { method: "DELETE" }), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(d2.status).toBe(204);
+      } finally {
+        if (prev === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
+        else process.env.CERT_UPLOAD_API_ENABLED = prev;
+      }
+    });
+  });
+
+  describe("FR48 — export automation JSON", () => {
+    it("não inclui chaves de segredo de certificado", async () => {
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOn,
+          email: "a@b",
+          name: "Admin On",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-fr48",
+          userId: ids.adminOn,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getAutomationExportJson(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+      });
+      expect(res.status).toBe(200);
+      const text = (await res.text()).toLowerCase();
+      for (const bad of ["vault_ref", "thumbprint", "pkcs12", "pfx\"", "private_key", "certificate_password"]) {
+        expect(text).not.toContain(bad);
+      }
+      const data = JSON.parse(text) as { monitoredCompanies?: Array<Record<string, unknown>> };
+      const keySet = new Set<string>();
+      const walk = (o: unknown) => {
+        if (!o || typeof o !== "object") return;
+        if (Array.isArray(o)) {
+          for (const x of o) walk(x);
+          return;
+        }
+        for (const k of Object.keys(o as object)) {
+          keySet.add(k.toLowerCase());
+          walk((o as Record<string, unknown>)[k]);
+        }
+      };
+      walk(data.monitoredCompanies);
+      expect([...keySet].some((k) => k.includes("vault") || k.includes("thumbprint"))).toBe(false);
+    });
   });
 });

@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AdnCertificateRegistrationForm } from "@/app/(dashboard)/empresas/[id]/adn-certificate-registration-form";
 import { useAdnCertificateReadiness } from "@/hooks/use-adn-certificate-readiness";
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
+import { isCertUploadUiEnabled } from "@/lib/cert-upload-ui-enabled";
 
 const COPY_PENDENTE =
   "Ainda não confirmámos se o servidor de recolha está preparado para o certificado desta empresa. Peça à equipa técnica que siga o guia ou clique em Verificar após a configuração.";
@@ -51,11 +53,15 @@ function liveAnnounceLabel(readiness: "pendente_verificacao" | "pronto" | "erro"
 export function AdnCertificateReadinessCard({
   organizationId,
   companyId,
+  cnpjDigits,
+  onCertificateRegistered,
   /** Incrementa após sync ADN aceite para revalidar GET readiness (spec UX §9). */
   refreshSignal = 0,
 }: {
   organizationId: string;
   companyId: string;
+  cnpjDigits: string;
+  onCertificateRegistered?: () => void;
   refreshSignal?: number;
 }) {
   const baseId = useId();
@@ -236,6 +242,18 @@ export function AdnCertificateReadinessCard({
           <span className="text-xs text-black/50 dark:text-white/45">Guia técnico ainda não configurado.</span>
         )}
       </div>
+
+      {isCertUploadUiEnabled() && data.canVerify ? (
+        <AdnCertificateRegistrationForm
+          organizationId={organizationId}
+          companyId={companyId}
+          cnpjDigits={cnpjDigits}
+          onRegistered={() => {
+            onCertificateRegistered?.();
+            void refresh();
+          }}
+        />
+      ) : null}
 
       <p className="mt-3 text-xs text-black/55 dark:text-white/50">{SECURITY_NOTE}</p>
 

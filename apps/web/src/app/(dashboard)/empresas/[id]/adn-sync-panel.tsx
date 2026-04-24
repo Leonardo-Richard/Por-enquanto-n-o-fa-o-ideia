@@ -104,6 +104,8 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           <AdnCertificateReadinessCard
             organizationId={company.organizationId}
             companyId={company.id}
+            cnpjDigits={company.cnpjDigits}
+            onCertificateRegistered={bumpReadiness}
             refreshSignal={readinessKick}
           />
           <div className="mt-3 text-sm text-black/75 dark:text-white/70" aria-live="polite">

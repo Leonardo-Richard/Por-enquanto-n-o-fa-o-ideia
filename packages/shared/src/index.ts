@@ -41,3 +41,19 @@ export {
   messageFromMonthlyRunDayParse,
 } from "./monthly-run-day";
 export type { MonthlyRunDayParseResult } from "./monthly-run-day";
+
+export {
+  certUploadErrorCodes,
+  certUploadErrorCodeSchema,
+  companyCertificateStatusSchema,
+  companyCertificateGetResponseSchema,
+  certUploadErrorBodySchema,
+  CERT_UPLOAD_PUBLIC_MESSAGES,
+  certUploadMessageForCode,
+} from "./cert-upload";
+export type {
+  CertUploadErrorCode,
+  CompanyCertificateStatus,
+  CompanyCertificateGetResponse,
+  CertUploadErrorBody,
+} from "./cert-upload";

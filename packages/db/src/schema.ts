@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   char,
+  date,
   integer,
   jsonb,
   pgEnum,
@@ -226,6 +227,42 @@ export const adnIngestionFailures = pgTable("adn_ingestion_failures", {
   errorDetail: text("error_detail"),
   canRetry: boolean("can_retry").notNull().default(true),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+});
+
+export const companyCertificates = pgTable(
+  "company_certificates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("active"),
+    notAfter: date("not_after"),
+    vaultRef: text("vault_ref").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedByUserId: text("updated_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (t) => [uniqueIndex("company_certificates_company_unique").on(t.companyId)],
+);
+
+export const companyCertificateAudits = pgTable("company_certificate_audits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  companyId: uuid("company_id")
+    .notNull()
+    .references(() => companies.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  actorUserId: text("actor_user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  outcome: text("outcome").notNull(),
+  errorCode: text("error_code"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const auditEvents = pgTable("audit_events", {
