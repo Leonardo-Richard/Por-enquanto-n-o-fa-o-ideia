@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray, or } from "drizzle-orm";
 import {
+  adnIngestionFailures,
   adnSyncJobs,
   auditEvents,
   companies,
@@ -21,6 +22,7 @@ vi.mock("@/server/api/v1/lib/session", () => ({
 }));
 
 import { getAuthedSession } from "@/server/api/v1/lib/session";
+import { GET as getAdnFailures } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/failures/route";
 import { GET as getAdnSync, POST as postAdnSync } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/sync/route";
 import { POST as postRetryBulk } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/failures/retry-bulk/route";
 
@@ -131,6 +133,7 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     const companyIds = [ids.companyOn, ids.companyOff];
     const orgIds = [ids.orgOn, ids.orgOff];
 
+    await db.delete(adnIngestionFailures).where(inArray(adnIngestionFailures.companyId, companyIds));
     await db.delete(adnSyncJobs).where(inArray(adnSyncJobs.companyId, companyIds));
     await db.delete(auditEvents).where(
       or(
@@ -585,5 +588,61 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     await db.delete(auditEvents).where(
       and(eq(auditEvents.actorUserId, ids.adminOn), eq(auditEvents.eventType, "adn_sync_requested")),
     );
+  });
+
+  it("GET failures com ADN_WORKER_CERT_NOT_FOUND mapeia mensagem CE-FR10 sem vazar paths (CER-05 AC5)", async () => {
+    const db = getDb();
+    const failureId = randomUUID();
+    await db.insert(adnIngestionFailures).values({
+      id: failureId,
+      organizationId: ids.orgOn,
+      companyId: ids.companyOn,
+      errorCode: "ADN_WORKER_CERT_NOT_FOUND",
+      errorDetail:
+        "certificates/11222333000181.pfx missing; thumbprint=ABCDEF1234567890ABCDEF1234567890ABCDEF12",
+      kind: "xml",
+    });
+
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOn,
+        email: "a@b",
+        name: "Admin On",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-fail",
+        userId: ids.adminOn,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const res = await getAdnFailures(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(res.status).toBe(200);
+    const raw = await res.text();
+    expect(raw).not.toMatch(/certificates\//i);
+    expect(raw).not.toMatch(/\.pfx/i);
+    expect(raw).not.toMatch(/thumbprint=/i);
+    const body = JSON.parse(raw) as {
+      items: Array<{ errorCode: string; userMessage: string; message: string }>;
+    };
+    const row = body.items.find((i) => i.errorCode === "ADN_WORKER_CERT_NOT_FOUND");
+    const expected =
+      "Não foi possível validar o certificado da empresa no servidor de recolha.";
+    expect(row?.userMessage).toBe(expected);
+    expect(row?.message).toBe(expected);
+
+    await db.delete(adnIngestionFailures).where(eq(adnIngestionFailures.id, failureId));
   });
 });

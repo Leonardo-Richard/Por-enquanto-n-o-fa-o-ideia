@@ -79,6 +79,10 @@ rg "getDb\\(|createDb\\(|from [\"']@repo/db[\"']" apps/web/src/app --glob '!apps
 
 Smoke rápido (SB-01 / SB-02): `GET /api/health` (200); com `READINESS_SECRET` definido, `GET /api/health/ready` com `Authorization: Bearer …` → `ok` ou `degraded`; liveness continua 200 se a DB falhar.
 
+## Contributing / segredos
+
+Não commite PFX, `clients.local.json` com dados reais nem credenciais em `NEXT_PUBLIC_*`. Política e exemplos com placeholders: `docs/briefing-importacao-certificado-empresa-monitorada-adn.md` e `docs/examples/clients.local.example.json`.
+
 ## Documentação de produto
 
 - PRD: `docs/prd.md`

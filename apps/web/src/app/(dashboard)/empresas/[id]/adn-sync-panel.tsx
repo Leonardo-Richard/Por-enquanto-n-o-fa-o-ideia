@@ -1,15 +1,84 @@
 "use client";
 
-import { useId } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Company } from "@repo/shared";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
+
+function runbookAnchorProps(href: string): { target?: "_blank"; rel?: string } {
+  const appBase = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  try {
+    const u = new URL(href);
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return {};
+    }
+    if (appBase) {
+      const appOrigin = new URL(appBase).origin;
+      if (u.origin === appOrigin) {
+        return {};
+      }
+    } else if (typeof window !== "undefined" && u.origin === window.location.origin) {
+      return {};
+    }
+    return { target: "_blank", rel: "noopener noreferrer" };
+  } catch {
+    return {};
+  }
+}
 
 export function AdnSyncPanel({ company }: { company: Company }) {
   const liveId = useId();
+  const helpDialogId = `${liveId}-adn-help`;
+  const helpTriggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const { access, lastJob, busy, actionMsg, actionTone, refresh, requestSync } = useAdnSyncForCompany({
     companyId: company.id,
     organizationId: company.organizationId,
   });
+
+  const runbookUrl = getAdnCertRunbookUrl();
+  const runbookAnchor = runbookUrl ? runbookAnchorProps(runbookUrl) : {};
+
+  const closeHelp = useCallback(() => {
+    dialogRef.current?.close();
+    setHelpOpen(false);
+    helpTriggerRef.current?.focus();
+  }, []);
+
+  const openHelp = useCallback(() => {
+    setHelpOpen(true);
+    queueMicrotask(() => {
+      dialogRef.current?.showModal();
+    });
+  }, []);
+
+  useEffect(() => {
+    const dlg = dialogRef.current;
+    if (!dlg) {
+      return;
+    }
+    const onCancel = (e: Event) => {
+      e.preventDefault();
+      closeHelp();
+    };
+    dlg.addEventListener("cancel", onCancel);
+    return () => dlg.removeEventListener("cancel", onCancel);
+  }, [closeHelp]);
+
+  useEffect(() => {
+    if (!helpOpen) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closeHelp();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [helpOpen, closeHelp]);
 
   return (
     <section
@@ -77,6 +146,56 @@ export function AdnSyncPanel({ company }: { company: Company }) {
               Actualizar
             </button>
           </div>
+          <Alert className="mt-4">
+            <span
+              className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-sky-900/10 text-[10px] font-bold text-sky-900 dark:bg-sky-200/15 dark:text-sky-100"
+              aria-hidden="true"
+            >
+              i
+            </span>
+            <div className="min-w-0 flex-1 space-y-2">
+              <AlertTitle className="text-sky-950 dark:text-sky-50">Certificado digital</AlertTitle>
+              <AlertDescription className="space-y-2 text-sky-950/90 dark:text-sky-100/95">
+                <p>
+                  A ligação ao Ambiente Nacional usa o certificado da empresa instalado no servidor
+                  de recolha — não nesta página.
+                </p>
+                <p>
+                  A sua equipa técnica pode seguir o guia oficial para instalar ou renovar o
+                  certificado.
+                </p>
+                {runbookUrl ? (
+                  <p>
+                    <a
+                      href={runbookUrl}
+                      {...runbookAnchor}
+                      className="font-medium text-sky-900 underline decoration-sky-900/35 underline-offset-2 hover:decoration-sky-900 dark:text-sky-200 dark:decoration-sky-200/40"
+                      title="Abrir guia técnico de certificado e recolha ADN"
+                    >
+                      Como configurar o certificado no servidor de recolha
+                    </a>
+                  </p>
+                ) : (
+                  <p className="text-xs text-sky-900/75 dark:text-sky-200/80">
+                    Ligação ao guia técnico ainda não configurada neste ambiente.
+                  </p>
+                )}
+              </AlertDescription>
+            </div>
+          </Alert>
+          <div className="mt-3">
+            <button
+              ref={helpTriggerRef}
+              type="button"
+              className="text-xs font-medium text-emerald-800 underline decoration-emerald-800/40 underline-offset-2 hover:decoration-emerald-800 dark:text-emerald-300 dark:decoration-emerald-300/40"
+              aria-haspopup="dialog"
+              aria-expanded={helpOpen}
+              aria-controls={helpDialogId}
+              onClick={() => openHelp()}
+            >
+              Como funciona?
+            </button>
+          </div>
         </>
       ) : (
         <div className="mt-4">
@@ -102,6 +221,53 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           {actionMsg}
         </p>
       ) : null}
+
+      <dialog
+        id={helpDialogId}
+        ref={dialogRef}
+        className="max-w-md rounded-xl border border-black/10 bg-[var(--background)] p-6 text-sm shadow-xl backdrop:bg-black/40 dark:border-white/15"
+        aria-labelledby={`${helpDialogId}-title`}
+        onClose={() => setHelpOpen(false)}
+      >
+        <h3 id={`${helpDialogId}-title`} className="font-semibold text-black/90 dark:text-white/90">
+          Como funciona a sincronização ADN?
+        </h3>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-black/80 dark:text-white/75">
+          <li>
+            O certificado de cliente para o ADN permanece na infraestrutura de recolha da
+            organização, não no browser.
+          </li>
+          <li>
+            O portal apenas enfileira pedidos; a ligação ao Ambiente Nacional corre no worker. Em
+            períodos de pico, a conclusão pode demorar.
+          </li>
+          <li>
+            O certificado digital da empresa é tratado pela infraestrutura de recolha. Saiba mais
+            no{" "}
+            {runbookUrl ? (
+              <a
+                href={runbookUrl}
+                {...runbookAnchor}
+                className="font-medium text-emerald-800 underline decoration-emerald-800/40 underline-offset-2 dark:text-emerald-300"
+              >
+                guia
+              </a>
+            ) : (
+              <span className="text-black/55 dark:text-white/50">guia (ainda não configurado)</span>
+            )}{" "}
+            para equipas técnicas.
+          </li>
+        </ul>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium dark:border-white/20"
+            onClick={() => closeHelp()}
+          >
+            Fechar
+          </button>
+        </div>
+      </dialog>
     </section>
   );
 }

@@ -7,6 +7,11 @@
 *.key
 *.pem
 
+# Worker / certificado ADN — nunca versionar segredos reais (CE-NFR2)
+clients.local.json
+**/*.pfx
+certificates/*.pfx
+
 # Dependencies (AIOS)
 node_modules/
 node_modules

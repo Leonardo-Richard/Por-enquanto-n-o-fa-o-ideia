@@ -8,7 +8,8 @@ Este documento define objetivos de experiência, arquitetura da informação, fl
 **Incremento UI/UX (dia 1–28 por empresa):** `docs/front-end-spec-agendamento-por-empresa.md`.  
 **Incremento UI/UX (login, empresas, papéis):** `docs/front-end-spec-login-empresas-roles.md` (PRD: `docs/prd-atualizacao-login-empresas-roles.md`).  
 **Incremento UI/UX (organização vs. empresas monitoradas):** `docs/front-end-spec-dois-niveis-organizacao-vs-empresas-fiscais.md` (PRD: `docs/prd-atualizacao-dois-niveis-organizacao-vs-empresas-fiscais.md`).  
-**Incremento UI/UX (sincronização ADN / NFS-e):** `docs/front-end-spec-integracao-nfse-dist-adn.md` (PRD: `docs/prd-integracao-nfse-dist-adn.md`).
+**Incremento UI/UX (sincronização ADN / NFS-e):** `docs/front-end-spec-integracao-nfse-dist-adn.md` (PRD: `docs/prd-integracao-nfse-dist-adn.md`).  
+**Delta UI/UX (certificado e-CNPJ / guia técnico ADN):** `docs/front-end-spec-importacao-certificado-empresa-monitorada-adn.md` (PRD: `docs/prd-importacao-certificado-empresa-monitorada-adn.md`).
 
 **Escopo UX web:** autenticação, gestão de empresas, status de execuções e área de agente/pairing. **Escopo agente desktop (Windows):** fluxos mínimos descritos em secção dedicada; detalhes de implementação nativa ficam para o arquiteto/`@dev`.
 

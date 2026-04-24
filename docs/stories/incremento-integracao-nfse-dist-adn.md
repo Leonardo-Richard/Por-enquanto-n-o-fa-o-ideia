@@ -414,7 +414,8 @@ Conforme PRD incremento §4: escolha de cloud da VM Windows, reimplementação A
 
 ### Dev Notes
 
-- PDF: coluna “Em breve” ou `—` até épico 1b.
+- PDF: coluna “Em breve” ou `—` até épico 1b.  
+- **Guia certificado (CE-FR9):** após **ADN-07**, encadear **`docs/stories/incremento-certificado-adn-guia-portal.md`** — story **CER-04** (Alert + link runbook + env).
 
 ---
 

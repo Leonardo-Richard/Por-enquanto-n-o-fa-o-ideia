@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { adnIngestionFailures } from "@repo/db";
+import { userMessageForAdnWorkerCode } from "@/lib/adn-worker-errors";
 import { adnJsonFromZodError } from "@/lib/adn-zod-response";
 import { toPublicApiError } from "../lib/errors";
 import { assertAdnOrgAdmin, resolveAdnPublicAccess } from "./adn-public-access";
@@ -13,6 +14,10 @@ const userMessagePt: Record<string, string> = {
 };
 
 function mapUserMessage(code: string): string {
+  const worker = userMessageForAdnWorkerCode(code);
+  if (worker) {
+    return worker;
+  }
   return userMessagePt[code] ?? "Ocorreu um erro ao processar o pedido ADN.";
 }
 
@@ -37,14 +42,18 @@ export async function handleGetAdnFailures(request: Request, organizationId: str
       .orderBy(desc(adnIngestionFailures.attemptedAt))
       .limit(100);
 
-    const items = rows.map((r) => ({
-      id: r.id,
-      attemptedAt: r.attemptedAt,
-      errorCode: r.errorCode,
-      userMessage: mapUserMessage(r.errorCode),
-      canRetry: r.canRetry,
-      kind: r.kind,
-    }));
+    const items = rows.map((r) => {
+      const msg = mapUserMessage(r.errorCode);
+      return {
+        id: r.id,
+        attemptedAt: r.attemptedAt,
+        errorCode: r.errorCode,
+        userMessage: msg,
+        message: msg,
+        canRetry: r.canRetry,
+        kind: r.kind,
+      };
+    });
 
     const res = NextResponse.json({ items });
     res.headers.set("Cache-Control", "no-store");

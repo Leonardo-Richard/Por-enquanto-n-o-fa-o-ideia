@@ -286,6 +286,7 @@ sequenceDiagram
 | --------- | ----------------- |
 | `docs/architecture.md` | Monorepo, BFF, observabilidade |
 | `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md` | `organizations`, `companies`, jobs |
+| `docs/architecture-importacao-certificado-empresa-monitorada-adn.md` | Guia ADN no portal, env `NEXT_PUBLIC_ADN_CERT_RUNBOOK_URL`, worker + `clients.local.json`, `error_code` certificado (**CE-FR10**) |
 | `docs/front-end-spec-integracao-nfse-dist-adn.md` | Polling, modais, query keys |
 
 ---
