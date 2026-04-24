@@ -15,6 +15,7 @@
 | Data       | Versão | Descrição |
 | ---------- | ------ | ---------- |
 | 2026-04-24 | 1.0    | Spec inicial: objectivos UX, IA, fluxos, organismo “Certificado no servidor”, copy CE-FR10, a11y, rastreio CE-FR/CE-NFR. |
+| 2026-04-24 | 1.1    | **§3.1.1** — precedência da ordem vertical quando **UIP-04** está entregue ([spec UIP §3.1](front-end-spec-instalacao-certificado-empresa-monitorada-utilizador.md)); alinhamento PO / ecossistema UIP. |
 
 ---
 
@@ -68,6 +69,10 @@
 - **Dentro** do organismo **Sincronização ADN** no **detalhe da empresa monitorada** (mesmo `h2` e região que o [spec ADN §5.1](front-end-spec-integracao-nfse-dist-adn.md)).  
 - **Ordem vertical sugerida:** (1) estado / última sync / CTAs ADN existentes; (2) **Alert** “Certificado e servidor de recolha”; (3) restantes links (Ver notas, Exportar lista, …).  
 - **Não** criar separador de nível superior só para certificado no MVP.
+
+#### 3.1.1 Precedência quando **UIP-04** está entregue
+
+Quando o incremento [`incremento-certificado-adn-readiness-uip.md`](stories/incremento-certificado-adn-readiness-uip.md) (**UIP-04**, opção A — card único) estiver **mergeado**, a **ordem vertical** da secção **Sincronização ADN** deixa de seguir a lista **(1)(2)** do parágrafo anterior e passa a obedecer **estritamente** ao [spec UIP §3.1](front-end-spec-instalacao-certificado-empresa-monitorada-utilizador.md): **(1)** organismo **Certificado para o ADN** (readiness + guia); **(2)** estado do último job + CTAs ADN; **(3)** restantes links. **Enquanto** **UIP-04** não estiver entregue, a ordem **§3.1** deste documento permanece vigente para implementações só **CER-04** (alerta antes dos CTAs).
 
 ### 3.2 Diagrama — descoberta do guia (CE-FR9)
 

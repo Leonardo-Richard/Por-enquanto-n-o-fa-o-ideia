@@ -248,7 +248,8 @@ Cada PR que feche **CER-0x** deve satisfazer **todos** os itens aplicáveis:
 
 ### Dev Notes
 
-- Rota opcional interna `/ajuda/adn-certificado` fica **backlog** se não for necessária no MVP (arquitectura §6).
+- Rota opcional interna `/ajuda/adn-certificado` fica **backlog** se não for necessária no MVP (arquitectura §6).  
+- **Evolução UIP (opção A):** quando o incremento [`incremento-certificado-adn-readiness-uip.md`](incremento-certificado-adn-readiness-uip.md) (**UIP-04**) for implementado, o **`Alert`** isolado desta story (**AC1**, ordem “após CTAs”) é **substituído** pelo organismo **`AdnCertificateReadinessCard`**, que **incorpora** as mesmas **duas frases** + **link** do guia + estado de readiness; **não** manter dois blocos informativos duplicados. A **ordem vertical** da secção ADN passa a seguir [spec UIP §3.1](front-end-spec-instalacao-certificado-empresa-monitorada-utilizador.md) (card de certificado **antes** dos CTAs de sync). Até ao merge **UIP-04**, **CER-04** permanece o contrato de UI vigente.
 
 ---
 

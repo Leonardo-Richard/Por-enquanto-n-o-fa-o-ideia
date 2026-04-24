@@ -15,6 +15,7 @@ import {
   user,
 } from "@repo/db";
 import { clearAdnRateLimitBucketsForTests } from "@/lib/adn-rate-limit";
+import { clearAllReadinessMemoryForTests } from "@/lib/adn-certificate-readiness-memory";
 import { getDb } from "@/lib/db";
 
 vi.mock("@/server/api/v1/lib/session", () => ({
@@ -24,6 +25,8 @@ vi.mock("@/server/api/v1/lib/session", () => ({
 import { getAuthedSession } from "@/server/api/v1/lib/session";
 import { GET as getAdnFailures } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/failures/route";
 import { GET as getAdnSync, POST as postAdnSync } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/sync/route";
+import { GET as getCertReadiness } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/route";
+import { POST as postCertReadinessVerify } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/verify/route";
 import { POST as postRetryBulk } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/failures/retry-bulk/route";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
@@ -149,6 +152,7 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     await db.delete(user).where(inArray(user.id, userIds));
     delete (globalThis as { __portalDb?: unknown }).__portalDb;
     clearAdnRateLimitBucketsForTests();
+    clearAllReadinessMemoryForTests();
   });
 
   it("GET sync com ADN desactivado na organização → 404", async () => {
@@ -644,5 +648,316 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     expect(row?.message).toBe(expected);
 
     await db.delete(adnIngestionFailures).where(eq(adnIngestionFailures.id, failureId));
+  });
+
+  it("GET certificate-readiness com ADN desactivado na organização → 404", async () => {
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOff,
+        email: "x@y",
+        name: "Admin Off",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-cr-off",
+        userId: ids.adminOff,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOff,
+        activeOrganizationId: ids.orgOff,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const res = await getCertReadiness(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOff, companyId: ids.companyOff }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("GET certificate-readiness sem sessão → 401", async () => {
+    vi.mocked(getAuthedSession).mockResolvedValue(null);
+    const res = await getCertReadiness(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("GET certificate-readiness com companyId de outra organização no path → 404 (UIP-01 AC7)", async () => {
+    clearAllReadinessMemoryForTests();
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOn,
+        email: "a@b",
+        name: "Admin On",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-cr",
+        userId: ids.adminOn,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const res = await getCertReadiness(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOff }),
+    });
+    expect(res.status).toBe(404);
+    const raw = await res.text();
+    expect(raw).not.toContain("certificateReadiness");
+  });
+
+  it("GET certificate-readiness com ADN activo → 200, Cache-Control no-store, nível 0", async () => {
+    clearAllReadinessMemoryForTests();
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOn,
+        email: "a@b",
+        name: "Admin On",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-cr2",
+        userId: ids.adminOn,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const res = await getCertReadiness(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const body = (await res.json()) as {
+      certificateReadiness: string;
+      lastCheckedAt: string | null;
+      probeAvailable: boolean;
+      canVerify: boolean;
+    };
+    expect(body.certificateReadiness).toBe("pendente_verificacao");
+    expect(body.lastCheckedAt).toBeNull();
+    expect(body.probeAvailable).toBe(false);
+    expect(body.canVerify).toBe(true);
+  });
+
+  it("POST certificate-readiness/verify como user org → 403", async () => {
+    clearAdnRateLimitBucketsForTests();
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.orgUser,
+        email: "u@b",
+        name: "Org User",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-crv",
+        userId: ids.orgUser,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const res = await postCertReadinessVerify(new Request("http://test/", { method: "POST" }), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("POST verify nível 0: dois POSTs avançam lastCheckedAt; GET reflecte (UIP-02 AC4)", async () => {
+    clearAllReadinessMemoryForTests();
+    clearAdnRateLimitBucketsForTests();
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOn,
+        email: "a@b",
+        name: "Admin On",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-pv0",
+        userId: ids.adminOn,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const p1 = await postCertReadinessVerify(new Request("http://test/", { method: "POST" }), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(p1.status).toBe(200);
+    const j1 = (await p1.json()) as { lastCheckedAt: string; certificateReadiness: string };
+    expect(j1.certificateReadiness).toBe("pendente_verificacao");
+    expect(j1.lastCheckedAt).toBeTruthy();
+
+    await new Promise((r) => setTimeout(r, 5));
+
+    const p2 = await postCertReadinessVerify(new Request("http://test/", { method: "POST" }), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(p2.status).toBe(200);
+    const j2 = (await p2.json()) as { lastCheckedAt: string };
+    expect(Date.parse(j2.lastCheckedAt)).toBeGreaterThanOrEqual(Date.parse(j1.lastCheckedAt));
+
+    const g = await getCertReadiness(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(g.status).toBe(200);
+    const jg = (await g.json()) as { lastCheckedAt: string | null; certificateReadiness: string };
+    expect(jg.lastCheckedAt).toBe(j2.lastCheckedAt);
+    expect(jg.certificateReadiness).toBe("pendente_verificacao");
+  });
+
+  it("POST verify após limite → 429 com Retry-After e retryAfterSeconds", async () => {
+    const prev = process.env.ADN_CERT_VERIFY_RATE_LIMIT_PER_MIN;
+    process.env.ADN_CERT_VERIFY_RATE_LIMIT_PER_MIN = "1";
+    clearAllReadinessMemoryForTests();
+    clearAdnRateLimitBucketsForTests();
+
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOn,
+        email: "a@b",
+        name: "Admin On",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-pvrl",
+        userId: ids.adminOn,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const first = await postCertReadinessVerify(new Request("http://test/", { method: "POST" }), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(first.status).toBe(200);
+
+    const second = await postCertReadinessVerify(new Request("http://test/", { method: "POST" }), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(second.status).toBe(429);
+    expect(second.headers.get("Retry-After")).toBeTruthy();
+    const j429 = (await second.json()) as { error_code?: string; retryAfterSeconds?: number };
+    expect(j429.error_code).toBe("ADN_RATE_LIMIT");
+    expect(typeof j429.retryAfterSeconds).toBe("number");
+
+    process.env.ADN_CERT_VERIFY_RATE_LIMIT_PER_MIN = prev;
+    clearAdnRateLimitBucketsForTests();
+  });
+
+  it("UIP-03: resposta pública do verify não contém substrings sensíveis do JSON interno do worker", async () => {
+    clearAllReadinessMemoryForTests();
+    clearAdnRateLimitBucketsForTests();
+    const prevBase = process.env.ADN_WORKER_INTERNAL_BASE_URL;
+    const prevSecret = process.env.ADN_WORKER_HMAC_SECRET;
+    const prevProbe = process.env.ADN_CERT_PROBE_ENABLED;
+    process.env.ADN_WORKER_INTERNAL_BASE_URL = "http://adn-worker-probe.test";
+    process.env.ADN_WORKER_HMAC_SECRET = "0123456789abcdef0123456789abcdef";
+    process.env.ADN_CERT_PROBE_ENABLED = "true";
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.startsWith("http://adn-worker-probe.test")) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error_code: "ADN_WORKER_CERT_NOT_FOUND",
+            leak: "certificates/11222333000181.pfx thumbprint=ABCDEF",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.adminOn,
+        email: "a@b",
+        name: "Admin On",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-prb",
+        userId: ids.adminOn,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOn,
+        activeOrganizationId: ids.orgOn,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    try {
+      const res = await postCertReadinessVerify(new Request("http://test/", { method: "POST" }), {
+        params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+      });
+      expect(res.status).toBe(200);
+      const raw = await res.text();
+      expect(raw).not.toMatch(/certificates\//i);
+      expect(raw).not.toMatch(/\.pfx/i);
+      expect(raw).not.toMatch(/thumbprint=/i);
+    } finally {
+      vi.unstubAllGlobals();
+      process.env.ADN_WORKER_INTERNAL_BASE_URL = prevBase;
+      process.env.ADN_WORKER_HMAC_SECRET = prevSecret;
+      process.env.ADN_CERT_PROBE_ENABLED = prevProbe;
+      clearAllReadinessMemoryForTests();
+      clearAdnRateLimitBucketsForTests();
+    }
   });
 });

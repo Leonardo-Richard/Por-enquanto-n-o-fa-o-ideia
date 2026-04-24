@@ -73,3 +73,14 @@ export function adnPostSyncRateKey(userId: string, organizationId: string, compa
 export function adnInternalIpRateKey(ip: string): string {
   return `adn:internal:${ip}`;
 }
+
+export function getAdnCertVerifyLimit(): { max: number; windowMs: number } {
+  const raw = process.env.ADN_CERT_VERIFY_RATE_LIMIT_PER_MIN?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : 10;
+  const max = Number.isFinite(n) && n > 0 ? n : 10;
+  return { max, windowMs: 60_000 };
+}
+
+export function adnCertVerifyRateKey(userId: string, organizationId: string, companyId: string): string {
+  return `adn:cert-verify:${userId}:${organizationId}:${companyId}`;
+}

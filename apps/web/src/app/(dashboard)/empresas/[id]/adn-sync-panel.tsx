@@ -2,30 +2,10 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Company } from "@repo/shared";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AdnCertificateReadinessCard } from "@/app/(dashboard)/empresas/[id]/adn-certificate-readiness-card";
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
+import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
-
-function runbookAnchorProps(href: string): { target?: "_blank"; rel?: string } {
-  const appBase = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  try {
-    const u = new URL(href);
-    if (u.protocol !== "http:" && u.protocol !== "https:") {
-      return {};
-    }
-    if (appBase) {
-      const appOrigin = new URL(appBase).origin;
-      if (u.origin === appOrigin) {
-        return {};
-      }
-    } else if (typeof window !== "undefined" && u.origin === window.location.origin) {
-      return {};
-    }
-    return { target: "_blank", rel: "noopener noreferrer" };
-  } catch {
-    return {};
-  }
-}
 
 export function AdnSyncPanel({ company }: { company: Company }) {
   const liveId = useId();
@@ -33,9 +13,16 @@ export function AdnSyncPanel({ company }: { company: Company }) {
   const helpTriggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [readinessKick, setReadinessKick] = useState(0);
+
+  const bumpReadiness = useCallback(() => {
+    setReadinessKick((k) => k + 1);
+  }, []);
+
   const { access, lastJob, busy, actionMsg, actionTone, refresh, requestSync } = useAdnSyncForCompany({
     companyId: company.id,
     organizationId: company.organizationId,
+    onSyncAccepted: bumpReadiness,
   });
 
   const runbookUrl = getAdnCertRunbookUrl();
@@ -114,6 +101,11 @@ export function AdnSyncPanel({ company }: { company: Company }) {
       ) : null}
       {access === "active" ? (
         <>
+          <AdnCertificateReadinessCard
+            organizationId={company.organizationId}
+            companyId={company.id}
+            refreshSignal={readinessKick}
+          />
           <div className="mt-3 text-sm text-black/75 dark:text-white/70" aria-live="polite">
             {lastJob ? (
               <p>
@@ -146,43 +138,6 @@ export function AdnSyncPanel({ company }: { company: Company }) {
               Actualizar
             </button>
           </div>
-          <Alert className="mt-4">
-            <span
-              className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-sky-900/10 text-[10px] font-bold text-sky-900 dark:bg-sky-200/15 dark:text-sky-100"
-              aria-hidden="true"
-            >
-              i
-            </span>
-            <div className="min-w-0 flex-1 space-y-2">
-              <AlertTitle className="text-sky-950 dark:text-sky-50">Certificado digital</AlertTitle>
-              <AlertDescription className="space-y-2 text-sky-950/90 dark:text-sky-100/95">
-                <p>
-                  A ligação ao Ambiente Nacional usa o certificado da empresa instalado no servidor
-                  de recolha — não nesta página.
-                </p>
-                <p>
-                  A sua equipa técnica pode seguir o guia oficial para instalar ou renovar o
-                  certificado.
-                </p>
-                {runbookUrl ? (
-                  <p>
-                    <a
-                      href={runbookUrl}
-                      {...runbookAnchor}
-                      className="font-medium text-sky-900 underline decoration-sky-900/35 underline-offset-2 hover:decoration-sky-900 dark:text-sky-200 dark:decoration-sky-200/40"
-                      title="Abrir guia técnico de certificado e recolha ADN"
-                    >
-                      Como configurar o certificado no servidor de recolha
-                    </a>
-                  </p>
-                ) : (
-                  <p className="text-xs text-sky-900/75 dark:text-sky-200/80">
-                    Ligação ao guia técnico ainda não configurada neste ambiente.
-                  </p>
-                )}
-              </AlertDescription>
-            </div>
-          </Alert>
           <div className="mt-3">
             <button
               ref={helpTriggerRef}
@@ -233,6 +188,10 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           Como funciona a sincronização ADN?
         </h3>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-black/80 dark:text-white/75">
+          <li>
+            O estado &quot;Pronto para o ADN&quot; resulta de uma verificação automática no servidor de recolha —
+            não significa que existam notas novas.
+          </li>
           <li>
             O certificado de cliente para o ADN permanece na infraestrutura de recolha da
             organização, não no browser.

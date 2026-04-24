@@ -48,3 +48,15 @@ export function requireAdnWorkerSecret(): string | null {
   const s = process.env["ADN_WORKER_HMAC_SECRET"]?.trim();
   return s && s.length > 0 ? s : null;
 }
+
+/** Cabeçalhos HMAC para pedidos **portal → worker** (mesmo algoritmo que `parseInternalAdnBody`). */
+export function adnWorkerSignedHeaders(secret: string, rawBodyUtf8: string): Record<string, string> {
+  const rawBody = Buffer.from(rawBodyUtf8, "utf8");
+  const ts = String(Math.floor(Date.now() / 1000));
+  const signature = computeAdnWorkerSignature(secret, rawBody);
+  return {
+    "Content-Type": "application/json",
+    "x-adn-timestamp": ts,
+    "x-adn-signature": signature,
+  };
+}

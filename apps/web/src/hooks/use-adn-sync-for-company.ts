@@ -16,9 +16,11 @@ export type UseAdnSyncForCompanyArgs = {
   companyId: string;
   /** `company.organizationId` da API (NFR29) */
   organizationId: string;
+  /** Opcional: após sync aceite (202), revalidar readiness UIP (spec UX §9). */
+  onSyncAccepted?: () => void;
 };
 
-export function useAdnSyncForCompany({ companyId, organizationId }: UseAdnSyncForCompanyArgs) {
+export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted }: UseAdnSyncForCompanyArgs) {
   const [access, setAccess] = useState<AdnSyncPanelAccess>("loading");
   const [lastJob, setLastJob] = useState<AdnSyncLastJob | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -74,6 +76,7 @@ export function useAdnSyncForCompany({ companyId, organizationId }: UseAdnSyncFo
         setActionTone("success");
         setActionMsg("Pedido aceite. O job foi enfileirado.");
         await refresh();
+        onSyncAccepted?.();
         return;
       }
       if (r.kind === "forbidden") {
@@ -93,7 +96,7 @@ export function useAdnSyncForCompany({ companyId, organizationId }: UseAdnSyncFo
     } finally {
       setBusy(false);
     }
-  }, [companyId, organizationId, refresh]);
+  }, [companyId, organizationId, onSyncAccepted, refresh]);
 
   return {
     access,
