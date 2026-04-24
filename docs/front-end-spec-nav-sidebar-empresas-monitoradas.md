@@ -15,6 +15,7 @@
 | Data       | Versão | Descrição |
 | ---------- | ------ | ---------- |
 | 2026-04-24 | 1.0    | Spec inicial: shell, rota dedicada, paridade com Painel, regras de estado activo, a11y, rastreio FR. |
+| 2026-04-24 | 1.1    | §4.2 actualizada: paridade de lista alinhada a **EM-01** (linhas + Editar + ADN); detalhe UX em `docs/front-end-spec-empresas-monitoradas-editar-e-forcar-automacao.md`. |
 
 ---
 
@@ -131,13 +132,15 @@ Cada item `nav` define `active` assim:
 
 ### 4.2 Paridade mínima com o Painel (MVP)
 
-Referência de comportamento: secção «Empresas monitoradas» em `apps/web/src/app/(dashboard)/dashboard/page.tsx` (cartão com `h2`, lista de botões «Job mensal · CNPJ», estado vazio, link para `/empresas/nova`).
+Referência de comportamento: secção «Empresas monitoradas» em `apps/web/src/app/(dashboard)/dashboard/page.tsx` e `MonitoredCompaniesSection` (lista em linhas com identificação, **Editar** → `/empresas/{id}`, **Pedir sincronização ADN** quando o estado ADN estiver activo).
+
+**Detalhe de copy, estados ADN e a11y por linha:** `docs/front-end-spec-empresas-monitoradas-editar-e-forcar-automacao.md` (**EM-01**).
 
 | Funcionalidade | Comportamento |
 | -------------- | -------------- |
 | Fonte de dados | Mesmo hook + `organizationId` efectivo que o Painel (`useMonitoredCompanies`, `useMeSummary` / equivalente). |
 | Lista vazia | Mensagem equivalente à do Painel; preferir alinhamento a **`fiscal.list.empty`**: **«Ainda não há CNPJs monitorados.»** + CTA **ligação** para `/empresas/nova` com texto **«Nova empresa monitorada»** (`fiscal.new.title`) ou **«Adicionar CNPJ»** (`fiscal.list.add`) — **uma** variante por PR após revisão de copy. |
-| Cada empresa | Botão ou card clicável que dispara **teste de job mensal** (`runSync`) com o mesmo rótulo visual **«Job mensal · {cnpjMasked}»** até evolução para tabela (spec dois níveis §5.3). |
+| Cada empresa | Linha com `tradeName` / `systemCode` / `cnpjMasked`; **Editar** (ligação); **Pedir sincronização ADN** com o mesmo contrato que a ficha (`POST .../adn/sync`, confirmação, mensagens **NFR27**/**NFR28**). **Supersedido:** botão «Job mensal · {cnpjMasked}» + `runSync` na lista (**histórico NAV-02 AC5** → **EM-01**). |
 | CTA secundário | Ligação visível **«Cadastrar empresa»** ou **«Nova empresa monitorada»** coerente com o Painel (`/empresas/nova`). |
 
 ### 4.3 Layout e componentes

@@ -72,13 +72,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <MonitoredCompaniesSection query={monitoredQuery} />
+      <MonitoredCompaniesSection
+        query={monitoredQuery}
+        effectiveOrganizationId={effectiveOrganizationId}
+      />
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
         <h2 className="text-sm font-semibold">Rotina mensal (dia 1º)</h2>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Em produção, cada empresa com agente ativo recebe uma coleta no dia 1º ({settings.timezone}). Use os botões
-          acima para disparar uma sincronização manual de teste.
+          Em produção, cada empresa com agente ativo recebe uma coleta no dia 1º ({settings.timezone}). Na lista
+          acima pode solicitar sincronização ADN (fila no portal) ou abrir a ficha da empresa para testes locais.
         </p>
       </section>
 

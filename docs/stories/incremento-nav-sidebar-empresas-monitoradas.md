@@ -77,7 +77,7 @@
 | ID | DoD mínimo |
 | -- | ----------- |
 | **NAV-01** | PR com `DashboardShell` actualizado; captura ou lista de pathnames testados no corpo do PR. |
-| **NAV-02** | PR com página nova + paridade funcional; se organismo extraído, Painel importa-o (sem duplicar lógica `runSync`). |
+| **NAV-02** | PR com página nova + paridade funcional; organismo partilhado no Painel; paridade de acções na lista segue **EM-01** (ADN + Editar), não `runSync`. |
 | **NAV-03** | PR de docs apenas ou anexo ao PR de NAV-02; referências actualizadas. |
 
 ---
@@ -165,7 +165,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 
 **Referências:** PRD §6; spec UX §4; arquitectura §3, §6; `apps/web/src/app/(dashboard)/dashboard/page.tsx` (secção «Empresas monitoradas»).
 
-**Riscos:** Drift de UI entre Painel e nova página; esquecer `usePortal` / `runSync`.
+**Riscos:** Drift de UI entre Painel e nova página. ~~`usePortal` / `runSync` na lista~~ **supersedido** por **EM-01** (`docs/stories/incremento-empresas-monitoradas-editar-e-forcar-automacao.md`) — lista com Editar + ADN real.
 
 **Executor Assignment**
 
@@ -184,7 +184,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 2. Página com **`h1`**: «Empresas monitoradas»; subtítulo: «CNPJs incluídos na automação de notas desta organização.» (spec UX §4.1 / copy deck `fiscal.list.*`).  
 3. Lista alimentada por **`useMonitoredCompanies(effectiveOrganizationId)`** (ou par `useMeSummary` equivalente ao Painel) — mesma API que o Painel (**FR51**, PRD §6).  
 4. Estado vazio: mensagem alinhada a **`fiscal.list.empty`** (**«Ainda não há CNPJs monitorados.»** — `docs/front-end-spec-dois-niveis-organizacao-vs-empresas-fiscais.md` §10) + link CTA para `/empresas/nova` com texto **«Nova empresa monitorada»** (paridade com `dashboard/page.tsx` e `fiscal.new.title`; **não** usar «Adicionar CNPJ» neste incremento salvo mudança explícita de PO).  
-5. Com itens: botões ou equivalente que disparam **`runSync`** com rótulo visível **«Job mensal · {cnpjMasked}»** e **`aria-label`** descritivo (spec UX §6).  
+5. Com itens: ~~botões «Job mensal · {cnpjMasked}» + `runSync`~~ **supersedido por EM-01 (2026-04-24):** cada linha com **Editar** (`/empresas/{id}`), **Pedir sincronização ADN** quando aplicável, identificação (`tradeName`, `systemCode`, `cnpjMasked`) e `aria-label` em **Editar** (`monitored.row.edit.aria` / equivalente no código). Ver `docs/stories/incremento-empresas-monitoradas-editar-e-forcar-automacao.md` **EM-01B**.  
 6. Secção visual: cartão `rounded-xl border` coerente com a secção do Painel (spec UX §4.3).  
 7. Estados loading / erro: skeleton ou `aria-busy`; erro com `role="alert"` e **Tentar novamente** se o hook expuser `reload` (paridade com padrões existentes).  
 8. **Recomendado (DoD forte):** extrair organismo partilhado (ex. `MonitoredCompaniesSection`) usado por `dashboard/page.tsx` e por esta página — se não feito neste PR, abrir dívida técnica com link para **NAV-02** follow-up.
@@ -192,7 +192,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 ### Tasks / Subtasks
 
 - [x] Criar rota e página sob `(dashboard)`.  
-- [x] Integrar `usePortal`, `useMeSummary` / `useMonitoredCompanies` como no Painel.  
+- [x] Integrar `useMeSummary` / `useMonitoredCompanies` como no Painel (lista EM-01: ADN por linha; `usePortal` só onde o Painel ainda precisa para execuções locais).  
 - [x] (Recomendado) Extrair componente partilhado e refactor do Painel.  
 - [ ] Teste manual da matriz pathnames + lista vazia + disparo (ambiente local).
 
@@ -275,7 +275,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 | AC2 | `h1` «Empresas monitoradas»; subtítulo literal «CNPJs incluídos na automação de notas desta organização.» (ponto final incluído). | OK |
 | AC3 | `MonitoredCompaniesSection` usa `useMeSummary` + `useMonitoredCompanies(effectiveOrganizationId)` como o Painel. | OK |
 | AC4 | Empty: «Ainda não há CNPJs monitorados.» + link «Nova empresa monitorada» → `/empresas/nova`. | OK |
-| AC5 | Botões `Job mensal · {cnpjMasked}` + `runSync`; `aria-label` descritivo presente. | OK |
+| AC5 | ~~`Job mensal` + `runSync`~~ **supersedido EM-01:** linhas com Editar + ADN + `aria-label` em Editar; ver nota NAV-02 AC5 no corpo da story. | OK (pós-EM-01) |
 | AC6 | Secção `rounded-xl border … p-6` alinhada ao padrão do Painel. | OK |
 | AC7 | Loading: `aria-busy` na `<section>`; erro `role="alert"` + «Tentar novamente» → `reload`. | OK |
 | AC8 | Organismo `MonitoredCompaniesSection` partilhado; `dashboard/page.tsx` importa-o. | OK |

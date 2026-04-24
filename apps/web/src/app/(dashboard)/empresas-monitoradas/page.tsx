@@ -16,7 +16,11 @@ export default function EmpresasMonitoradasPage() {
           CNPJs incluídos na automação de notas desta organização.
         </p>
       </div>
-      <MonitoredCompaniesSection showSectionHeading={false} query={monitoredQuery} />
+      <MonitoredCompaniesSection
+        showSectionHeading={false}
+        query={monitoredQuery}
+        effectiveOrganizationId={effectiveOrganizationId}
+      />
     </div>
   );
 }

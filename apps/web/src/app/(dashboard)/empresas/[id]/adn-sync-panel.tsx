@@ -1,103 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId } from "react";
 import type { Company } from "@repo/shared";
-
-type LastJob = {
-  id: string;
-  status: string;
-  trigger: string;
-  summary: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type PanelAccess = "loading" | "active" | "feature_off" | "forbidden" | "error";
+import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
 
 export function AdnSyncPanel({ company }: { company: Company }) {
   const liveId = useId();
-  const [access, setAccess] = useState<PanelAccess>("loading");
-  const [lastJob, setLastJob] = useState<LastJob | null>(null);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const base = `/api/v1/organizations/${company.organizationId}/monitored-companies/${company.id}/adn`;
-
-  const refresh = useCallback(async () => {
-    setAccess("loading");
-    setActionMsg(null);
-    const r = await fetch(`${base}/sync`, { credentials: "include" });
-    if (r.status === 404) {
-      setAccess("feature_off");
-      setLastJob(null);
-      return;
-    }
-    if (r.status === 403) {
-      setAccess("forbidden");
-      setLastJob(null);
-      return;
-    }
-    if (!r.ok) {
-      setAccess("error");
-      setLastJob(null);
-      return;
-    }
-    const b = (await r.json()) as { lastJob: LastJob | null };
-    setAccess("active");
-    setLastJob(b.lastJob);
-  }, [base]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (access !== "active" || !lastJob || lastJob.status !== "running") {
-      return;
-    }
-    const t = window.setInterval(() => void refresh(), 8000);
-    return () => window.clearInterval(t);
-  }, [access, lastJob, refresh]);
-
-  async function requestSync() {
-    if (!window.confirm("Pedir sincronização ADN agora? (fila no portal)")) {
-      return;
-    }
-    setBusy(true);
-    setActionMsg(null);
-    try {
-      const r = await fetch(`${base}/sync`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({}),
-      });
-      if (r.status === 202) {
-        setActionMsg("Pedido aceite. O job foi enfileirado.");
-        await refresh();
-        return;
-      }
-      if (r.status === 403) {
-        setActionMsg("Apenas administradores da organização podem pedir sincronização ADN.");
-        return;
-      }
-      if (r.status === 429) {
-        const retry = r.headers.get("Retry-After");
-        const j = (await r.json().catch(() => null)) as { message?: string } | null;
-        const baseMsg =
-          j?.message ?? "Serviço ocupado. Aguarde antes de voltar a pedir sincronização ADN.";
-        setActionMsg(retry ? `${baseMsg} (tente novamente em ~${retry}s)` : baseMsg);
-        return;
-      }
-      const j = (await r.json().catch(() => null)) as { message?: string } | null;
-      setActionMsg(j?.message ?? "Não foi possível pedir a sincronização.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { access, lastJob, busy, actionMsg, actionTone, refresh, requestSync } = useAdnSyncForCompany({
+    companyId: company.id,
+    organizationId: company.organizationId,
+  });
 
   return (
     <section
@@ -179,7 +91,14 @@ export function AdnSyncPanel({ company }: { company: Company }) {
         </div>
       )}
       {actionMsg ? (
-        <p className="mt-3 text-xs text-emerald-800 dark:text-emerald-300" role="status">
+        <p
+          className={
+            actionTone === "success"
+              ? "mt-3 text-xs text-emerald-800 dark:text-emerald-300"
+              : "mt-3 text-xs text-amber-900 dark:text-amber-200"
+          }
+          role={actionTone === "success" ? "status" : "alert"}
+        >
           {actionMsg}
         </p>
       ) : null}

@@ -11,6 +11,7 @@
 | Data       | Versão | Descrição |
 | ---------- | ------ | ---------- |
 | 2026-04-24 | 1.0    | Arquitectura inicial: rotas, gates, shell, componentes, matriz de pathname, testes, riscos. |
+| 2026-04-24 | 1.1    | Paridade lista: ADN via `adn-sync-client` / hook na lista (**EM-01**); ver `docs/architecture-empresas-monitoradas-editar-e-forcar-automacao.md`. |
 
 ---
 
@@ -21,7 +22,7 @@
 | **Routing (Next.js App Router)** | Nova rota **`/empresas-monitoradas`** como `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx` (segmento de URL **hífen**, sem colisão com `/empresas/*`). |
 | **Layout** | Reutiliza `(dashboard)/layout.tsx` → `SessionAuthGate` → `WorkspaceGate` → `DashboardShell` → `children`. |
 | **Dados** | Mesma stack que o Painel: `useMeSummary` / `useEffectiveOrganizationId` + `useMonitoredCompanies(organizationId)` → `GET /api/v1/organizations/:organizationId/monitored-companies`. |
-| **Portal / jobs locais** | Mesmo `usePortal()` + `runSync` que o Painel para disparo de teste mensal (**paridade PRD §6**). |
+| **Portal / jobs locais** | A secção **Empresas monitoradas** no Painel e em `/empresas-monitoradas` usa **GET/POST ADN** partilhados (`adn-sync-client` + `useAdnSyncForCompany`) por linha — **sem** `runSync` na lista (**supersedido por EM-01**). `usePortal` permanece para execuções locais / KPIs onde aplicável. Ver `docs/architecture-empresas-monitoradas-editar-e-forcar-automacao.md`. |
 | **Shell** | Actualizar array `nav` em `DashboardShell`; implementar **função de match por item** (evitar `startsWith("/empresas")` para o novo item). |
 | **A11y** | `aria-current="page"` no `Link` activo do `nav` (**NFR24**). |
 
@@ -36,7 +37,7 @@ flowchart TB
     PageDash["/dashboard — Painel"]
     PageMon["/empresas-monitoradas — Lista"]
     PagePick["/empresas — Picker"]
-    Hooks[useMonitoredCompanies + usePortal + useMeSummary]
+    Hooks[useMonitoredCompanies + useMeSummary + ADN row hook]
   end
   subgraph next [apps/web Next.js]
     API["Route Handler GET .../monitored-companies"]
