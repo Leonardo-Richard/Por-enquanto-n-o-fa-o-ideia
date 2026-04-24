@@ -5,6 +5,7 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "probe:pooler": "npm run probe:pooler -w web",
+    "vendor:nfse-dist": "node scripts/vendor-nfse-dist.mjs",
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",

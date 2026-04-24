@@ -7,6 +7,11 @@
 *.key
 *.pem
 
+# NFSE_dist upstream (obtido com npm run vendor:nfse-dist)
+third_party/NFSE_dist/
+third_party/NFSE_dist-main/
+third_party/nfse-dist-main.zip
+
 # Worker / certificado ADN — nunca versionar segredos reais (CE-NFR2)
 clients.local.json
 **/*.pfx

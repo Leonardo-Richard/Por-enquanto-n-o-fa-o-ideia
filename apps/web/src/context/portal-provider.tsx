@@ -48,7 +48,6 @@ type PortalContextValue = {
   executions: Execution[];
   settings: PortalSettings;
   appendExecution: (execution: Execution) => void;
-  runSync: (companyId: string, trigger: Execution["trigger"], companyCnpjDigits: string) => void;
   updateSettings: (patch: Partial<PortalSettings>) => void;
   pathForCompany: (company: Pick<Company, "cnpjDigits" | "systemCode">) => string;
 };
@@ -88,39 +87,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     setExecutions((prev) => [execution, ...prev]);
   }, []);
 
-  const runSync = useCallback(
-    (companyId: string, trigger: Execution["trigger"], companyCnpjDigits: string) => {
-      const id =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `ex-${Date.now()}`;
-      const startedAt = new Date().toISOString();
-      const running: Execution = {
-        id,
-        companyId,
-        companyCnpjDigits,
-        status: "running",
-        trigger,
-        startedAt,
-      };
-      setExecutions((prev) => [running, ...prev]);
-
-      window.setTimeout(() => {
-        const finishedAt = new Date().toISOString();
-        const done: Execution = {
-          ...running,
-          status: "success",
-          finishedAt,
-          detail:
-            "Sincronização concluída (simulada). Verifique a pasta local com o agente instalado.",
-          filesCount: Math.floor(Math.random() * 5),
-        };
-        setExecutions((prev) => prev.map((e) => (e.id === id ? done : e)));
-      }, 900);
-    },
-    [],
-  );
-
   const updateSettings = useCallback((patch: Partial<PortalSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -131,11 +97,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       executions,
       settings,
       appendExecution,
-      runSync,
       updateSettings,
       pathForCompany,
     }),
-    [hydrated, executions, settings, appendExecution, runSync, updateSettings, pathForCompany],
+    [hydrated, executions, settings, appendExecution, updateSettings, pathForCompany],
   );
 
   return (

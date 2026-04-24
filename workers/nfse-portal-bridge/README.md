@@ -1,0 +1,72 @@
+# Worker NFSE_dist ↔ Portal (bridge)
+
+Este directório liga o portal (jobs `adn_sync_jobs` + API interna HMAC) ao cliente **[NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist)** — o mesmo fluxo que o menu **«1) Baixar Notas de Todos os Clientes»** (`run_download_workflow` em `main.py`).
+
+## Requisitos
+
+- **Windows** (recomendado): `curl.exe` no PATH, certificado e-CNPJ na loja ou PFX em `certificates/`, conforme o [README do NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist).
+- **Python 3.11+**
+- Postgres acessível com o mesmo `DATABASE_URL` que o portal.
+- Portal a correr com `ADN_WORKER_HMAC_SECRET` definido e bucket Storage ADN configurado (`docs/qa/adn-staging-setup.md`).
+
+## 1. Descarregar o código NFSE_dist
+
+Na raiz do monorepo:
+
+```bash
+npm run vendor:nfse-dist
+```
+
+Isto cria `third_party/NFSE_dist/` (ignorado pelo Git).
+
+Instalar dependências Python do bridge:
+
+```bash
+cd workers/nfse-portal-bridge
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+## 2. Variáveis de ambiente (worker)
+
+| Variável | Exemplo | Notas |
+| -------- | ------- | ----- |
+| `DATABASE_URL` | `postgresql://…` | Igual ao portal. |
+| `PORTAL_INTERNAL_URL` | `http://localhost:3000` | URL base onde o Next responde. |
+| `ADN_WORKER_HMAC_SECRET` | *(hex forte)* | **O mesmo** valor no `.env` do portal. |
+| `NFSE_DIST_ROOT` | *(opcional)* | Default: `<repo>/third_party/NFSE_dist`. |
+| `NFSE_DIST_CLIENTS_LOCAL_PATH` | `C:\secrets\clients.local.json` | Opcional: ficheiro com thumbprint / `senha_cert` / PFX (não versionar). |
+| `POLL_INTERVAL_SEC` | `15` | Intervalo quando não há jobs. |
+
+## 3. Arranque
+
+Com o portal (`npm run dev`) e Postgres activos:
+
+```bash
+cd workers/nfse-portal-bridge
+.venv\Scripts\activate
+set DATABASE_URL=...
+set PORTAL_INTERNAL_URL=http://localhost:3000
+set ADN_WORKER_HMAC_SECRET=...
+python poll_jobs.py
+```
+
+Fluxo por job:
+
+1. Reserva um job `queued` (org com `adn_sync_enabled`).
+2. Escreve `clients.json` no NFSE_dist com o CNPJ da empresa monitorada.
+3. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`).
+4. Executa `run_download_workflow()` (XML + PDF como no repositório original).
+5. Percorre `data/<CNPJ>/` e envia cada XML/PDF ao portal (`uploads/prepare` → PUT → `artifacts/commit`).
+6. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`).
+
+## 4. Certificado e organização
+
+- O certificado **não** passa pelo browser: continua na VM do worker, como no NFSE_dist.
+- No portal: activar **Sincronização ADN** na organização (**Configurações**) e pedir sync na ficha da empresa.
+
+## 5. Limitações conhecidas
+
+- A UI Rich do NFSE_dist espera consola; em ambientes sem TTY pode falhar — preferir `cmd.exe` interactivo ou consola de serviço com utilizador logado.
+- Paralelismo PDF (`NFSE_DIST_PDF_WORKERS`, etc.) segue o [README upstream](https://github.com/RafaelOliveiraCf/NFSE_dist#variáveis-de-ambiente).

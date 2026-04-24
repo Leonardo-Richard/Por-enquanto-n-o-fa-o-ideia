@@ -13,7 +13,7 @@ const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 export default function EmpresaDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const { pathForCompany, runSync } = usePortal();
+  const { pathForCompany } = usePortal();
   const { refetch } = useAppSession();
   const router = useRouter();
   const monthlyHelpId = useId();
@@ -261,21 +261,17 @@ export default function EmpresaDetailPage() {
         </div>
       </section>
 
-      <section className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => runSync(comp.id, "manual", comp.cnpjDigits)}
-          className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-100"
-        >
-          Sincronizar agora
-        </button>
-        <button
-          type="button"
-          onClick={() => runSync(comp.id, "monthly", comp.cnpjDigits)}
-          className="rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/15"
-        >
-          Simular coleta mensal (dia {comp.monthlyRunDay})
-        </button>
+      <section className="max-w-xl rounded-lg border border-black/8 bg-black/[0.02] px-4 py-3 dark:border-white/12 dark:bg-white/[0.03]">
+        <p className="text-xs leading-relaxed text-black/65 dark:text-white/60">
+          A ligação real ao <strong className="font-medium text-black/80 dark:text-white/75">Ambiente Nacional</strong>{" "}
+          faz-se pelo bloco <strong className="font-medium text-black/80 dark:text-white/75">Sincronização ADN</strong>{" "}
+          acima: o portal enfileira um job na base de dados e um{" "}
+          <strong className="font-medium text-black/80 dark:text-white/75">worker</strong> (fora do browser) deve
+          processá-lo. Um administrador da organização pode activar a funcionalidade em{" "}
+          <strong className="font-medium text-black/80 dark:text-white/75">Configurações</strong>. O separador{" "}
+          <strong className="font-medium text-black/80 dark:text-white/75">Execuções</strong> continua a mostrar só
+          histórico local de demonstração (agente / protótipo), não o estado da fila ADN.
+        </p>
       </section>
 
       <section className="border-t border-black/5 pt-8 dark:border-white/10">
