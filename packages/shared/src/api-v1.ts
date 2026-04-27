@@ -1,6 +1,43 @@
 import { z } from "zod";
 import { isValidCnpj, sanitizeCnpj } from "./cnpj";
 
+/** Criação de organização por superadmin (`POST /api/v1/organizations`). */
+export const organizationCreateBodySchema = z
+  .object({
+    name: z.string().max(500),
+    tradeName: z.string().max(500).nullable().optional(),
+    taxIdDigits: z.string().nullable().optional(),
+  })
+  .transform((val) => {
+    const name = val.name.trim();
+    const tradeName =
+      val.tradeName === undefined || val.tradeName === null
+        ? null
+        : val.tradeName.trim().length === 0
+          ? null
+          : val.tradeName.trim();
+    let taxIdDigits: string | null = null;
+    if (val.taxIdDigits !== undefined && val.taxIdDigits !== null) {
+      const d = sanitizeCnpj(val.taxIdDigits);
+      taxIdDigits = d.length === 0 ? null : d;
+    }
+    return { name, tradeName, taxIdDigits };
+  })
+  .superRefine((val, ctx) => {
+    if (val.name.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["name"], message: "Nome obrigatório." });
+    }
+    if (val.taxIdDigits !== null && val.taxIdDigits.length !== 14) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["taxIdDigits"],
+        message: "CNPJ da organização deve ter 14 dígitos.",
+      });
+    }
+  });
+
+export type OrganizationCreateBody = z.infer<typeof organizationCreateBodySchema>;
+
 export const activeCompanyBodySchema = z.object({
   companyId: z.string().uuid(),
 });

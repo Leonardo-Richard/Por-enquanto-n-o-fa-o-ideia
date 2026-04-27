@@ -10,6 +10,49 @@ servers:
     description: Desenvolvimento local
 
 paths:
+  /organizations:
+    post:
+      summary: Criar organização (superadmin)
+      description: Requer sessão autenticada com `isSuperadmin`.
+      parameters:
+        - in: header
+          name: X-Organization-Create-Source
+          schema:
+            type: string
+            enum: [admin_ui, api]
+          description: Opcional; `admin_ui` quando a origem é a UI administrativa.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1 }
+                tradeName: { type: string, nullable: true }
+                taxIdDigits: { type: string, nullable: true, description: "14 dígitos quando informado" }
+      responses:
+        "201":
+          description: Organização criada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name, tradeName, taxIdMasked, createdAt, localAdminLinked]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  tradeName: { type: string, nullable: true }
+                  taxIdMasked: { type: string, nullable: true }
+                  createdAt: { type: string, format: date-time }
+                  localAdminLinked: { type: boolean }
+        "400": { description: Validação }
+        "401": { description: Não autenticado }
+        "403": { description: Sem superadmin }
+        "409": { description: CNPJ duplicado }
+        "500": { description: Erro interno }
+
   /organizations/accessible:
     get:
       summary: Organizações acessíveis ao utilizador

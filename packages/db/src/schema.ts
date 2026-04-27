@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -29,18 +29,26 @@ export const user = pgTable("user", {
   isSuperadmin: boolean("isSuperadmin").notNull().default(false),
 });
 
-export const organizations = pgTable("organizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  tradeName: text("trade_name"),
-  taxIdDigits: char("tax_id_digits", { length: 14 }),
-  active: boolean("active").notNull().default(true),
-  adnSyncEnabled: boolean("adn_sync_enabled").notNull().default(false),
-  /** Caminho absoluto na VM do worker (ex.: C:\\NFs). Espelho: {root}/{CNPJ}/{system_code}/{chave}.xml|.pdf */
-  localDownloadRoot: text("local_download_root"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    tradeName: text("trade_name"),
+    taxIdDigits: char("tax_id_digits", { length: 14 }),
+    active: boolean("active").notNull().default(true),
+    adnSyncEnabled: boolean("adn_sync_enabled").notNull().default(false),
+    /** Caminho absoluto na VM do worker (ex.: C:\\NFs). Espelho: {root}/{CNPJ}/{system_code}/{chave}.xml|.pdf */
+    localDownloadRoot: text("local_download_root"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("organizations_tax_id_digits_unique_partial")
+      .on(t.taxIdDigits)
+      .where(sql`${t.taxIdDigits} IS NOT NULL`),
+  ],
+);
 
 export const companies = pgTable(
   "companies",

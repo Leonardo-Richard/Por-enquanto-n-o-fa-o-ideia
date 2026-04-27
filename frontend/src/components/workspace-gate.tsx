@@ -11,6 +11,9 @@ function hasWorkspaceContext(session: { activeCompanyId?: string | null; activeO
 }
 
 function needsActiveCompany(pathname: string): boolean {
+  if (pathname.startsWith("/admin")) {
+    return false;
+  }
   if (ALLOW_NO_ACTIVE.has(pathname)) {
     return false;
   }

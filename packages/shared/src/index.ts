@@ -18,11 +18,13 @@ export {
   activeOrganizationBodySchema,
   companiesAccessibleQuerySchema,
   companyCreateBodySchema,
-  membersQuerySchema,
-  memberPostBodySchema,
   memberPatchBodySchema,
+  memberPostBodySchema,
+  membersQuerySchema,
   companyPatchBodySchema,
+  organizationCreateBodySchema,
 } from "./api-v1";
+export type { OrganizationCreateBody } from "./api-v1";
 
 export type {
   Company,

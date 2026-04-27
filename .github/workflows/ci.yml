@@ -89,6 +89,7 @@ jobs:
       BETTER_AUTH_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       PLAYWRIGHT_LER_SMOKE: "1"
+      PLAYWRIGHT_SUPERADMIN_ORG_SMOKE: "1"
       CI: "true"
     steps:
       - name: Checkout
@@ -139,5 +140,5 @@ jobs:
             fi
             sleep 2
           done
-          pnpm exec playwright test e2e/ler-smoke.spec.ts
+          pnpm exec playwright test e2e/ler-smoke.spec.ts e2e/superadmin-organizacoes-smoke.spec.ts
           kill $NEXT_PID || true

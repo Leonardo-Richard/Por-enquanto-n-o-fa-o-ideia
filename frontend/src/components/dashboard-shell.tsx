@@ -12,6 +12,12 @@ type NavItem = {
   isActive: (pathname: string) => boolean;
 };
 
+const superadminNav: NavItem = {
+  href: "/admin/organizacoes",
+  label: "Organizações",
+  isActive: (p) => p === "/admin/organizacoes" || p.startsWith("/admin/organizacoes/"),
+};
+
 const navItems: NavItem[] = [
   {
     href: "/dashboard",
@@ -40,15 +46,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   const { data } = useAppSession();
   const [orgName, setOrgName] = useState<string | null>(null);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const res = await fetch("/api/v1/me", { credentials: "include" });
-        const j = (await res.json().catch(() => null)) as { activeOrganizationName?: string | null } | null;
-        if (!cancelled && res.ok && j?.activeOrganizationName) {
-          setOrgName(j.activeOrganizationName);
+        const j = (await res.json().catch(() => null)) as {
+          activeOrganizationName?: string | null;
+          isSuperadmin?: boolean;
+        } | null;
+        if (!cancelled && res.ok && j) {
+          setOrgName(j.activeOrganizationName ?? null);
+          setIsSuperadmin(Boolean(j.isSuperadmin));
         }
       } catch {
         /* ignore */
@@ -107,6 +118,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            {isSuperadmin ? (
+              <Link
+                href={superadminNav.href}
+                aria-current={superadminNav.isActive(pathname) ? "page" : undefined}
+                className={`rounded-lg px-3 py-2 text-sm transition-colors ${
+                  superadminNav.isActive(pathname)
+                    ? "bg-emerald-600/15 font-medium text-emerald-900 dark:text-emerald-200"
+                    : "text-black/70 hover:bg-black/[0.04] dark:text-white/65 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                {superadminNav.label}
+              </Link>
+            ) : null}
           </nav>
           <div className="px-3 pt-4">
             <Link
@@ -155,6 +179,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
+              {isSuperadmin ? (
+                <Link
+                  href={superadminNav.href}
+                  aria-current={superadminNav.isActive(pathname) ? "page" : undefined}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${
+                    superadminNav.isActive(pathname)
+                      ? "bg-emerald-600/15 font-medium text-emerald-900 dark:text-emerald-200"
+                      : "bg-black/[0.04] text-black/70 dark:bg-white/[0.06] dark:text-white/65"
+                  }`}
+                >
+                  {superadminNav.label}
+                </Link>
+              ) : null}
             </nav>
           </header>
           <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-8">
