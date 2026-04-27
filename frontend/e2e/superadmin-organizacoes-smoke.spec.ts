@@ -20,6 +20,10 @@ test.describe("superadmin — organizações (smoke)", () => {
    * SMEM-06 AC3 — evidência de redireccionamento real (302 → /dashboard) para não-superadmin autenticado.
    */
   test("utilizador autenticado sem superadmin: /admin/organizacoes vai para /dashboard", async ({ page }) => {
+    test.skip(
+      !process.env.DATABASE_URL?.trim(),
+      "DATABASE_URL necessário (registo persiste utilizador na BD)",
+    );
     const suffix = `${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     const email = `admin_gate_norm_${suffix}@example.com`;
     const password = "SenhaE2E-8chars";
