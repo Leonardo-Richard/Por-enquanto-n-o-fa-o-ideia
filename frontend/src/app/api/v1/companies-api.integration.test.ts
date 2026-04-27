@@ -32,7 +32,7 @@ import { POST as postActiveCompany } from "@/app/api/v1/session/active-company/r
 import {
   DELETE as deleteOrgMember,
   PATCH as patchOrgMember,
-} from "@/app/api/v1/organizations/[organizationId]/members/[userId]/route";
+} from "@/app/api/v1/organizations/[organizationId]/members/[membershipId]/route";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
 
@@ -48,6 +48,8 @@ describe.skipIf(!hasDb)("API /api/v1/companies (integração)", () => {
     companyA: randomUUID(),
     companyB: randomUUID(),
     sessionAc: `sess_${prefix}ac`,
+    /** Vínculo Bob ↔ Org B (único admin em Org B) — usado em PATCH/DELETE membros organização. */
+    membershipBobOrgB: randomUUID(),
   };
 
   beforeAll(async () => {
@@ -114,7 +116,7 @@ describe.skipIf(!hasDb)("API /api/v1/companies (integração)", () => {
     await db.insert(organizationMemberships).values([
       { organizationId: ids.orgA, userId: ids.alice, orgRole: "admin" },
       { organizationId: ids.orgA, userId: ids.dave, orgRole: "admin" },
-      { organizationId: ids.orgB, userId: ids.bob, orgRole: "admin" },
+      { id: ids.membershipBobOrgB, organizationId: ids.orgB, userId: ids.bob, orgRole: "admin" },
     ]);
 
     await db.insert(companyMemberships).values([
@@ -412,24 +414,24 @@ describe.skipIf(!hasDb)("API /api/v1/companies (integração)", () => {
   it("PATCH último admin da organização → 409", async () => {
     vi.mocked(getAuthedSession).mockResolvedValue({
       user: {
-        id: ids.bob,
-        email: "b@x",
-        name: "Bob",
+        id: ids.carol,
+        email: "c@x",
+        name: "Carol",
         emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
         image: null,
-        isSuperadmin: false,
+        isSuperadmin: true,
       },
       session: {
         id: "s-org-patch",
-        userId: ids.bob,
+        userId: ids.carol,
         expiresAt: new Date(),
         token: "t-org-patch",
         createdAt: new Date(),
         updatedAt: new Date(),
-        activeCompanyId: ids.companyB,
-        activeOrganizationId: ids.orgB,
+        activeCompanyId: null,
+        activeOrganizationId: null,
       },
     } as Awaited<ReturnType<typeof getAuthedSession>>);
 
@@ -437,43 +439,45 @@ describe.skipIf(!hasDb)("API /api/v1/companies (integração)", () => {
       new Request("http://test/", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyRole: "user" }),
+        body: JSON.stringify({ orgRole: "user" }),
       }),
-      { params: Promise.resolve({ organizationId: ids.orgB, userId: ids.bob }) },
+      { params: Promise.resolve({ organizationId: ids.orgB, membershipId: ids.membershipBobOrgB }) },
     );
     expect(res.status).toBe(409);
-    const body = (await res.json()) as { error?: { code?: string } };
-    expect(body.error?.code).toBe("last_admin");
+    const body = (await res.json()) as { code?: string };
+    expect(body.code).toBe("LAST_ORG_ADMIN");
   });
 
   it("DELETE último admin da organização → 409", async () => {
     vi.mocked(getAuthedSession).mockResolvedValue({
       user: {
-        id: ids.bob,
-        email: "b@x",
-        name: "Bob",
+        id: ids.carol,
+        email: "c@x",
+        name: "Carol",
         emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
         image: null,
-        isSuperadmin: false,
+        isSuperadmin: true,
       },
       session: {
         id: "s-org-del",
-        userId: ids.bob,
+        userId: ids.carol,
         expiresAt: new Date(),
         token: "t-org-del",
         createdAt: new Date(),
         updatedAt: new Date(),
-        activeCompanyId: ids.companyB,
-        activeOrganizationId: ids.orgB,
+        activeCompanyId: null,
+        activeOrganizationId: null,
       },
     } as Awaited<ReturnType<typeof getAuthedSession>>);
 
     const res = await deleteOrgMember(new Request("http://test/"), {
-      params: Promise.resolve({ organizationId: ids.orgB, userId: ids.bob }),
+      params: Promise.resolve({ organizationId: ids.orgB, membershipId: ids.membershipBobOrgB }),
     });
     expect(res.status).toBe(409);
+    const body = (await res.json()) as { code?: string };
+    expect(body.code).toBe("LAST_ORG_ADMIN");
   });
 
   it("POST active-company persiste activeOrganizationId na sessão (ORG-03)", async () => {
