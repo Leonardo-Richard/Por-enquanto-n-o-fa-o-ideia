@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-client";
+
 /**
  * Cliente HTTP ADN (GET/POST sync) — fonte única para ficha e lista (NFR26).
  * IDs na URL devem vir sempre da API / props (NFR29).
@@ -50,7 +52,7 @@ function releaseAdnGetSlot(): void {
 }
 
 export function buildAdnSyncSyncUrl(organizationId: string, companyId: string): string {
-  return `/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/sync`;
+  return apiUrl(`/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/sync`);
 }
 
 export async function interpretAdnSyncGetResponse(res: Response): Promise<AdnSyncGetResult> {

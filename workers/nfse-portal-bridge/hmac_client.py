@@ -1,4 +1,4 @@
-"""Cabeçalhos HMAC alinhados a apps/web/src/lib/adn-hmac.ts (ADN-03)."""
+"""Cabeçalhos HMAC alinhados a frontend/src/lib/adn-hmac.ts (ADN-03)."""
 
 from __future__ import annotations
 

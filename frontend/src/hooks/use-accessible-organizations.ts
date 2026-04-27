@@ -7,6 +7,7 @@ import {
   messageForFailedResponse,
   type FeApiFailureKind,
 } from "@/lib/fe-api-error";
+import { apiFetch } from "@/lib/api-client";
 
 export type AccessibleOrganization = {
   id: string;
@@ -33,7 +34,7 @@ export function useAccessibleOrganizations() {
     setLoading(true);
     setIssue(null);
     try {
-      const res = await fetch("/api/v1/organizations/accessible?page=1&pageSize=100", {
+      const res = await apiFetch("/api/v1/organizations/accessible?page=1&pageSize=100", {
         credentials: "include",
       });
       const body = (await res.json().catch(() => null)) as unknown;

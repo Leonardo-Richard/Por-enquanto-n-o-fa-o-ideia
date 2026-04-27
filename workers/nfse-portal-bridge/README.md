@@ -41,7 +41,7 @@ pip install -r requirements.txt
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Só smoke/testes:** não chama `run_download_workflow` (valida fila + `PATCH` + uploads vazios). |
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
 
-**Importante (monorepo):** o Next lê `apps/web/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
+**Importante (monorepo):** o Next lê `frontend/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 
 ## 3. Arranque
 
@@ -56,7 +56,7 @@ set ADN_WORKER_HMAC_SECRET=...
 python poll_jobs.py
 ```
 
-**Smoke local (sem ADN nem certificado):** na raiz do repo, com o portal activo e o mesmo `ADN_WORKER_HMAC_SECRET` em `apps/web/.env.local`:
+**Smoke local (sem ADN nem certificado):** na raiz do repo, com o portal activo e o mesmo `ADN_WORKER_HMAC_SECRET` em `frontend/.env.local`:
 
 ```bash
 node scripts/run-adn-bridge-smoke-once.mjs

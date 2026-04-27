@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { adnStorageBucket, canonicalAdnObjectPath, createAdnPresignedPutUrl } from "@/lib/adn-storage";
 import { getDb } from "@/lib/db";
+import { maybeForwardInternalApi } from "@/lib/internal-api-forward";
 import { adnArtifactDrafts, companies, organizations } from "@repo/db";
 import { jsonError, toPublicApiError } from "@/server/api/v1/lib/errors";
 import { parseInternalAdnBody } from "@/server/api/internal/v1/adn/lib/parse-internal-adn";
@@ -24,6 +25,10 @@ const prepareSchema = z
 
 export async function POST(request: Request) {
   try {
+    const forwarded = await maybeForwardInternalApi(request);
+    if (forwarded) {
+      return forwarded;
+    }
     const parsed = await parseInternalAdnBody(request, prepareSchema);
     if (!parsed.ok) {
       return parsed.response;

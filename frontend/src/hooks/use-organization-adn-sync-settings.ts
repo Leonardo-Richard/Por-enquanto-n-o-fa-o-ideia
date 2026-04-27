@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 /** Alinhado a `AdnSettingsJson` em `configuracoes/page.tsx` e ao handler GET. */
 export type OrganizationAdnSyncSettingsData = {
@@ -48,10 +49,10 @@ export function useOrganizationAdnSyncSettings({
 
     void (async () => {
       try {
-        const res = await fetch(
-          `/api/v1/organizations/${organizationId}/adn-sync-settings`,
-          { credentials: "include", cache: "no-store" },
-        );
+        const res = await apiFetch(`/api/v1/organizations/${organizationId}/adn-sync-settings`, {
+          credentials: "include",
+          cache: "no-store",
+        });
         if (cancelled) {
           return;
         }

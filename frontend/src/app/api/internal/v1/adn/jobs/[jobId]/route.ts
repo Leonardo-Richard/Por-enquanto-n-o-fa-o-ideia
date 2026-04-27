@@ -4,6 +4,7 @@ import { z } from "zod";
 import { adnSyncJobs } from "@repo/db";
 import { insertAuditEvent } from "@/lib/audit";
 import { getDb } from "@/lib/db";
+import { maybeForwardInternalApi } from "@/lib/internal-api-forward";
 import { jsonError, toPublicApiError } from "@/server/api/v1/lib/errors";
 import { parseInternalAdnBody } from "@/server/api/internal/v1/adn/lib/parse-internal-adn";
 
@@ -24,6 +25,10 @@ const patchSchema = z
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ jobId: string }> }) {
   try {
+    const forwarded = await maybeForwardInternalApi(request);
+    if (forwarded) {
+      return forwarded;
+    }
     const { jobId } = await ctx.params;
     if (!z.string().uuid().safeParse(jobId).success) {
       return jsonError(400, "jobId inválido.");

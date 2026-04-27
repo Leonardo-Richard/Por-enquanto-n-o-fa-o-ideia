@@ -134,7 +134,7 @@ export function AdnCertificateReadinessCard({
           registo ainda desactivada no processo Node). Defina{" "}
           <span className="font-mono text-[11px] sm:text-xs">CERT_UPLOAD_API_ENABLED=true</span> no ficheiro{" "}
           <span className="font-mono text-[11px] sm:text-xs">.env</span> na raiz do repositório ou em{" "}
-          <span className="font-mono text-[11px] sm:text-xs">apps/web/.env.local</span>, guarde e reinicie o{" "}
+          <span className="font-mono text-[11px] sm:text-xs">frontend/.env.local</span>, guarde e reinicie o{" "}
           <span className="font-mono text-[11px] sm:text-xs">npm run dev</span>.
         </p>
         {runbookUrl ? (

@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
 import { MAX_LOCAL_DOWNLOAD_ROOT_LENGTH } from "@/lib/local-download-root";
+import { apiFetch } from "@/lib/api-client";
 
 const ZONES = [
   "America/Sao_Paulo",
@@ -71,7 +72,7 @@ export default function ConfiguracoesPage() {
     setAdnErr(null);
     setServerPathErr(null);
     try {
-      const r = await fetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
+      const r = await apiFetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
         credentials: "include",
         cache: "no-store",
       });
@@ -104,7 +105,7 @@ export default function ConfiguracoesPage() {
     setAdnBusy(true);
     setAdnErr(null);
     try {
-      const r = await fetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
+      const r = await apiFetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -138,7 +139,7 @@ export default function ConfiguracoesPage() {
       const trimmed = serverPathDraft.trim();
       const body =
         trimmed.length === 0 ? { localDownloadRoot: null } : { localDownloadRoot: trimmed };
-      const r = await fetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
+      const r = await apiFetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

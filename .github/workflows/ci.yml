@@ -115,15 +115,15 @@ jobs:
         run: |
           for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 
-      - name: Build web
-        run: pnpm --filter web build
+      - name: Build frontend
+        run: pnpm --filter frontend build
 
       - name: Install Playwright Chromium
-        working-directory: apps/web
+        working-directory: frontend
         run: pnpm exec playwright install chromium --with-deps
 
       - name: Start Next.js and run LER smoke
-        working-directory: apps/web
+        working-directory: frontend
         run: |
           pnpm start -- -p 3000 &
           NEXT_PID=$!

@@ -33,6 +33,8 @@ const env = {
   ...process.env,
   ...fileEnv,
   NFSE_BRIDGE_SKIP_NFSE_DIST: "1",
+  API_INTERNAL_URL:
+    process.env.API_INTERNAL_URL ?? fileEnv.API_INTERNAL_URL ?? process.env.PORTAL_INTERNAL_URL ?? fileEnv.PORTAL_INTERNAL_URL,
 };
 
 const py = process.env.PYTHON ?? "python";

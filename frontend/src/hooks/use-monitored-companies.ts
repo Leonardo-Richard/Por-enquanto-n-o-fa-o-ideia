@@ -8,6 +8,7 @@ import {
   messageForFailedResponse,
   type FeApiFailureKind,
 } from "@/lib/fe-api-error";
+import { apiFetch } from "@/lib/api-client";
 
 export type MonitoredCompanyRow = Company & { cnpjMasked: string; active: boolean };
 
@@ -42,10 +43,9 @@ export function useMonitoredCompanies(organizationId: string | null | undefined)
     setLoading(true);
     setIssue(null);
     try {
-      const res = await fetch(
-        `/api/v1/organizations/${organizationId}/monitored-companies?page=1&pageSize=100`,
-        { credentials: "include" },
-      );
+      const res = await apiFetch(`/api/v1/organizations/${organizationId}/monitored-companies?page=1&pageSize=100`, {
+        credentials: "include",
+      });
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
         const { kind, text } = messageForFailedResponse(res.status, body);

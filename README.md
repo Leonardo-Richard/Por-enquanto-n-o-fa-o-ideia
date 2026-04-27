@@ -19,7 +19,7 @@ pnpm install
 
 | Comando            | Descrição                          |
 | ------------------ | ---------------------------------- |
-| `pnpm dev`         | Dev server (Next.js em `apps/web`) |
+| `pnpm dev`         | Dev server (Next.js em `frontend`) |
 | `pnpm build`       | Build de todos os pacotes (Turbo)  |
 | `pnpm lint`        | ESLint (app web)                   |
 | `pnpm typecheck`   | `tsc --noEmit` nos pacotes TS      |
@@ -39,7 +39,7 @@ Com o dev server a correr (`pnpm dev`), o endpoint público responde em:
 ## Supabase — ambiente e migrações (SB-01 / SB-02)
 
 1. No [Supabase Dashboard](https://supabase.com/dashboard) do projeto: **Project Settings → Database → Connection string** e escolher **Transaction** (pooler, porta **6543**, `sslmode=require`).
-2. Copiar `.env.example` para `apps/web/.env.local` (ou configurar secrets no CI/Vercel) e definir:
+2. Copiar `.env.example` para `frontend/.env.local` (ou configurar secrets no CI/Vercel) e definir:
    - `DATABASE_URL` — URI do pooler (servidor apenas).
    - `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — **o mesmo projeto** que `DATABASE_URL` (FR1). Ver comentários FR2 em `.env.example`.
 3. Aplicar os ficheiros SQL em `db/migrations/` ao Postgres remoto **por ordem** (SQL editor do Supabase, `psql`, ou pipeline interno). Garantir que o schema remoto corresponde ao repositório antes de smoke em cloud.
@@ -47,7 +47,8 @@ Com o dev server a correr (`pnpm dev`), o endpoint público responde em:
 
 ## Estrutura
 
-- `apps/web` — Next.js (App Router, API routes)
+- `frontend` — Next.js (App Router, API routes)
+- `backend` — Backend dedicado (API interna/health)
 - `packages/shared` — tipos e constantes partilhados (`@repo/shared`)
 
 ## Multi-tenant (ORG-09) — ACL
@@ -73,8 +74,8 @@ Colar no PR ou executar localmente (com [ripgrep](https://github.com/BurntSushi/
 rg -n "service_role|DATABASE_URL=postgres://|postgresql://[^:]+:[^@]+@" --glob '!*.md'
 
 # SB-03 — imports de DB na UI (deve ser vazio)
-rg "getDb\\(|createDb\\(|from [\"']@/lib/db[\"']|from [\"']@repo/db[\"']" apps/web/src/hooks apps/web/src/components
-rg "getDb\\(|createDb\\(|from [\"']@repo/db[\"']" apps/web/src/app --glob '!apps/web/src/app/api/**'
+rg "getDb\\(|createDb\\(|from [\"']@/lib/db[\"']|from [\"']@repo/db[\"']" frontend/src/hooks frontend/src/components
+rg "getDb\\(|createDb\\(|from [\"']@repo/db[\"']" frontend/src/app --glob '!frontend/src/app/api/**'
 ```
 
 Smoke rápido (SB-01 / SB-02): `GET /api/health` (200); com `READINESS_SECRET` definido, `GET /api/health/ready` com `Authorization: Bearer …` → `ok` ou `degraded`; liveness continua 200 se a DB falhar.

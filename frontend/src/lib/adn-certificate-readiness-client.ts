@@ -1,7 +1,8 @@
 import type { AdnCertificateReadinessResponse } from "@/lib/adn-certificate-readiness-schema";
+import { apiUrl } from "@/lib/api-client";
 
 export function buildCertificateReadinessUrl(organizationId: string, companyId: string): string {
-  return `/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/certificate-readiness`;
+  return apiUrl(`/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/certificate-readiness`);
 }
 
 export function buildCertificateReadinessVerifyUrl(organizationId: string, companyId: string): string {

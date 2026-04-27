@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { adnArtifacts, adnArtifactDrafts, adnSyncJobs } from "@repo/db";
 import { getDb } from "@/lib/db";
+import { maybeForwardInternalApi } from "@/lib/internal-api-forward";
 import { jsonError, toPublicApiError } from "@/server/api/v1/lib/errors";
 import { parseInternalAdnBody } from "@/server/api/internal/v1/adn/lib/parse-internal-adn";
 
@@ -25,6 +26,10 @@ function maskAccessKey(accessKey: string): { prefix: string; suffix: string } {
 
 export async function POST(request: Request) {
   try {
+    const forwarded = await maybeForwardInternalApi(request);
+    if (forwarded) {
+      return forwarded;
+    }
     const parsed = await parseInternalAdnBody(request, commitSchema);
     if (!parsed.ok) {
       return parsed.response;

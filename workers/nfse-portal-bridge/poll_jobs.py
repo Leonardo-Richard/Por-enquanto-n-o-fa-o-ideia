@@ -4,7 +4,8 @@ e envia XML/PDF de volta ao portal (rotas internas HMAC).
 
 Variáveis de ambiente:
   DATABASE_URL          — Postgres (igual ao portal)
-  PORTAL_INTERNAL_URL   — Ex.: http://localhost:3000
+  API_INTERNAL_URL      — Ex.: http://localhost:3001 (preferido)
+  PORTAL_INTERNAL_URL   — Fallback legado quando API_INTERNAL_URL não definido
   ADN_WORKER_HMAC_SECRET — Mesmo segredo que o portal (NFR20)
   NFSE_DIST_ROOT        — Opcional; default: <repo>/third_party/NFSE_dist
   NFSE_DIST_CLIENTS_LOCAL_PATH — Opcional; copia para clients.local.json antes da recolha
@@ -169,14 +170,17 @@ def fail_job(portal_url: str, secret: str, oid: str, jid: str, msg: str) -> None
 
 def main() -> None:
     dsn = _require_env("DATABASE_URL")
-    portal_url = _require_env("PORTAL_INTERNAL_URL").rstrip("/")
+    portal_url = (
+        os.environ.get("API_INTERNAL_URL", "").strip()
+        or _require_env("PORTAL_INTERNAL_URL").strip()
+    ).rstrip("/")
     secret = _require_env("ADN_WORKER_HMAC_SECRET")
     nfse = _nfse_root()
     interval = int(os.environ.get("POLL_INTERVAL_SEC", "15") or "15")
     poll_once = "--once" in sys.argv
 
     print(f"[nfse-portal-bridge] NFSE_DIST_ROOT={nfse}", flush=True)
-    print(f"[nfse-portal-bridge] PORTAL_INTERNAL_URL={portal_url}", flush=True)
+    print(f"[nfse-portal-bridge] INTERNAL_API_URL={portal_url}", flush=True)
     if poll_once:
         print("[nfse-portal-bridge] Modo --once (um ciclo ou um job).", flush=True)
 
