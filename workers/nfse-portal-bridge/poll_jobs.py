@@ -198,6 +198,18 @@ def main() -> None:
                 print(f"[nfse-portal-bridge] Job {jid} concluído.", flush=True)
                 if poll_once:
                     return
+            except KeyboardInterrupt:
+                # Evita job preso em "running" quando o worker é interrompido manualmente.
+                try:
+                    fail_job(portal_url, secret, oid, jid, "Execução interrompida manualmente (KeyboardInterrupt).")
+                except Exception as e2:  # noqa: BLE001
+                    print(
+                        f"[nfse-portal-bridge] Falha ao marcar job interrompido como failed: {e2}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                print("[nfse-portal-bridge] Interrompido durante processamento do job.", flush=True)
+                return
             except Exception as e:  # noqa: BLE001
                 tb = traceback.format_exc()
                 print(tb, file=sys.stderr, flush=True)

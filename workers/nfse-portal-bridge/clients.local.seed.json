@@ -1,0 +1,12 @@
+[
+  {
+    "cnpj": "65805583000173",
+    "thumbprint": "4C825B00A49E274DDC38AD257B017A50BD8C95F5",
+    "cert_store": "CurrentUser"
+  },
+  {
+    "cnpj": "17422651000172",
+    "thumbprint": "7A98D202A9413D605E409D8A9796090C18A6C968",
+    "cert_store": "CurrentUser"
+  }
+]

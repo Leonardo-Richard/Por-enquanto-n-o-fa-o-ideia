@@ -60,7 +60,9 @@ def mirror_data_directory_to_local(
         log.info("[mirror_local] data_dir inexistente: %s", data_dir)
         return out
 
-    dest_root = Path(r) / cnpj_digits / safe_sys
+    # Requisito operacional: uma única pasta no root, sem subpastas por CNPJ/código.
+    # Formato: "<codigo> - <cnpj>".
+    dest_root = Path(r) / f"{safe_sys} - {cnpj_digits}"
     errors_sample: list[str] = []
 
     for xml_path in data_dir.rglob("*.xml"):
@@ -75,17 +77,20 @@ def mirror_data_directory_to_local(
             continue
 
         chave = extract_access_key_from_xml(xml_text)
-        if not chave or len(chave) != 44:
+        # Fallback para XMLs sem chave de 44 dígitos (ex.: alguns layouts municipais/NSU).
+        # Mantém rastreabilidade pelo nome base do ficheiro.
+        doc_id = chave if chave and len(chave) == 44 else xml_path.stem
+        if not doc_id:
             continue
 
         try:
             dest_root.mkdir(parents=True, exist_ok=True)
-            dest_xml = dest_root / f"{chave}.xml"
+            dest_xml = dest_root / f"{doc_id}.xml"
             shutil.copy2(xml_path, dest_xml)
             out["mirrorWritten"] += 1
         except OSError as e:
             out["mirrorFailed"] += 1
-            msg = f"copy_xml:{chave}:{e!s}"
+            msg = f"copy_xml:{doc_id}:{e!s}"
             log.warning("[mirror_local] %s", msg)
             if len(errors_sample) < 3:
                 errors_sample.append(msg[:200])
@@ -94,11 +99,11 @@ def mirror_data_directory_to_local(
         pdf_path = xml_path.with_suffix(".pdf")
         if pdf_path.is_file():
             try:
-                shutil.copy2(pdf_path, dest_root / f"{chave}.pdf")
+                shutil.copy2(pdf_path, dest_root / f"{doc_id}.pdf")
                 out["mirrorWritten"] += 1
             except OSError as e:
                 out["mirrorFailed"] += 1
-                msg = f"copy_pdf:{chave}:{e!s}"
+                msg = f"copy_pdf:{doc_id}:{e!s}"
                 log.warning("[mirror_local] %s", msg)
                 if len(errors_sample) < 3:
                     errors_sample.append(msg[:200])

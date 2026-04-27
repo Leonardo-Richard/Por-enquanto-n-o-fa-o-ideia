@@ -166,8 +166,9 @@ export default function EmpresaDetailPage() {
           {path}
         </p>
         <p className="mt-3 text-xs text-black/55 dark:text-white/50">
-          Raiz configurável em Configurações. Caracteres inválidos no código do
-          sistema são normalizados para o caminho.
+          Raiz configurável em Configurações. Formato do destino:{" "}
+          <span className="font-mono">codigo - cnpj</span>. Caracteres inválidos no
+          código do sistema são normalizados para o caminho.
         </p>
       </section>
 

@@ -280,12 +280,12 @@ export default function ConfiguracoesPage() {
         </p>
         <p id={HELPER_SERVER_PATH_B_ID} className="text-xs leading-relaxed text-black/55 dark:text-white/50">
           Se o worker correr noutro ambiente (cloud), defina aqui o caminho nessa máquina ou deixe vazio e use o
-          agente local quando estiver disponível. Árvore no disco:{" "}
+          agente local quando estiver disponível. Formato no disco (sem subpastas adicionais):{" "}
           <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">
-            {"{root}\\{CNPJ 14 dígitos}\\{código-do-sistema}\\{chave}.xml"}
+            {"{root}\\{codigo-do-sistema} - {CNPJ 14 dígitos}\\{arquivo}"}
           </code>{" "}
-          e <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">.pdf</code> quando
-          existir.
+          (extensão <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">.xml</code> ou{" "}
+          <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">.pdf</code>).
         </p>
         {!activeOrgId ? (
           <p className="text-sm text-amber-900 dark:text-amber-200">

@@ -24,6 +24,12 @@ const defaultSettings: PortalSettings = {
   timezone: "America/Sao_Paulo",
 };
 
+function sanitizeSystemCodeForPath(raw: string): string {
+  const replaced = raw.replace(/[<>:"|?*\\/\u0000-\u001F]/g, "_").trim();
+  const compact = replaced.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+  return compact || "system";
+}
+
 function loadPersisted(): Persisted {
   if (typeof window === "undefined") {
     return { executions: [], settings: defaultSettings };
@@ -77,8 +83,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const pathForCompany = useCallback(
     (company: Pick<Company, "cnpjDigits" | "systemCode">) => {
       const root = settings.localRootPath.replace(/[/\\]+$/, "");
-      const safeCode = company.systemCode.replace(/[/\\?%*:|"<>]/g, "-");
-      return `${root}\\${company.cnpjDigits}\\${safeCode}`;
+      const safeCode = sanitizeSystemCodeForPath(company.systemCode);
+      return `${root}\\${safeCode} - ${company.cnpjDigits}`;
     },
     [settings.localRootPath],
   );
