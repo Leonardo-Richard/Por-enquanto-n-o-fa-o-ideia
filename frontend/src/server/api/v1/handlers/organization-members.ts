@@ -1,200 +1,434 @@
-import { and, eq, ilike, or } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, count, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { z } from "zod";
 import { NextResponse } from "next/server";
-import { organizationMemberships, organizations, user } from "@repo/db";
-import { memberPostBodySchema, membersQuerySchema } from "@repo/shared";
-import { auth } from "@/lib/auth";
+import { hashPassword } from "better-auth/crypto";
+import {
+  account,
+  organizationMemberships,
+  organizations,
+  user,
+  type Db,
+} from "@repo/db";
+import {
+  type OrganizationMemberListItem,
+  organizationMemberPostBodySchema,
+  organizationMembersQuerySchema,
+} from "@repo/shared";
 import { getDb } from "@/lib/db";
-import { canManageUsers, isSuperadmin } from "@/lib/authz";
+import { isSuperadmin } from "@/lib/authz";
 import { insertAuditEvent } from "@/lib/audit";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
-import { callerRoleInOrganization } from "../lib/active-org";
+import { jsonOrganizationMembersError } from "../lib/org-members-json";
+import { consumeOrgMembersSearchSlot, ORG_MEMBERS_SEARCH_RATE } from "../lib/organization-members-search-rate-limit";
 
-async function assertOrgExists(organizationId: string) {
-  const db = getDb();
-  const [row] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  return Boolean(row);
+const MEMBERSHIP_UNIQUE = "organization_memberships_user_org_unique";
+
+function isPgUniqueViolation(e: unknown): boolean {
+  return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "23505";
 }
 
-export async function handleGetOrganizationMembers(request: Request, organizationId: string) {
+function logMembers(entry: Record<string, unknown>) {
+  console.info(JSON.stringify({ scope: "organization_members", ...entry }));
+}
+
+function sanitizeIlikeFragment(raw: string): string {
+  return raw.trim().replace(/[%_\\]/g, "");
+}
+
+export function toMemberListItem(row: {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  orgRole: "user" | "admin";
+  jobTitle: string | null;
+  department: string | null;
+  phone: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): OrganizationMemberListItem {
+  return {
+    membershipId: row.id,
+    userId: row.userId,
+    email: row.email,
+    displayName: row.name,
+    orgRole: row.orgRole,
+    jobTitle: row.jobTitle,
+    department: row.department,
+    phone: row.phone,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export async function handleGetOrganizationMembers(request: Request, organizationIdParam: string) {
+  const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
+  let outcome: "success" | "validation_error" | "unauthorized" | "forbidden" | "not_found" | "rate_limited" | "error" =
+    "error";
+  let organizationId: string | null = null;
+
   try {
     const session = await getAuthedSession(request);
     if (!session) {
+      outcome = "unauthorized";
+      logMembers({ requestId, outcome, organizationId: organizationIdParam });
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
-
-    const role = await callerRoleInOrganization(getDb(), session.user.id, organizationId);
-    if (!canManageUsers(session.user, role)) {
+    if (!isSuperadmin(session.user)) {
+      outcome = "forbidden";
+      logMembers({ requestId, outcome, userId: session.user.id, organizationId: organizationIdParam });
       return jsonError(403, "Não tem permissão para esta operação.");
     }
 
-    const url = new URL(request.url);
-    const parsed = membersQuerySchema.safeParse(Object.fromEntries(url.searchParams));
-    if (!parsed.success) {
-      return jsonError(400, "Parâmetros inválidos.");
+    const orgUuid = z.string().uuid().safeParse(organizationIdParam);
+    if (!orgUuid.success) {
+      outcome = "validation_error";
+      logMembers({ requestId, outcome, userId: session.user.id, organizationId: organizationIdParam });
+      return jsonError(400, "organizationId inválido.");
     }
+    organizationId = orgUuid.data;
+
+    const url = new URL(request.url);
+    const parsed = organizationMembersQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+    if (!parsed.success) {
+      outcome = "validation_error";
+      logMembers({ requestId, outcome, userId: session.user.id, organizationId });
+      return jsonError(400, "Parâmetros de paginação inválidos.");
+    }
+
     const { page, pageSize, q } = parsed.data;
-    const offset = (page - 1) * pageSize;
+    const qTrim = q?.trim() ?? "";
+    if (qTrim.length > 0) {
+      const rateKey = `${session.user.id}:${organizationId}`;
+      if (!consumeOrgMembersSearchSlot(rateKey)) {
+        outcome = "rate_limited";
+        logMembers({
+          requestId,
+          outcome,
+          userId: session.user.id,
+          organizationId,
+          rateLimit: ORG_MEMBERS_SEARCH_RATE,
+        });
+        return jsonOrganizationMembersError(
+          429,
+          "Demasiadas pesquisas. Aguarde um momento antes de tentar novamente.",
+        );
+      }
+    }
 
     const db = getDb();
-    const search =
-      q?.trim() &&
-      or(ilike(user.email, `%${q.trim()}%`), ilike(user.name, `%${q.trim()}%`));
+    const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    if (!org) {
+      outcome = "not_found";
+      logMembers({ requestId, outcome, userId: session.user.id, organizationId });
+      return jsonError(404, "Organização não encontrada.");
+    }
 
-    const base = db
+    const safeQ = sanitizeIlikeFragment(qTrim);
+    const searchCond =
+      safeQ.length > 0
+        ? or(ilike(user.email, `%${safeQ}%`), ilike(user.name, `%${safeQ}%`))
+        : undefined;
+
+    const whereBase = eq(organizationMemberships.organizationId, organizationId);
+    const whereAll = searchCond ? and(whereBase, searchCond) : whereBase;
+
+    const [countRow] = await db
+      .select({ c: count() })
+      .from(organizationMemberships)
+      .innerJoin(user, eq(user.id, organizationMemberships.userId))
+      .where(whereAll);
+
+    const total = Number(countRow?.c ?? 0);
+    const offset = (page - 1) * pageSize;
+
+    const rows = await db
       .select({
-        userId: user.id,
+        id: organizationMemberships.id,
+        userId: organizationMemberships.userId,
         email: user.email,
         name: user.name,
-        companyRole: organizationMemberships.orgRole,
+        orgRole: organizationMemberships.orgRole,
         jobTitle: organizationMemberships.jobTitle,
         department: organizationMemberships.department,
         phone: organizationMemberships.phone,
+        createdAt: organizationMemberships.createdAt,
+        updatedAt: organizationMemberships.updatedAt,
       })
       .from(organizationMemberships)
       .innerJoin(user, eq(user.id, organizationMemberships.userId))
-      .where(
-        search
-          ? and(eq(organizationMemberships.organizationId, organizationId), search)
-          : eq(organizationMemberships.organizationId, organizationId),
-      );
+      .where(whereAll)
+      .orderBy(desc(organizationMemberships.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
-    const items = await base.limit(pageSize).offset(offset);
-    return NextResponse.json({ items });
+    outcome = "success";
+    logMembers({ requestId, outcome, userId: session.user.id, organizationId, total });
+    return NextResponse.json({
+      items: rows.map(toMemberListItem),
+      page,
+      pageSize,
+      total,
+    });
   } catch (e) {
+    outcome = "error";
+    logMembers({ requestId, outcome, organizationId: organizationId ?? organizationIdParam });
     return toPublicApiError(e);
   }
 }
 
-export async function handlePostOrganizationMembers(request: Request, organizationId: string) {
+export async function handlePostOrganizationMembers(request: Request, organizationIdParam: string) {
+  const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
+  let organizationId: string | null = null;
+  let outcome: "success" | "validation_error" | "unauthorized" | "forbidden" | "not_found" | "error" = "error";
+
   try {
     const session = await getAuthedSession(request);
     if (!session) {
+      outcome = "unauthorized";
+      logMembers({ requestId, outcome, organizationId: organizationIdParam });
       return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
     }
-
-    const role = await callerRoleInOrganization(getDb(), session.user.id, organizationId);
-    if (!canManageUsers(session.user, role)) {
+    if (!isSuperadmin(session.user)) {
+      outcome = "forbidden";
+      logMembers({ requestId, outcome, userId: session.user.id, organizationId: organizationIdParam });
       return jsonError(403, "Não tem permissão para esta operação.");
     }
+
+    const orgUuidPost = z.string().uuid().safeParse(organizationIdParam);
+    if (!orgUuidPost.success) {
+      outcome = "validation_error";
+      return jsonError(400, "organizationId inválido.");
+    }
+    organizationId = orgUuidPost.data;
 
     let raw: unknown;
     try {
       raw = await request.json();
     } catch {
+      outcome = "validation_error";
       return jsonError(400, "Corpo JSON inválido.");
     }
 
-    const parsed = memberPostBodySchema.safeParse(raw);
+    const parsed = organizationMemberPostBodySchema.safeParse(raw);
     if (!parsed.success) {
-      const msg = parsed.error.flatten().formErrors[0] ?? "Dados inválidos.";
+      outcome = "validation_error";
+      const flat = parsed.error.flatten();
+      const msg =
+        Object.values(flat.fieldErrors)[0]?.[0] ?? flat.formErrors[0] ?? "Dados inválidos.";
       return jsonError(400, msg);
     }
 
     const db = getDb();
-    if (!(await assertOrgExists(organizationId))) {
+    const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    if (!org) {
+      outcome = "not_found";
       return jsonError(404, "Organização não encontrada.");
     }
 
-    const body = parsed.data;
-    const orgRole = body.companyRole ?? "user";
+    const orgPk = org.id;
 
-    if (body.mode === "link") {
-      const email = body.email.trim().toLowerCase();
-      const [target] = await db.select().from(user).where(eq(user.email, email)).limit(1);
-      if (!target) {
-        return jsonError(404, "Utilizador não encontrado com este email.");
-      }
-      const [existing] = await db
-        .select({ id: organizationMemberships.id })
-        .from(organizationMemberships)
-        .where(
-          and(
-            eq(organizationMemberships.organizationId, organizationId),
-            eq(organizationMemberships.userId, target.id),
-          ),
-        )
+    if (parsed.data.mode === "link") {
+      const { email, orgRole } = parsed.data;
+      const normalizedEmail = email.toLowerCase();
+      const [target] = await db
+        .select({ id: user.id })
+        .from(user)
+        .where(sql`lower(${user.email}) = ${normalizedEmail}`)
         .limit(1);
-      if (existing) {
-        return jsonError(409, "Utilizador já pertence a esta organização.");
+
+      if (!target) {
+        outcome = "validation_error";
+        logMembers({ requestId, outcome: "user_not_found", userId: session.user.id, organizationId });
+        return jsonOrganizationMembersError(
+          400,
+          "Não existe utilizador registado com este e-mail.",
+          "USER_NOT_FOUND",
+        );
       }
-      await db.insert(organizationMemberships).values({
-        organizationId,
-        userId: target.id,
-        orgRole,
-      });
-      if (isSuperadmin(session.user) && !role) {
-        await insertAuditEvent(db, {
-          actorUserId: session.user.id,
-          targetUserId: target.id,
-          organizationId,
-          eventType: "superadmin_access_company",
-          metadata: { scope: "organization", organizationId },
+
+      try {
+        const row = await db.transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(organizationMemberships)
+            .values({
+              organizationId: orgPk,
+              userId: target.id,
+              orgRole,
+            })
+            .returning();
+
+          if (!inserted) {
+            throw new Error("Falha ao criar vínculo.");
+          }
+
+          await insertAuditEvent(tx as unknown as Db, {
+            actorUserId: session.user.id,
+            targetUserId: target.id,
+            organizationId: orgPk,
+            eventType: "membership_created",
+            metadata: { membershipId: inserted.id, mode: "link", orgRole },
+          });
+
+          const [full] = await tx
+            .select({
+              id: organizationMemberships.id,
+              userId: organizationMemberships.userId,
+              email: user.email,
+              name: user.name,
+              orgRole: organizationMemberships.orgRole,
+              jobTitle: organizationMemberships.jobTitle,
+              department: organizationMemberships.department,
+              phone: organizationMemberships.phone,
+              createdAt: organizationMemberships.createdAt,
+              updatedAt: organizationMemberships.updatedAt,
+            })
+            .from(organizationMemberships)
+            .innerJoin(user, eq(user.id, organizationMemberships.userId))
+            .where(eq(organizationMemberships.id, inserted.id))
+            .limit(1);
+
+          return full;
         });
+
+        if (!row) {
+          throw new Error("Membro não encontrado após criação.");
+        }
+
+        outcome = "success";
+        logMembers({ requestId, outcome, userId: session.user.id, organizationId });
+        return NextResponse.json(toMemberListItem(row), { status: 201 });
+      } catch (e) {
+        if (isPgUniqueViolation(e)) {
+          const cn = (e as { constraint_name?: string }).constraint_name ?? "";
+          const blob = `${cn} ${(e as Error).message ?? ""}`;
+          if (blob.includes(MEMBERSHIP_UNIQUE) || blob.includes("user_org")) {
+            outcome = "validation_error";
+            return jsonOrganizationMembersError(
+              409,
+              "Este utilizador já é membro desta organização.",
+              "MEMBERSHIP_DUPLICATE",
+            );
+          }
+        }
+        throw e;
       }
-      await insertAuditEvent(db, {
-        actorUserId: session.user.id,
-        targetUserId: target.id,
-        organizationId,
-        eventType: "membership_created",
-        metadata: { mode: "link", orgRole, scope: "organization" },
-      });
-      return NextResponse.json({ ok: true }, { status: 201 });
     }
 
-    const email = body.email.trim().toLowerCase();
-    const [dup] = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1);
-    if (dup) {
-      return jsonError(409, "Já existe conta com este email.");
-    }
+    /* mode === "create" */
+    const { email, password, name, orgRole, jobTitle, department, phone } = parsed.data;
+    const normalizedEmail = email.toLowerCase();
 
-    try {
-      await auth.api.signUpEmail({
-        body: {
-          name: body.name.trim(),
-          email,
-          password: body.password,
-        },
-        headers: request.headers,
-      });
-    } catch (err) {
-      return jsonError(
-        400,
-        err instanceof Error ? err.message : "Não foi possível criar utilizador.",
+    const [existing] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`lower(${user.email}) = ${normalizedEmail}`)
+      .limit(1);
+    if (existing) {
+      outcome = "validation_error";
+      return jsonOrganizationMembersError(
+        409,
+        "Já existe uma conta com este e-mail.",
+        "USER_EMAIL_CONFLICT",
       );
     }
 
-    const [createdUser] = await db.select().from(user).where(eq(user.email, email)).limit(1);
-    if (!createdUser) {
-      return jsonError(500, "Utilizador criado mas não encontrado na base.");
-    }
+    const hashed = await hashPassword(password);
+    const newUserId = randomUUID();
+    const newAccountId = randomUUID();
 
-    await db.insert(organizationMemberships).values({
-      organizationId,
-      userId: createdUser.id,
-      orgRole,
-    });
+    try {
+      const row = await db.transaction(async (tx) => {
+        await tx.insert(user).values({
+          id: newUserId,
+          name: name.trim(),
+          email: normalizedEmail,
+          emailVerified: false,
+          isSuperadmin: false,
+        });
 
-    if (isSuperadmin(session.user) && !role) {
-      await insertAuditEvent(db, {
-        actorUserId: session.user.id,
-        targetUserId: createdUser.id,
-        organizationId,
-        eventType: "superadmin_access_company",
-        metadata: { scope: "organization", organizationId },
+        await tx.insert(account).values({
+          id: newAccountId,
+          accountId: newUserId,
+          providerId: "credential",
+          userId: newUserId,
+          password: hashed,
+        });
+
+        const [inserted] = await tx
+          .insert(organizationMemberships)
+          .values({
+            organizationId: orgPk,
+            userId: newUserId,
+            orgRole,
+            ...(jobTitle !== undefined ? { jobTitle } : {}),
+            ...(department !== undefined ? { department } : {}),
+            ...(phone !== undefined ? { phone } : {}),
+          })
+          .returning();
+
+        if (!inserted) {
+          throw new Error("Falha ao criar vínculo.");
+        }
+
+        await insertAuditEvent(tx as unknown as Db, {
+          actorUserId: session.user.id,
+          targetUserId: newUserId,
+          organizationId: orgPk,
+          eventType: "membership_created",
+          metadata: { membershipId: inserted.id, mode: "create", orgRole },
+        });
+
+        const [full] = await tx
+          .select({
+            id: organizationMemberships.id,
+            userId: organizationMemberships.userId,
+            email: user.email,
+            name: user.name,
+            orgRole: organizationMemberships.orgRole,
+            jobTitle: organizationMemberships.jobTitle,
+            department: organizationMemberships.department,
+            phone: organizationMemberships.phone,
+            createdAt: organizationMemberships.createdAt,
+            updatedAt: organizationMemberships.updatedAt,
+          })
+          .from(organizationMemberships)
+          .innerJoin(user, eq(user.id, organizationMemberships.userId))
+          .where(eq(organizationMemberships.id, inserted.id))
+          .limit(1);
+
+        return full;
       });
+
+      if (!row) {
+        throw new Error("Membro não encontrado após criação.");
+      }
+
+      outcome = "success";
+      logMembers({ requestId, outcome, userId: session.user.id, organizationId });
+      return NextResponse.json(toMemberListItem(row), { status: 201 });
+    } catch (e) {
+      if (isPgUniqueViolation(e)) {
+        const cn = (e as { constraint_name?: string }).constraint_name ?? "";
+        const blob = `${cn} ${(e as Error).message ?? ""}`;
+        if (blob.includes(MEMBERSHIP_UNIQUE) || blob.includes("user_org")) {
+          return jsonOrganizationMembersError(
+            409,
+            "Este utilizador já é membro desta organização.",
+            "MEMBERSHIP_DUPLICATE",
+          );
+        }
+        if (blob.toLowerCase().includes("email") || blob.includes("user_email")) {
+          return jsonOrganizationMembersError(409, "Já existe uma conta com este e-mail.", "USER_EMAIL_CONFLICT");
+        }
+      }
+      throw e;
     }
-
-    await insertAuditEvent(db, {
-      actorUserId: session.user.id,
-      targetUserId: createdUser.id,
-      organizationId,
-      eventType: "membership_created",
-      metadata: { mode: "create", orgRole, scope: "organization" },
-    });
-
-    return NextResponse.json({ ok: true }, { status: 201 });
   } catch (e) {
+    outcome = "error";
+    logMembers({ requestId, outcome, organizationId: organizationId ?? organizationIdParam });
     return toPublicApiError(e);
   }
 }

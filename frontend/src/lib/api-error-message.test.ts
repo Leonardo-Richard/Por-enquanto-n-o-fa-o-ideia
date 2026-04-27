@@ -23,6 +23,19 @@ describe("messageFromApiJson", () => {
     ).toBe("Primeiro");
   });
 
+  it("lê error como string (NFR33 / membros organização)", () => {
+    expect(messageFromApiJson({ error: "Operação inválida.", code: "LAST_ORG_ADMIN" })).toBe("Operação inválida.");
+  });
+
+  it("prioriza message no topo sobre error string", () => {
+    expect(
+      messageFromApiJson({
+        message: "Topo",
+        error: "Corpo",
+      }),
+    ).toBe("Topo");
+  });
+
   it("devolve undefined para corpo vazio", () => {
     expect(messageFromApiJson(null)).toBeUndefined();
     expect(messageFromApiJson({})).toBeUndefined();

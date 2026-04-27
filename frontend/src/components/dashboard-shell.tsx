@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAppSession } from "@/context/app-session";
 import { signOut } from "@/lib/auth-browser";
+import { isSuperadminOrganizationsNavVisible } from "@/components/dashboard-shell-fr100";
 
 type NavItem = {
   href: string;
@@ -118,7 +119,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-            {isSuperadmin ? (
+            {isSuperadminOrganizationsNavVisible(isSuperadmin) ? (
               <Link
                 href={superadminNav.href}
                 aria-current={superadminNav.isActive(pathname) ? "page" : undefined}
@@ -179,7 +180,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
-              {isSuperadmin ? (
+              {isSuperadminOrganizationsNavVisible(isSuperadmin) ? (
                 <Link
                   href={superadminNav.href}
                   aria-current={superadminNav.isActive(pathname) ? "page" : undefined}

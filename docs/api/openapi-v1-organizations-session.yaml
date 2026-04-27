@@ -86,7 +86,10 @@ paths:
 
   /organizations/{organizationId}/members:
     get:
-      summary: Membros da organização
+      summary: Membros da organização (superadmin)
+      description: |
+        Paginação `page` (≥1, default 50), `pageSize` (1–100, default 50), `q` opcional.
+        Com `q` presente aplica-se NFR31 (rate limit no servidor — ver implementação).
       parameters:
         - in: path
           name: organizationId
@@ -94,21 +97,28 @@ paths:
           schema: { type: string, format: uuid }
         - in: query
           name: page
-          schema: { type: integer, minimum: 1 }
+          schema: { type: integer, minimum: 1, default: 1 }
         - in: query
           name: pageSize
-          schema: { type: integer, minimum: 1, maximum: 100 }
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
         - in: query
           name: q
           schema: { type: string }
       responses:
         "200":
-          description: OK
-        "403":
-          description: Sem permissão ou org alheia
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMembersListResponse"
+        "400": { description: organizationId ou query inválidos }
+        "401": { description: Não autenticado }
+        "403": { description: Sem superadmin }
+        "404": { description: Organização inexistente }
+        "429": { description: Rate limit (pesquisa com `q`) }
 
     post:
-      summary: Convidar / criar membro (modo link ou create)
+      summary: Adicionar membro — modo `link` ou `create` (superadmin)
       parameters:
         - in: path
           name: organizationId
@@ -121,73 +131,107 @@ paths:
             schema:
               oneOf:
                 - type: object
-                  required: [mode, email]
+                  required: [mode, email, orgRole]
                   properties:
                     mode: { const: link }
                     email: { type: string, format: email }
-                    companyRole: { type: string, enum: [user, admin] }
+                    orgRole: { type: string, enum: [user, admin] }
                 - type: object
-                  required: [mode, email, password, name]
+                  required: [mode, email, password, name, orgRole]
                   properties:
                     mode: { const: create }
                     email: { type: string, format: email }
-                    password: { type: string, minLength: 8 }
-                    name: { type: string }
-                    companyRole: { type: string, enum: [user, admin] }
+                    password: { type: string, minLength: 8, maxLength: 128 }
+                    name: { type: string, minLength: 1, maxLength: 200 }
+                    orgRole: { type: string, enum: [user, admin] }
+                    jobTitle: { type: string, nullable: true }
+                    department: { type: string, nullable: true }
+                    phone: { type: string, nullable: true }
       responses:
-        "201": { description: Criado }
-        "403": { description: Proibido }
-        "409": { description: Conflito }
+        "201":
+          description: Vínculo criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMemberItem"
+        "400":
+          description: Validação / USER_NOT_FOUND (corpo com `code`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMembersApiError"
+        "401": { description: Não autenticado }
+        "403": { description: Sem superadmin }
+        "404": { description: Organização inexistente }
+        "409":
+          description: MEMBERSHIP_DUPLICATE ou USER_EMAIL_CONFLICT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMembersApiError"
 
-  /organizations/{organizationId}/members/{userId}:
+  /organizations/{organizationId}/members/{membershipId}:
     patch:
-      summary: Atualizar membro (papel org em `companyRole` no JSON por compatibilidade LER)
+      summary: Atualizar membro da organização (superadmin)
       parameters:
         - in: path
           name: organizationId
           required: true
           schema: { type: string, format: uuid }
         - in: path
-          name: userId
+          name: membershipId
           required: true
-          schema: { type: string }
+          schema: { type: string, format: uuid }
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               properties:
-                companyRole: { type: string, enum: [user, admin] }
+                orgRole: { type: string, enum: [user, admin] }
                 jobTitle: { type: string, nullable: true }
                 department: { type: string, nullable: true }
                 phone: { type: string, nullable: true }
       responses:
-        "200": { description: OK }
-        "409":
-          description: Último administrador da organização
+        "200":
+          description: Item actualizado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LastAdminError"
+                $ref: "#/components/schemas/OrganizationMemberItem"
+        "400": { description: Corpo inválido }
+        "401": { description: Não autenticado }
+        "403": { description: Sem superadmin }
+        "404": { description: Organização ou vínculo inexistente }
+        "409":
+          description: LAST_ORG_ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMembersApiError"
     delete:
-      summary: Remover membro da organização
+      summary: Remover vínculo membro–organização (superadmin)
       parameters:
         - in: path
           name: organizationId
           required: true
           schema: { type: string, format: uuid }
         - in: path
-          name: userId
+          name: membershipId
           required: true
-          schema: { type: string }
+          schema: { type: string, format: uuid }
       responses:
-        "204": { description: Removido }
+        "204": { description: Removido (sem corpo) }
+        "401": { description: Não autenticado }
+        "403": { description: Sem superadmin }
+        "404": { description: Organização ou vínculo inexistente }
         "409":
-          description: Último administrador
+          description: LAST_ORG_ADMIN
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LastAdminError"
+                $ref: "#/components/schemas/OrganizationMembersApiError"
 
   /organizations/{organizationId}/monitored-companies:
     get:
@@ -240,11 +284,44 @@ paths:
 
 components:
   schemas:
-    LastAdminError:
+    OrganizationMemberItem:
       type: object
+      required:
+        [membershipId, userId, email, displayName, orgRole, jobTitle, department, phone, createdAt, updatedAt]
       properties:
-        message: { type: string }
-        error:
-          type: object
-          properties:
-            code: { const: last_admin }
+        membershipId: { type: string, format: uuid }
+        userId: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string, nullable: true }
+        orgRole: { type: string, enum: [user, admin] }
+        jobTitle: { type: string, nullable: true }
+        department: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    OrganizationMembersListResponse:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMemberItem"
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    OrganizationMembersApiError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: Mensagem humana (PT) }
+        message: { type: string, description: Duplicado de `error` para compatibilidade }
+        code:
+          type: string
+          enum:
+            - LAST_ORG_ADMIN
+            - MEMBERSHIP_DUPLICATE
+            - USER_NOT_FOUND
+            - USER_EMAIL_CONFLICT

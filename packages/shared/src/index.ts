@@ -23,8 +23,19 @@ export {
   membersQuerySchema,
   companyPatchBodySchema,
   organizationCreateBodySchema,
+  organizationMembersQuerySchema,
+  organizationMemberPostBodySchema,
+  organizationMemberPatchBodySchema,
+  organizationMembersApiErrorBodySchema,
 } from "./api-v1";
-export type { OrganizationCreateBody } from "./api-v1";
+export type {
+  OrganizationCreateBody,
+  OrganizationMembersQuery,
+  OrganizationMemberPostBody,
+  OrganizationMemberPatchBody,
+  OrganizationMembersApiErrorBody,
+  OrganizationMemberListItem,
+} from "./api-v1";
 
 export type {
   Company,

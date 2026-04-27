@@ -250,6 +250,12 @@ export function OrganizationsAdminPage() {
               <p className="mt-1 font-mono text-xs text-black/60 tabular-nums dark:text-white/55">{o.taxIdMasked}</p>
             ) : null}
             <p className="mt-1 text-xs text-black/50 dark:text-white/45">{o.memberCount} membro(s)</p>
+            <Link
+              href={`/admin/organizacoes/${o.id}/membros`}
+              className="mt-3 inline-flex text-sm font-medium text-emerald-800 underline dark:text-emerald-300"
+            >
+              Gerir membros
+            </Link>
           </li>
         ))}
       </ul>

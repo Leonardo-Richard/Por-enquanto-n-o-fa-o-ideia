@@ -5,16 +5,16 @@ import {
 
 export async function GET(
   request: Request,
-  ctx: { params: Promise<{ organizationId: string }> },
+  context: { params: Promise<{ organizationId: string }> },
 ) {
-  const { organizationId } = await ctx.params;
+  const { organizationId } = await context.params;
   return handleGetOrganizationMembers(request, organizationId);
 }
 
 export async function POST(
   request: Request,
-  ctx: { params: Promise<{ organizationId: string }> },
+  context: { params: Promise<{ organizationId: string }> },
 ) {
-  const { organizationId } = await ctx.params;
+  const { organizationId } = await context.params;
   return handlePostOrganizationMembers(request, organizationId);
 }

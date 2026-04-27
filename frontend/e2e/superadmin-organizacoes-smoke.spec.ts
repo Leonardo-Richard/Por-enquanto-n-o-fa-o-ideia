@@ -16,6 +16,28 @@ test.describe("superadmin — organizações (smoke)", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  /**
+   * SMEM-06 AC3 — evidência de redireccionamento real (302 → /dashboard) para não-superadmin autenticado.
+   */
+  test("utilizador autenticado sem superadmin: /admin/organizacoes vai para /dashboard", async ({ page }) => {
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const email = `admin_gate_norm_${suffix}@example.com`;
+    const password = "SenhaE2E-8chars";
+
+    await page.goto("/registo");
+    await expect(page.getByRole("heading", { name: "Criar conta" })).toBeVisible();
+
+    await page.getByLabel("Nome").fill("E2E Admin Gate Norm");
+    await page.getByLabel("E-mail").fill(email);
+    await page.getByLabel("Senha", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Registar" }).click();
+
+    await page.waitForURL(/\/empresas/, { timeout: 30_000 });
+
+    await page.goto("/admin/organizacoes");
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  });
+
   test("fluxo: registo → superadmin na BD → criar org → aviso FR50 → Acessar agora → painel", async ({
     page,
   }) => {
