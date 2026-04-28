@@ -1,4 +1,5 @@
 import { apiUrl } from "@/lib/api-client";
+import { recordAdnSyncGetRequest } from "@/lib/adn-sync-telemetry";
 
 /**
  * Cliente HTTP ADN (GET/POST sync) — fonte única para ficha e lista (NFR26).
@@ -108,6 +109,7 @@ export async function fetchAdnSyncStatus(
     const r = await fetchFn(buildAdnSyncSyncUrl(organizationId, companyId), {
       credentials: "include",
     });
+    recordAdnSyncGetRequest();
     return await interpretAdnSyncGetResponse(r);
   } finally {
     releaseAdnGetSlot();

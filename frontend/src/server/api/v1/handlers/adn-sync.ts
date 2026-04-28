@@ -3,11 +3,8 @@ import { NextResponse } from "next/server";
 import { adnPostSyncBodySchema, canonicalSyncBodyForFingerprint, fingerprintFromCanonical } from "@/lib/adn-sync-body";
 import { adnSyncJobs } from "@repo/db";
 import { insertAuditEvent } from "@/lib/audit";
-import {
-  adnPostSyncRateKey,
-  consumeAdnRateLimit,
-  getAdnPublicPostSyncLimit,
-} from "@/lib/adn-rate-limit";
+import { adnPostSyncRateKey, getAdnPublicPostSyncLimit } from "@/lib/adn-rate-limit";
+import { consumeDistributedOrLocalRateLimit } from "@/lib/distributed-rate-limit";
 import { adnJsonFromZodError } from "@/lib/adn-zod-response";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { assertAdnOrgAdmin, resolveAdnPublicAccess } from "./adn-public-access";
@@ -107,12 +104,22 @@ export async function handlePostAdnSync(request: Request, organizationId: string
     }
 
     const lim = getAdnPublicPostSyncLimit();
-    const rl = consumeAdnRateLimit({
+    const rl = await consumeDistributedOrLocalRateLimit({
       key: adnPostSyncRateKey(ctx.session.user.id, organizationId, companyId),
       max: lim.max,
       windowMs: lim.windowMs,
     });
     if (!rl.ok) {
+      console.info(
+        JSON.stringify({
+          scope: "rate_limit_429",
+          route: "adn_sync_post",
+          organizationId,
+          companyId,
+          userId: ctx.session.user.id,
+          retryAfterSec: rl.retryAfterSec,
+        }),
+      );
       const res = NextResponse.json(
         {
           message: "Limite de pedidos de sincronização ADN excedido. Tente novamente dentro de instantes.",

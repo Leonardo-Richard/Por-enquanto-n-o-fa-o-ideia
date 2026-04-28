@@ -1,4 +1,5 @@
 import { consumeAdnRateLimit } from "@/lib/adn-rate-limit";
+import { consumeDistributedOrLocalRateLimit } from "@/lib/distributed-rate-limit";
 
 export function getCertUploadRateLimit(): { max: number; windowMs: number } {
   const raw = process.env.CERT_UPLOAD_RATE_MAX_PER_WINDOW?.trim();
@@ -17,6 +18,20 @@ export function certUploadPostRateKey(userId: string, organizationId: string, co
 export function consumeCertUploadRateLimit(userId: string, organizationId: string, companyId: string) {
   const { max, windowMs } = getCertUploadRateLimit();
   return consumeAdnRateLimit({
+    key: certUploadPostRateKey(userId, organizationId, companyId),
+    max,
+    windowMs,
+  });
+}
+
+/** MSYS-06 — mesma política com backend distribuído quando Upstash está configurado. */
+export async function consumeCertUploadRateLimitAsync(
+  userId: string,
+  organizationId: string,
+  companyId: string,
+) {
+  const { max, windowMs } = getCertUploadRateLimit();
+  return consumeDistributedOrLocalRateLimit({
     key: certUploadPostRateKey(userId, organizationId, companyId),
     max,
     windowMs,

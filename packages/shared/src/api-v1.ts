@@ -140,6 +140,11 @@ export type OrganizationMembersApiErrorBody = z.infer<typeof organizationMembers
 export const organizationSystemUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(100),
+  /** Pesquisa server-side por nome ou e-mail (MSYS-03). */
+  q: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.string().max(200).optional(),
+  ),
 });
 
 export type OrganizationSystemUsersQuery = z.infer<typeof organizationSystemUsersQuerySchema>;

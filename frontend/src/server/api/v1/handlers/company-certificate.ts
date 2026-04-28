@@ -7,7 +7,7 @@ import {
 } from "@repo/shared";
 import { companies, companyCertificateAudits, companyCertificates } from "@repo/db";
 import { getCertUploadMaxBytes, isCertUploadApiEnabled } from "@/lib/cert-upload-env";
-import { consumeCertUploadRateLimit } from "@/lib/cert-upload-rate-limit";
+import { consumeCertUploadRateLimitAsync } from "@/lib/cert-upload-rate-limit";
 import { validatePkcs12ForCompany } from "@/lib/validate-pkcs12-for-company";
 import { deleteCertificateVaultObject, writeCertificateToVault } from "@/server/cert-upload/cert-upload-vault";
 import { toPublicApiError } from "@/server/api/v1/lib/errors";
@@ -171,12 +171,22 @@ export async function handlePostCompanyCertificate(
       return jsonCertError(status, validated.code, maxMb);
     }
 
-    const lim = consumeCertUploadRateLimit(
+    const lim = await consumeCertUploadRateLimitAsync(
       gate.ctx.session.user.id,
       organizationId,
       companyId,
     );
     if (!lim.ok) {
+      console.info(
+        JSON.stringify({
+          scope: "rate_limit_429",
+          route: "cert_upload_post",
+          organizationId,
+          companyId,
+          userId: gate.ctx.session.user.id,
+          retryAfterSec: lim.retryAfterSec,
+        }),
+      );
       const res = jsonCertError(429, "CERT_UPLOAD_RATE_LIMITED");
       res.headers.set("Retry-After", String(lim.retryAfterSec));
       return res;

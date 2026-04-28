@@ -10,6 +10,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:without-org-create-integration": "vitest run --exclude \"**/organizations-create.integration.test.ts\"",
+    "test:integration-superadmin": "vitest run src/app/api/v1/organizations-create.integration.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/ler-smoke.spec.ts e2e/superadmin-organizacoes-smoke.spec.ts",
     "test:e2e:spider": "playwright test e2e/spider.spec.ts",

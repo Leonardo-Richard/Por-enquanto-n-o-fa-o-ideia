@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { organizationMemberships, organizations, user } from "@repo/db";
@@ -12,6 +12,10 @@ import { getAuthedSession } from "../lib/session";
 
 function logSystemUsers(entry: Record<string, unknown>) {
   console.info(JSON.stringify({ scope: "organization_system_users", ...entry }));
+}
+
+function sanitizeIlikeFragment(raw: string): string {
+  return raw.trim().replace(/[%_\\]/g, "");
 }
 
 function toMemberListItem(row: {
@@ -74,7 +78,11 @@ export async function handleGetOrganizationSystemUsers(request: Request, organiz
       return jsonError(400, "Parâmetros de paginação inválidos.");
     }
 
-    const { page, pageSize } = parsed.data;
+    const { page, pageSize, q } = parsed.data;
+    const qTrim = typeof q === "string" ? q.trim() : "";
+    const safeQ = sanitizeIlikeFragment(qTrim);
+    const searchCond =
+      safeQ.length > 0 ? or(ilike(user.email, `%${safeQ}%`), ilike(user.name, `%${safeQ}%`)) : undefined;
 
     const db = getDb();
     const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
@@ -84,11 +92,13 @@ export async function handleGetOrganizationSystemUsers(request: Request, organiz
       return jsonError(404, "Organização não encontrada.");
     }
 
-    const [countRow] = await db.select({ c: count() }).from(user);
+    const [countRow] = searchCond
+      ? await db.select({ c: count() }).from(user).where(searchCond)
+      : await db.select({ c: count() }).from(user);
     const total = Number(countRow?.c ?? 0);
     const offset = (page - 1) * pageSize;
 
-    const rows = await db
+    const listBase = db
       .select({
         userId: user.id,
         email: user.email,
@@ -113,6 +123,8 @@ export async function handleGetOrganizationSystemUsers(request: Request, organiz
       .orderBy(desc(user.createdAt))
       .limit(pageSize)
       .offset(offset);
+
+    const rows = searchCond ? await listBase.where(searchCond) : await listBase;
 
     const items: OrganizationDirectoryUserItem[] = rows.map((r) => {
       const member =
@@ -144,7 +156,15 @@ export async function handleGetOrganizationSystemUsers(request: Request, organiz
     });
 
     outcome = "success";
-    logSystemUsers({ requestId, outcome, userId: session.user.id, organizationId, total, page });
+    logSystemUsers({
+      requestId,
+      outcome,
+      userId: session.user.id,
+      organizationId,
+      total,
+      page,
+      hasQuery: safeQ.length > 0,
+    });
     return NextResponse.json({
       items,
       page,

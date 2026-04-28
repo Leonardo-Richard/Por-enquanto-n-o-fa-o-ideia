@@ -55,7 +55,12 @@ const mem = {
   errorLastAdmin: "É necessário pelo menos um administrador da organização. Promova outro membro a administrador antes de continuar.",
   errorDuplicate: "Este utilizador já é membro desta organização.",
   errorGeneric: "Não foi possível concluir a operação. Tente novamente.",
+  searching: "A procurar…",
 } as const;
+
+const MEMBERS_SERVER_SEARCH_ENABLED =
+  process.env.NEXT_PUBLIC_MEMBERS_SERVER_SEARCH_ENABLED === "1" ||
+  process.env.NEXT_PUBLIC_MEMBERS_SERVER_SEARCH_ENABLED === "true";
 
 function mapApiCodeToMessage(code: string | undefined): string | undefined {
   if (code === "LAST_ORG_ADMIN") return mem.errorLastAdmin;
@@ -74,6 +79,11 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [qInput, setQInput] = useState("");
+  const [qDebounced, setQDebounced] = useState("");
+  const [serverItems, setServerItems] = useState<OrganizationDirectoryUserItem[]>([]);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [queryLoading, setQueryLoading] = useState(false);
+  const [catalogNonce, setCatalogNonce] = useState(0);
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<Issue>(null);
   const [catalogRefetchIssue, setCatalogRefetchIssue] = useState<Issue>(null);
@@ -87,6 +97,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<OrganizationMemberListItem | null>(null);
   const [removeRow, setRemoveRow] = useState<OrganizationMemberListItem | null>(null);
+  const serverHadFirstSuccess = useRef(false);
 
   const loadOrgName = useCallback(async () => {
     try {
@@ -106,6 +117,10 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
 
   const loadSystemUserCatalog = useCallback(
     async (reason: "initial" | "refresh" = "initial") => {
+      if (MEMBERS_SERVER_SEARCH_ENABLED) {
+        setCatalogNonce((n) => n + 1);
+        return;
+      }
       const isRefresh = reason === "refresh";
       if (isRefresh) {
         setCatalogRefetching(true);
@@ -159,14 +174,104 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
   );
 
   useEffect(() => {
+    const id = window.setTimeout(() => setQDebounced(qInput.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [qInput]);
+
+  useEffect(() => {
     void loadOrgName();
   }, [loadOrgName]);
 
   useEffect(() => {
+    serverHadFirstSuccess.current = false;
+    setServerItems([]);
+    setServerTotal(0);
+    setIssue(null);
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (MEMBERS_SERVER_SEARCH_ENABLED) {
+      return;
+    }
     void loadSystemUserCatalog("initial");
   }, [loadSystemUserCatalog]);
 
-  const filteredCatalog = useMemo(() => {
+  useEffect(() => {
+    if (!MEMBERS_SERVER_SEARCH_ENABLED) {
+      return;
+    }
+    const ac = new AbortController();
+    if (!serverHadFirstSuccess.current) {
+      setLoading(true);
+    }
+    setQueryLoading(true);
+    setIssue(null);
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+        });
+        if (qDebounced.length > 0) {
+          params.set("q", qDebounced);
+        }
+        const res = await apiFetch(`/api/v1/organizations/${organizationId}/system-users?${params.toString()}`, {
+          credentials: "include",
+          cache: "no-store",
+          signal: ac.signal,
+        });
+        if (res.status === 401) {
+          router.replace(
+            `/login?next=${encodeURIComponent(`/admin/organizacoes/${organizationId}/membros`)}`,
+          );
+          return;
+        }
+        const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+        if (!res.ok) {
+          let kind: FeApiFailureKind;
+          let msg: string;
+          const mapped = mapApiCodeToMessage((body as { code?: string })?.code);
+          const parsed = messageForFailedResponse(res.status, body);
+          kind = parsed.kind;
+          msg = mapped ?? parsed.text;
+          setIssue({ kind, message: msg });
+          setServerItems([]);
+          setServerTotal(0);
+          return;
+        }
+        const data = body as {
+          items: OrganizationDirectoryUserItem[];
+          total: number;
+          page: number;
+          pageSize: number;
+        };
+        setServerItems(data.items ?? []);
+        setServerTotal(Number(data.total ?? 0));
+        setCatalogTruncated(false);
+        setIssue(null);
+        serverHadFirstSuccess.current = true;
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") {
+          return;
+        }
+        setIssue({ kind: "network", message: FE_API_COPY.network });
+      } finally {
+        setQueryLoading(false);
+        setLoading(false);
+      }
+    })();
+    return () => ac.abort();
+  }, [
+    MEMBERS_SERVER_SEARCH_ENABLED,
+    organizationId,
+    page,
+    pageSize,
+    qDebounced,
+    catalogNonce,
+    router,
+  ]);
+
+  const clientFilteredCatalog = useMemo(() => {
     const needle = qInput.trim().toLowerCase();
     if (!needle) return catalog;
     return catalog.filter((row) => {
@@ -179,11 +284,14 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
     setPage(1);
   }, [qInput]);
 
-  const totalFiltered = filteredCatalog.length;
+  const totalFiltered = MEMBERS_SERVER_SEARCH_ENABLED ? serverTotal : clientFilteredCatalog.length;
   const pageSlice = useMemo(() => {
+    if (MEMBERS_SERVER_SEARCH_ENABLED) {
+      return serverItems;
+    }
     const start = (page - 1) * pageSize;
-    return filteredCatalog.slice(start, start + pageSize);
-  }, [filteredCatalog, page, pageSize]);
+    return clientFilteredCatalog.slice(start, start + pageSize);
+  }, [MEMBERS_SERVER_SEARCH_ENABLED, serverItems, clientFilteredCatalog, page, pageSize]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setLiveResultCount(totalFiltered), 350);
@@ -198,7 +306,12 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
     }
   }, [issue?.kind, organizationId, router]);
 
-  if (loading && catalog.length === 0 && !issue) {
+  const showInitialSkeleton =
+    loading &&
+    !issue &&
+    (MEMBERS_SERVER_SEARCH_ENABLED ? !serverHadFirstSuccess.current : catalog.length === 0);
+
+  if (showInitialSkeleton) {
     return (
       <div className="space-y-4" aria-busy="true">
         <div className="h-8 w-64 animate-pulse rounded-lg bg-black/[0.06] dark:bg-white/[0.08]" />
@@ -207,7 +320,12 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
     );
   }
 
-  if (issue && issue.kind !== "401" && catalog.length === 0) {
+  const showBlockingError =
+    issue &&
+    issue.kind !== "401" &&
+    (MEMBERS_SERVER_SEARCH_ENABLED ? serverItems.length === 0 : catalog.length === 0);
+
+  if (showBlockingError) {
     return (
       <div
         className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-800 dark:text-red-100"
@@ -281,6 +399,11 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
             className="w-full rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
             autoComplete="off"
           />
+          {MEMBERS_SERVER_SEARCH_ENABLED && queryLoading ? (
+            <p className="text-xs text-black/50 dark:text-white/45" aria-live="polite">
+              {mem.searching}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <button

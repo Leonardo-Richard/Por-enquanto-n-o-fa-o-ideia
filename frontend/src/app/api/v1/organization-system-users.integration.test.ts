@@ -199,6 +199,22 @@ describe.skipIf(!hasDb)("API /api/v1/organizations/.../system-users (integraçã
     expect(res.status).toBe(400);
   });
 
+  it("GET com q filtra por e-mail/nome e ajusta total (MSYS-03)", async () => {
+    mockSuperSession();
+    const q = encodeURIComponent(`${prefix}mem`);
+    const res = await getSystemUsers(
+      new Request(`http://test/api/v1/organizations/${orgId}/system-users?page=1&pageSize=50&q=${q}`),
+      { params: Promise.resolve({ organizationId: orgId }) },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: { userId: string; email: string }[];
+      total: number;
+    };
+    expect(body.total).toBeGreaterThanOrEqual(1);
+    expect(body.items.some((i) => i.userId === ids.userMember)).toBe(true);
+  });
+
   it("GET organização inexistente retorna 404", async () => {
     mockSuperSession();
     const missing = randomUUID();

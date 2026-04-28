@@ -185,6 +185,11 @@ export function OrganizationsAdminPage() {
           <p className="mt-2 text-sm text-black/65 dark:text-white/60">
             Crie organizações e aceda ao contexto para continuar o onboarding.
           </p>
+          <p className="mt-2 text-sm">
+            <Link href="/admin/operacao" className="font-medium text-emerald-800 underline dark:text-emerald-300">
+              Operação (métricas MVP)
+            </Link>
+          </p>
         </div>
         <button
           type="button"
