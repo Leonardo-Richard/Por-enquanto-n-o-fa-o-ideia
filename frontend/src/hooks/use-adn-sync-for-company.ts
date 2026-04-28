@@ -111,6 +111,18 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
   }, [access, lastJob, refresh]);
 
   const requestSync = useCallback(async () => {
+    if (lastJob && !isTerminalJobStatus(lastJob.status)) {
+      const msg =
+        "Já existe um job ADN em execução para esta empresa. Aguarde a conclusão antes de pedir nova busca.";
+      setActionTone("error");
+      setActionMsg(msg);
+      showToast({
+        title: "Busca já em andamento",
+        description: msg,
+        tone: "error",
+      });
+      return;
+    }
     if (!window.confirm(CONFIRM_TEXT)) {
       return;
     }
@@ -171,7 +183,7 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
     } finally {
       setBusy(false);
     }
-  }, [companyId, organizationId, onSyncAccepted, refresh, showToast]);
+  }, [companyId, lastJob, organizationId, onSyncAccepted, refresh, showToast]);
 
   return {
     access,

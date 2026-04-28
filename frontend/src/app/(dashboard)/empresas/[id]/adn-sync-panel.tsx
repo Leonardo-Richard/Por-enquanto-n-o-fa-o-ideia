@@ -16,6 +16,10 @@ function isLocalDownloadRootConfigured(root: string | null | undefined): boolean
   return typeof root === "string" && root.trim().length > 0;
 }
 
+function isAdnJobInProgress(status: string | null | undefined): boolean {
+  return status === "queued" || status === "running";
+}
+
 export function AdnSyncPanel({ company }: { company: Company }) {
   const liveId = useId();
   const helpDialogId = `${liveId}-adn-help`;
@@ -119,6 +123,7 @@ export function AdnSyncPanel({ company }: { company: Company }) {
   const showAdnRootContext = settingsFetchEnabled;
   /** Spec UX §5.1: último job e acções imediatamente após FR67/callout; certificado/readiness depois no ramo `active`. */
   const showCertificateAfterAdnActions = access === "active";
+  const hasJobInProgress = isAdnJobInProgress(lastJob?.status);
 
   return (
     <section
@@ -224,8 +229,8 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={busy}
-              aria-busy={busy}
+              disabled={busy || hasJobInProgress}
+              aria-busy={busy || hasJobInProgress}
               aria-label="Buscar notas agora no Ambiente Nacional"
               onClick={() => void requestSync()}
               className="rounded-lg bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] disabled:opacity-50"
