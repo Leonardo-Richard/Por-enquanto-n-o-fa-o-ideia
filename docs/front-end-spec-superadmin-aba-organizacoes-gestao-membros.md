@@ -4,6 +4,8 @@
 **Fonte de produto:** `docs/prd-superadmin-aba-organizacoes-gestao-membros.md` (**FR100–FR110**, **NFR30–NFR35**).  
 **Especificações base:** `docs/front-end-spec.md`, `docs/front-end-spec-login-empresas-roles.md`, `docs/front-end-spec-superadmin-cadastro-organizacoes-acesso-global.md`. Este documento define o **delta** de UX/UI sobre a área administrativa já existente (`/admin/organizacoes`, `DashboardShell`, `OrganizationsAdminPage`).
 
+**Extensão (catálogo global + filtro dinâmico):** a página **`/admin/organizacoes/[organizationId]/membros`** segue também `docs/front-end-spec-membros-catalogo-utilizadores-filtro-dinamico.md` (PRD `docs/prd-membros-catalogo-utilizadores-filtro-dinamico.md`), que **substitui** na prática a secção §5.2 deste ficheiro quanto à listagem e ao campo de filtro.
+
 ---
 
 ## 1. Introdução e âmbito
@@ -370,6 +372,7 @@ interface PatchMemberInput {
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-04-27 | 1.0 | Especificação inicial de UX/UI derivada do PRD FR100–FR110. | UX (Uma / AIOS) |
+| 2026-04-27 | 1.1 | Referência cruzada à spec de catálogo global em Membros. | UX (Uma / AIOS) |
 
 ---
 

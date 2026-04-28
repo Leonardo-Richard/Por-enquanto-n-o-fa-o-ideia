@@ -2,25 +2,32 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
-import {
-  classifyThrownFetchError,
-  FE_API_COPY,
-  messageForFailedResponse,
-  type FeApiFailureKind,
-} from "@/lib/fe-api-error";
-import type { OrganizationMemberListItem } from "@repo/shared";
+import { fetchOrganizationSystemUserCatalog } from "@/lib/fetch-organization-system-user-catalog";
+import { FE_API_COPY, messageForFailedResponse, type FeApiFailureKind } from "@/lib/fe-api-error";
+import type { OrganizationDirectoryUserItem, OrganizationMemberListItem } from "@repo/shared";
 
-/** Copy PT-BR (spec UX §10 / mem.*). `mem.error.duplicate` — spec corrigida; não usar `mem.mem.*`. */
+/** Copy PT-BR (spec UX §10 — chaves `mem.catalog.*` para rastreio i18n). */
 const mem = {
   backToOrganizations: "Voltar às organizações",
   listTitle: "Membros",
   listSubtitle: (name: string) => `Organização: ${name}`,
-  searchLabel: "Buscar por nome ou e-mail",
-  searchPlaceholder: "Buscar membros…",
-  empty: "Ainda não há membros nesta organização.",
-  emptySearch: "Nenhum membro corresponde à pesquisa.",
+  searchLabel: "Filtrar por nome ou e-mail",
+  searchPlaceholder: "Filtra à medida que escreve…",
+  emptySystem: "Ainda não há utilizadores no sistema.",
+  emptyFilter: "Nenhum utilizador corresponde ao filtro.",
+  paginationStatus: (pageNum: number, visibleTotal: number) =>
+    `Página ${pageNum} · ${visibleTotal} utilizador(es) visíveis`,
+  truncationWarning: (maxLoaded: number) =>
+    `Lista truncada: foram carregados no máximo ${maxLoaded} utilizadores. Refine operações ou contacte suporte.`,
+  catalogRefetchRetry: "Tentar novamente",
+  liveRegionResults: (count: number) => `${count} resultados`,
+  tableSuperadmin: "Superadmin",
+  tableInOrg: "Nesta organização",
+  inOrgYes: "Membro",
+  inOrgNo: "—",
+  rowAddToOrg: "Adicionar à organização",
   ctaAddExisting: "Adicionar membro existente",
   ctaCreateUser: "Criar utilizador e adicionar",
   roleAdmin: "Administrador da organização",
@@ -33,6 +40,8 @@ const mem = {
   tableActions: "Acções",
   rowEdit: "Editar",
   rowRemove: "Remover vínculo",
+  superadminYes: "Sim",
+  superadminNo: "Não",
   addExistingTitle: "Adicionar membro existente",
   addExistingSubmit: "Adicionar à organização",
   createUserTitle: "Criar utilizador e adicionar",
@@ -61,17 +70,20 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
   const router = useRouter();
   const mainTitleId = useId();
   const [orgName, setOrgName] = useState<string>("—");
-  const [items, setItems] = useState<OrganizationMemberListItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [catalog, setCatalog] = useState<OrganizationDirectoryUserItem[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [qInput, setQInput] = useState("");
-  const [qApplied, setQApplied] = useState("");
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<Issue>(null);
+  const [catalogRefetchIssue, setCatalogRefetchIssue] = useState<Issue>(null);
+  const [catalogRefetching, setCatalogRefetching] = useState(false);
+  const [catalogTruncated, setCatalogTruncated] = useState(false);
+  const [liveResultCount, setLiveResultCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [addPrefillEmail, setAddPrefillEmail] = useState<string | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<OrganizationMemberListItem | null>(null);
   const [removeRow, setRemoveRow] = useState<OrganizationMemberListItem | null>(null);
@@ -92,78 +104,101 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
     }
   }, [organizationId]);
 
-  const loadMembers = useCallback(async () => {
-    setLoading(true);
-    setIssue(null);
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-    });
-    if (qApplied.trim()) {
-      params.set("q", qApplied.trim());
-    }
-    try {
-      const res = await apiFetch(
-        `/api/v1/organizations/${organizationId}/members?${params.toString()}`,
-        { credentials: "include" },
-      );
-      const body = (await res.json().catch(() => null)) as unknown;
-      if (res.status === 401) {
-        router.replace(
-          `/login?next=${encodeURIComponent(`/admin/organizacoes/${organizationId}/membros`)}`,
-        );
-        return;
-      }
-      if (!res.ok) {
-        const parsed = body as { code?: string; error?: string };
-        const mapped = mapApiCodeToMessage(parsed.code);
-        const { kind, text } = messageForFailedResponse(res.status, body);
-        setIssue({ kind, message: mapped ?? text });
-        setItems([]);
-        setTotal(0);
-        return;
-      }
-      const data = body as { items: OrganizationMemberListItem[]; total: number };
-      setItems(data.items ?? []);
-      setTotal(data.total ?? 0);
-    } catch (e) {
-      const net = classifyThrownFetchError(e);
-      if (net === "network") {
-        setIssue({ kind: "network", message: FE_API_COPY.network });
+  const loadSystemUserCatalog = useCallback(
+    async (reason: "initial" | "refresh" = "initial") => {
+      const isRefresh = reason === "refresh";
+      if (isRefresh) {
+        setCatalogRefetching(true);
+        setCatalogRefetchIssue(null);
       } else {
-        setIssue({ kind: "5xx", message: FE_API_COPY.service5xx });
+        setLoading(true);
+        setIssue(null);
+        setCatalogTruncated(false);
       }
-      setItems([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [organizationId, page, pageSize, qApplied, router]);
+      try {
+        const result = await fetchOrganizationSystemUserCatalog(organizationId, apiFetch);
+        if (!result.ok) {
+          if (result.code === "401") {
+            router.replace(
+              `/login?next=${encodeURIComponent(`/admin/organizacoes/${organizationId}/membros`)}`,
+            );
+            return;
+          }
+          let kind: FeApiFailureKind;
+          let msg: string;
+          if (result.code === "http") {
+            const body = result.body as { code?: string; error?: string };
+            const mapped = mapApiCodeToMessage(body.code);
+            const parsed = messageForFailedResponse(result.status, body);
+            kind = parsed.kind;
+            msg = mapped ?? parsed.text;
+          } else {
+            kind = result.code === "network" ? "network" : "5xx";
+            msg = result.code === "network" ? FE_API_COPY.network : FE_API_COPY.service5xx;
+          }
+          if (isRefresh) {
+            setCatalogRefetchIssue({ kind, message: msg });
+          } else {
+            setIssue({ kind, message: msg });
+            setCatalog([]);
+          }
+          return;
+        }
+        setCatalog(result.items);
+        setCatalogTruncated(result.truncated);
+        setCatalogRefetchIssue(null);
+      } finally {
+        if (isRefresh) {
+          setCatalogRefetching(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [organizationId, router],
+  );
 
   useEffect(() => {
     void loadOrgName();
   }, [loadOrgName]);
 
   useEffect(() => {
-    void loadMembers();
-  }, [loadMembers]);
+    void loadSystemUserCatalog("initial");
+  }, [loadSystemUserCatalog]);
 
-  const combinedIssue = issue;
+  const filteredCatalog = useMemo(() => {
+    const needle = qInput.trim().toLowerCase();
+    if (!needle) return catalog;
+    return catalog.filter((row) => {
+      const name = row.displayName.toLowerCase();
+      return row.email.toLowerCase().includes(needle) || name.includes(needle);
+    });
+  }, [catalog, qInput]);
 
   useEffect(() => {
-    if (combinedIssue?.kind === "401") {
+    setPage(1);
+  }, [qInput]);
+
+  const totalFiltered = filteredCatalog.length;
+  const pageSlice = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredCatalog.slice(start, start + pageSize);
+  }, [filteredCatalog, page, pageSize]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setLiveResultCount(totalFiltered), 350);
+    return () => window.clearTimeout(id);
+  }, [qInput, totalFiltered]);
+
+  useEffect(() => {
+    if (issue?.kind === "401") {
       router.replace(
         `/login?next=${encodeURIComponent(`/admin/organizacoes/${organizationId}/membros`)}`,
       );
     }
-  }, [combinedIssue?.kind, organizationId, router]);
+  }, [issue?.kind, organizationId, router]);
 
-  function applySearch() {
-    setPage(1);
-    setQApplied(qInput);
-  }
-
-  if (loading && items.length === 0 && !combinedIssue) {
+  if (loading && catalog.length === 0 && !issue) {
     return (
       <div className="space-y-4" aria-busy="true">
         <div className="h-8 w-64 animate-pulse rounded-lg bg-black/[0.06] dark:bg-white/[0.08]" />
@@ -172,14 +207,14 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
     );
   }
 
-  if (combinedIssue && combinedIssue.kind !== "401") {
+  if (issue && issue.kind !== "401" && catalog.length === 0) {
     return (
       <div
         className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-800 dark:text-red-100"
         role="alert"
         aria-live="polite"
       >
-        <p>{combinedIssue.message}</p>
+        <p>{issue.message}</p>
         <p className="mt-4">
           <Link href="/admin/organizacoes" className="font-medium text-emerald-800 underline dark:text-emerald-300">
             {mem.backToOrganizations}
@@ -206,32 +241,54 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">{mem.listSubtitle(orgName)}</p>
       </header>
 
+      {catalogTruncated ? (
+        <p
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+          role="status"
+        >
+          {mem.truncationWarning(10000)}
+        </p>
+      ) : null}
+
+      {catalogRefetchIssue ? (
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-3 text-sm text-red-900 dark:text-red-100 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+          aria-live="polite"
+        >
+          <p>{catalogRefetchIssue.message}</p>
+          <button
+            type="button"
+            onClick={() => void loadSystemUserCatalog("refresh")}
+            disabled={catalogRefetching}
+            className="shrink-0 rounded-lg border border-red-800/30 px-3 py-1.5 font-medium text-red-950 underline-offset-2 hover:underline disabled:opacity-50 dark:border-red-200/30 dark:text-red-50"
+          >
+            {mem.catalogRefetchRetry}
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div className="max-w-md flex-1 space-y-1">
           <label htmlFor="q-members" className="text-xs font-medium text-black/70 dark:text-white/65">
             {mem.searchLabel}
           </label>
-          <div className="flex gap-2">
-            <input
-              id="q-members"
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              placeholder={mem.searchPlaceholder}
-              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
-            />
-            <button
-              type="button"
-              onClick={() => applySearch()}
-              className="shrink-0 rounded-lg bg-[var(--foreground)] px-3 py-2 text-sm font-medium text-[var(--background)]"
-            >
-              Buscar
-            </button>
-          </div>
+          <input
+            id="q-members"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            placeholder={mem.searchPlaceholder}
+            className="w-full rounded-lg border border-black/10 bg-[var(--background)] px-3 py-2 text-sm outline-none ring-emerald-600/30 focus:ring-2 dark:border-white/15"
+            autoComplete="off"
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              setAddPrefillEmail(undefined);
+              setAddOpen(true);
+            }}
             className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium dark:border-white/15"
           >
             {mem.ctaAddExisting}
@@ -246,11 +303,22 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-black/5 dark:border-white/10" aria-busy={busy}>
-        <table className="w-full min-w-[640px] text-left text-sm">
+      {qInput.trim() && liveResultCount !== null ? (
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          {mem.liveRegionResults(liveResultCount)}
+        </p>
+      ) : null}
+
+      <div
+        className="overflow-x-auto rounded-xl border border-black/5 dark:border-white/10"
+        aria-busy={busy || catalogRefetching}
+      >
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-black/5 bg-black/[0.02] text-xs font-medium text-black/60 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/55">
             <tr>
               <th className="px-3 py-2">{mem.tableUser}</th>
+              <th className="px-3 py-2">{mem.tableSuperadmin}</th>
+              <th className="px-3 py-2">{mem.tableInOrg}</th>
               <th className="px-3 py-2">{mem.tableRole}</th>
               <th className="px-3 py-2">{mem.tableJob}</th>
               <th className="px-3 py-2">{mem.tableDept}</th>
@@ -259,49 +327,76 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
+            {pageSlice.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-black/55 dark:text-white/50">
-                  {qApplied.trim() ? mem.emptySearch : mem.empty}
+                <td colSpan={8} className="px-3 py-8 text-center text-black/55 dark:text-white/50">
+                  {qInput.trim() ? mem.emptyFilter : mem.emptySystem}
                 </td>
               </tr>
             ) : (
-              items.map((m) => (
-                <tr key={m.membershipId} className="border-b border-black/5 last:border-0 dark:border-white/10">
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{m.displayName ?? "—"}</div>
-                    <div className="text-xs text-black/50 dark:text-white/45">{m.email}</div>
-                  </td>
-                  <td className="px-3 py-2">{m.orgRole === "admin" ? mem.roleAdmin : mem.roleUser}</td>
-                  <td className="px-3 py-2 text-black/80 dark:text-white/75">{m.jobTitle ?? "—"}</td>
-                  <td className="px-3 py-2 text-black/80 dark:text-white/75">{m.department ?? "—"}</td>
-                  <td className="px-3 py-2 text-black/80 dark:text-white/75">{m.phone ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditRow(m)}
-                        className="text-xs font-medium text-emerald-800 underline dark:text-emerald-300"
-                      >
-                        {mem.rowEdit}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRemoveRow(m)}
-                        className="text-xs font-medium text-red-700 underline dark:text-red-300"
-                      >
-                        {mem.rowRemove}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              pageSlice.map((row) => {
+                const m = row.member;
+                return (
+                  <tr key={row.userId} className="border-b border-black/5 last:border-0 dark:border-white/10">
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.displayName || "—"}</div>
+                      <div className="text-xs text-black/50 dark:text-white/45">{row.email}</div>
+                    </td>
+                    <td className="px-3 py-2 text-black/80 dark:text-white/75">
+                      {row.isSuperadmin ? mem.superadminYes : mem.superadminNo}
+                    </td>
+                    <td className="px-3 py-2 text-black/80 dark:text-white/75">{m ? mem.inOrgYes : mem.inOrgNo}</td>
+                    <td className="px-3 py-2">
+                      {m ? (m.orgRole === "admin" ? mem.roleAdmin : mem.roleUser) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-black/80 dark:text-white/75">{m?.jobTitle ?? "—"}</td>
+                    <td className="px-3 py-2 text-black/80 dark:text-white/75">{m?.department ?? "—"}</td>
+                    <td className="px-3 py-2 text-black/80 dark:text-white/75">{m?.phone ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        {m ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditRow(m)}
+                              className="text-xs font-medium text-emerald-800 underline dark:text-emerald-300"
+                              aria-label={`${mem.rowEdit} · ${m.email}`}
+                            >
+                              {mem.rowEdit}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRemoveRow(m)}
+                              className="text-xs font-medium text-red-700 underline dark:text-red-300"
+                              aria-label={`${mem.rowRemove} · ${m.email}`}
+                            >
+                              {mem.rowRemove}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddPrefillEmail(row.email);
+                              setAddOpen(true);
+                            }}
+                            className="text-xs font-medium text-emerald-800 underline dark:text-emerald-300"
+                            aria-label={`${mem.rowAddToOrg} · ${row.email}`}
+                          >
+                            {mem.rowAddToOrg}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
-      {total > pageSize ? (
+      {totalFiltered > pageSize ? (
         <div className="flex items-center justify-between text-sm">
           <button
             type="button"
@@ -311,12 +406,10 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
           >
             Anterior
           </button>
-          <span className="text-black/60 dark:text-white/55">
-            Página {page} · {total} membro(s)
-          </span>
+          <span className="text-black/60 dark:text-white/55">{mem.paginationStatus(page, totalFiltered)}</span>
           <button
             type="button"
-            disabled={page * pageSize >= total || busy}
+            disabled={page * pageSize >= totalFiltered || busy}
             onClick={() => setPage((p) => p + 1)}
             className="rounded-lg border border-black/10 px-3 py-1 disabled:opacity-40 dark:border-white/15"
           >
@@ -327,11 +420,16 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
 
       <AddExistingModal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        initialEmail={addPrefillEmail}
+        onClose={() => {
+          setAddOpen(false);
+          setAddPrefillEmail(undefined);
+        }}
         organizationId={organizationId}
         onDone={() => {
           setAddOpen(false);
-          void loadMembers();
+          setAddPrefillEmail(undefined);
+          void loadSystemUserCatalog("refresh");
         }}
         setBusy={setBusy}
       />
@@ -341,7 +439,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
         organizationId={organizationId}
         onDone={() => {
           setCreateOpen(false);
-          void loadMembers();
+          void loadSystemUserCatalog("refresh");
         }}
         setBusy={setBusy}
       />
@@ -352,7 +450,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
         organizationId={organizationId}
         onDone={() => {
           setEditRow(null);
-          void loadMembers();
+          void loadSystemUserCatalog("refresh");
         }}
         setBusy={setBusy}
       />
@@ -363,7 +461,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
         organizationId={organizationId}
         onDone={() => {
           setRemoveRow(null);
-          void loadMembers();
+          void loadSystemUserCatalog("refresh");
         }}
         setBusy={setBusy}
       />
@@ -373,6 +471,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
 
 function AddExistingModal(props: {
   open: boolean;
+  initialEmail?: string;
   onClose: () => void;
   organizationId: string;
   onDone: () => void;
@@ -391,9 +490,12 @@ function AddExistingModal(props: {
       setAlert(null);
       return;
     }
+    setEmail(props.initialEmail?.trim() ?? "");
+    setOrgRole("user");
+    setAlert(null);
     const t = requestAnimationFrame(() => closeRef.current?.focus());
     return () => cancelAnimationFrame(t);
-  }, [props.open]);
+  }, [props.open, props.initialEmail]);
 
   useEffect(() => {
     if (!props.open) return;

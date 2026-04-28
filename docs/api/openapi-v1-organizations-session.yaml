@@ -170,6 +170,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/OrganizationMembersApiError"
 
+  /organizations/{organizationId}/system-users:
+    get:
+      summary: Catálogo global de utilizadores com vínculo opcional à organização (superadmin)
+      description: |
+        Requer sessão autenticada com `isSuperadmin`.
+        `total` é a contagem global de linhas na tabela `user` (independente da organização do path).
+        Cada item inclui `member` com dados de `OrganizationMemberListItem` quando existe vínculo em
+        `organization_memberships` para `organizationId`, ou `null` quando o utilizador não pertence à org.
+        Ordenação por página: `user.createdAt` descendente (mais recentes primeiro).
+        NFR38 (backlog): evolução prevista com pesquisa no servidor com debounce e virtualização da lista para grandes volumes — não obrigatório neste sprint.
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        "200":
+          description: Lista paginada (alinhado a `OrganizationDirectoryUserItem` em `@repo/shared`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSystemUsersListResponse"
+        "400": { description: organizationId ou query inválidos }
+        "401": { description: Não autenticado }
+        "403": { description: Sem superadmin }
+        "404": { description: Organização inexistente }
+        "500": { description: Erro interno }
+
   /organizations/{organizationId}/members/{membershipId}:
     patch:
       summary: Atualizar membro da organização (superadmin)
@@ -308,6 +342,31 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrganizationMemberItem"
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    OrganizationDirectoryUserItem:
+      type: object
+      required: [userId, email, displayName, isSuperadmin, member]
+      properties:
+        userId: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        isSuperadmin: { type: boolean }
+        member:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/OrganizationMemberItem"
+
+    OrganizationSystemUsersListResponse:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationDirectoryUserItem"
         page: { type: integer }
         pageSize: { type: integer }
         total: { type: integer }

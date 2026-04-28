@@ -136,6 +136,14 @@ export type OrganizationMemberPostBody = z.infer<typeof organizationMemberPostBo
 export type OrganizationMemberPatchBody = z.infer<typeof organizationMemberPatchBodySchema>;
 export type OrganizationMembersApiErrorBody = z.infer<typeof organizationMembersApiErrorBodySchema>;
 
+/** Query `GET /api/v1/organizations/{organizationId}/system-users` — catálogo global com vínculo opcional à org. */
+export const organizationSystemUsersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(100),
+});
+
+export type OrganizationSystemUsersQuery = z.infer<typeof organizationSystemUsersQuerySchema>;
+
 /** Item de lista `GET/POST .../members` (SMEM-02). */
 export type OrganizationMemberListItem = {
   membershipId: string;
@@ -148,6 +156,16 @@ export type OrganizationMemberListItem = {
   phone: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Utilizador do sistema na vista de directório da organização (membro ou não). */
+export type OrganizationDirectoryUserItem = {
+  userId: string;
+  email: string;
+  displayName: string;
+  isSuperadmin: boolean;
+  /** Dados de membro nesta organização, se existir vínculo. */
+  member: OrganizationMemberListItem | null;
 };
 
 export const companyPatchBodySchema = z.object({

@@ -27,6 +27,7 @@ export {
   organizationMemberPostBodySchema,
   organizationMemberPatchBodySchema,
   organizationMembersApiErrorBodySchema,
+  organizationSystemUsersQuerySchema,
 } from "./api-v1";
 export type {
   OrganizationCreateBody,
@@ -35,6 +36,8 @@ export type {
   OrganizationMemberPatchBody,
   OrganizationMembersApiErrorBody,
   OrganizationMemberListItem,
+  OrganizationSystemUsersQuery,
+  OrganizationDirectoryUserItem,
 } from "./api-v1";
 
 export type {
