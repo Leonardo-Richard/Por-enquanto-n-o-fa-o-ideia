@@ -245,7 +245,7 @@ export async function handlePostCompanyCertificate(
       return jsonCertError(503, "CERT_UPLOAD_STORE_FAILED");
     }
 
-    if (existing?.vaultRef && existing.vaultRef !== vaultRef && existing.vaultRef.startsWith("mock:")) {
+    if (existing?.vaultRef && existing.vaultRef !== vaultRef) {
       await deleteCertificateVaultObject(existing.vaultRef).catch(() => undefined);
     }
 
@@ -306,9 +306,7 @@ export async function handleDeleteCompanyCertificate(
       return new NextResponse(null, { status: 204 });
     }
 
-    if (row.vaultRef.startsWith("mock:")) {
-      await deleteCertificateVaultObject(row.vaultRef).catch(() => undefined);
-    }
+    await deleteCertificateVaultObject(row.vaultRef).catch(() => undefined);
 
     await gate.ctx.db
       .update(companyCertificates)

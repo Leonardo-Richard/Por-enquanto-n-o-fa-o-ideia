@@ -26,9 +26,13 @@ from pathlib import Path
 import psycopg
 from psycopg.rows import dict_row
 
-from nfse_runner import run_download_workflow_once, write_clients_json
+from nfse_runner import clear_company_data_directory, run_download_workflow_once, write_clients_json
 from mirror_local import load_org_mirror_context, mirror_data_directory_to_local
 from portal_artifacts import patch_job, sync_data_directory
+
+
+class NoCompanyArtifactsError(RuntimeError):
+    """Job sem ficheiros da empresa após execução do downloader."""
 
 
 def _repo_root() -> Path:
@@ -95,9 +99,17 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         co = load_company(conn, cid)
     cnpj = str(co["cnpj_digits"])
     nome = str(co["trade_name"] or cnpj)
+    run_started_epoch = time.time()
 
     write_clients_json(nfse, cnpj, nome)
-    if os.environ.get("NFSE_BRIDGE_SKIP_NFSE_DIST", "").strip() == "1":
+    cleanup = clear_company_data_directory(nfse, cnpj)
+    if cleanup["failed"] > 0:
+        print(
+            f"[nfse-portal-bridge] Aviso: {cleanup['failed']} ficheiro(s) antigos não puderam ser removidos para {cnpj}.",
+            flush=True,
+        )
+    skip_nfse_dist = os.environ.get("NFSE_BRIDGE_SKIP_NFSE_DIST", "").strip() == "1"
+    if skip_nfse_dist:
         print(
             "[nfse-portal-bridge] NFSE_BRIDGE_SKIP_NFSE_DIST=1 — a saltar run_download_workflow (smoke).",
             flush=True,
@@ -113,6 +125,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         job_id=jid,
         cnpj=cnpj,
         nfse_root=nfse,
+        min_xml_mtime_epoch=run_started_epoch,
     )
     mirror_summary: dict = {
         "mirrorWritten": 0,
@@ -139,6 +152,13 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             "mirrorHadFailures": True,
             "mirrorErrorsSample": [f"{err_hint}:{e!s}"[:200]],
         }
+
+    artifacts_total = counts["xml"] + counts["pdf"]
+    if artifacts_total <= 0 and not skip_nfse_dist:
+        raise NoCompanyArtifactsError(
+            "Nenhum XML/PDF da empresa foi encontrado após execução do job. "
+            "O job foi marcado como failed para forçar nova tentativa."
+        )
 
     patch_job(
         base_url=portal_url,

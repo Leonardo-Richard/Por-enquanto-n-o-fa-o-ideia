@@ -70,9 +70,10 @@ Fluxo por job:
 2. Escreve `clients.json` no NFSE_dist com o CNPJ da empresa monitorada.
 3. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`).
 4. Executa `run_download_workflow()` (XML + PDF como no repositório original).
-5. Percorre `data/<CNPJ>/` e envia cada XML/PDF ao portal (`uploads/prepare` → PUT → `artifacts/commit`).
+5. Limpa XML/PDF antigos em `data/<CNPJ>/` (best-effort) e só envia artefactos com timestamp desta execução, evitando falso positivo com ficheiros antigos (`uploads/prepare` → PUT → `artifacts/commit`).
 6. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{CNPJ}\{system_code}\` (`mirror_local.py`).
-7. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
+7. Em modo normal (sem `NFSE_BRIDGE_SKIP_NFSE_DIST=1`), se não houver nenhum XML/PDF da empresa no fim da execução, o job é marcado como `failed` para forçar nova tentativa operacional.
+8. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
 
 ## 4. Certificado e organização
 

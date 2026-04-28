@@ -84,6 +84,7 @@ def sync_data_directory(
     job_id: str,
     cnpj: str,
     nfse_root: Path,
+    min_xml_mtime_epoch: float | None = None,
 ) -> dict[str, int]:
     """Sobe XML e PDF sob data/<cnpj>/ (estrutura NFSE_dist)."""
     data_dir = nfse_root / "data" / cnpj
@@ -92,6 +93,14 @@ def sync_data_directory(
         return counts
 
     for xml_path in data_dir.rglob("*.xml"):
+        if min_xml_mtime_epoch is not None:
+            try:
+                if xml_path.stat().st_mtime < min_xml_mtime_epoch:
+                    counts["skipped"] += 1
+                    continue
+            except OSError:
+                counts["skipped"] += 1
+                continue
         try:
             xml_text = xml_path.read_text(encoding="utf-8")
         except OSError:

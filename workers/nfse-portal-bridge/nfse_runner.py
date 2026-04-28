@@ -25,6 +25,26 @@ def write_clients_json(nfse_root: Path, cnpj: str, nome: str) -> None:
     )
 
 
+def clear_company_data_directory(nfse_root: Path, cnpj: str) -> dict[str, int]:
+    """
+    Limpa artefactos XML/PDF antigos da empresa antes do workflow.
+    Em Windows/OneDrive pode haver locks transitórios; por isso a limpeza é best-effort.
+    """
+    data_dir = nfse_root / "data" / cnpj
+    out = {"removed": 0, "failed": 0}
+    if not data_dir.is_dir():
+        return out
+
+    for pattern in ("*.xml", "*.pdf"):
+        for file_path in data_dir.rglob(pattern):
+            try:
+                file_path.unlink()
+                out["removed"] += 1
+            except OSError:
+                out["failed"] += 1
+    return out
+
+
 def _filter_local_patch_by_clients(nfse_root: Path) -> None:
     """Mantém no clients.local.json apenas CNPJs presentes no clients.json do job atual."""
     cfg_path = nfse_root / "clients.json"
