@@ -17,6 +17,9 @@ clients.local.json
 **/*.pfx
 certificates/*.pfx
 
+# Logs do worker NFSE portal bridge (scripts/windows/start-nfse-portal-bridge.ps1)
+workers/nfse-portal-bridge/logs/
+
 # Dependencies (AIOS)
 node_modules/
 node_modules

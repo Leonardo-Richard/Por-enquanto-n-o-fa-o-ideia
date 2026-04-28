@@ -31,10 +31,10 @@ export function AdnSyncPanel({ company }: { company: Company }) {
   const { effectiveOrganizationId, loading: meOrgLoading } = useMeSummary();
 
   const { access, lastJob, busy, actionMsg, actionTone, refresh, requestSync } = useAdnSyncForCompany({
-    companyId: company.id,
-    organizationId: company.organizationId,
-    onSyncAccepted: bumpReadiness,
-  });
+      companyId: company.id,
+      organizationId: company.organizationId,
+      onSyncAccepted: bumpReadiness,
+    });
 
   const orgAligned =
     Boolean(company.organizationId) &&

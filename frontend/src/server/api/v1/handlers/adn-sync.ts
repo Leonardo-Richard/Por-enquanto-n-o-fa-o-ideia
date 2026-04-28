@@ -7,7 +7,7 @@ import { adnPostSyncRateKey, getAdnPublicPostSyncLimit } from "@/lib/adn-rate-li
 import { consumeDistributedOrLocalRateLimit } from "@/lib/distributed-rate-limit";
 import { adnJsonFromZodError } from "@/lib/adn-zod-response";
 import { jsonError, toPublicApiError } from "../lib/errors";
-import { assertAdnOrgAdmin, resolveAdnPublicAccess } from "./adn-public-access";
+import { resolveAdnPublicAccess } from "./adn-public-access";
 
 export async function handleGetAdnSync(request: Request, organizationId: string, companyId: string) {
   try {
@@ -52,10 +52,6 @@ export async function handlePostAdnSync(request: Request, organizationId: string
     }
     const { ctx } = gate;
     const { db } = ctx;
-    const adminBlock = assertAdnOrgAdmin(ctx);
-    if (adminBlock) {
-      return adminBlock;
-    }
 
     const raw = await request.text();
     let bodyJson: unknown = {};

@@ -137,12 +137,10 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
       }
       if (r.kind === "forbidden") {
         setActionTone("error");
-        setActionMsg(
-          r.message ?? "Apenas administradores da organização podem pedir sincronização ADN.",
-        );
+        setActionMsg(r.message ?? "Não tem permissão para pedir sincronização ADN.");
         showToast({
           title: "Sem permissão",
-          description: r.message ?? "Apenas administradores da organização podem pedir sincronização ADN.",
+          description: r.message ?? "Não tem permissão para pedir sincronização ADN.",
           tone: "error",
         });
         return;
