@@ -36,8 +36,17 @@ def main() -> None:
             cur.execute(
                 """
                 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-                VALUES ('adn-certificates', 'adn-certificates', false, 5242880, ARRAY['application/x-pkcs12'])
-                ON CONFLICT (id) DO NOTHING;
+                VALUES (
+                  'adn-certificates',
+                  'adn-certificates',
+                  false,
+                  5242880,
+                  ARRAY['application/json', 'application/x-pkcs12']
+                )
+                ON CONFLICT (id) DO UPDATE
+                SET allowed_mime_types = EXCLUDED.allowed_mime_types,
+                    file_size_limit = EXCLUDED.file_size_limit,
+                    public = EXCLUDED.public;
                 """
             )
             cur.execute(

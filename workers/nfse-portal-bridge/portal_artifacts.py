@@ -17,6 +17,18 @@ def _sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _synthetic_access_key_44(cnpj: str, doc_id: str) -> str:
+    """
+    Gera uma chave técnica de 44 dígitos para layouts sem chave ADN de 44.
+    Determinística por (CNPJ, doc_id) para idempotência entre XML/PDF.
+    """
+    seed = f"{cnpj}:{doc_id}".encode("utf-8")
+    # 44 dígitos: prefixo reservado + 41 dígitos derivados do hash.
+    digits = str(int(hashlib.sha256(seed).hexdigest(), 16))
+    tail = digits[-41:].rjust(41, "0")
+    return f"9{cnpj[:2]}{tail}"
+
+
 def _issued_at_iso_from_xml(xml_text: str) -> str:
     try:
         root = ET.fromstring(xml_text)
@@ -88,7 +100,7 @@ def sync_data_directory(
 ) -> dict[str, int]:
     """Sobe XML e PDF sob data/<cnpj>/ (estrutura NFSE_dist)."""
     data_dir = nfse_root / "data" / cnpj
-    counts = {"xml": 0, "pdf": 0, "skipped": 0}
+    counts = {"xml": 0, "pdf": 0, "skipped": 0, "syntheticKey": 0}
     if not data_dir.is_dir():
         return counts
 
@@ -107,9 +119,10 @@ def sync_data_directory(
             counts["skipped"] += 1
             continue
         chave = extract_access_key_from_xml(xml_text)
-        if not chave or len(chave) != 44:
-            counts["skipped"] += 1
-            continue
+        doc_id = xml_path.stem
+        if not chave or len(chave) != 44 or not chave.isdigit():
+            chave = _synthetic_access_key_44(cnpj, doc_id)
+            counts["syntheticKey"] += 1
         xml_bytes = xml_text.encode("utf-8")
         upload_file(
             base_url=base_url,

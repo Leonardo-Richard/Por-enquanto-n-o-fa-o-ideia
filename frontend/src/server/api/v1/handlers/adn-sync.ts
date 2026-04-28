@@ -134,7 +134,11 @@ export async function handlePostAdnSync(request: Request, organizationId: string
         requestedByUserId: ctx.session.user.id,
         idempotencyKey: idemKey,
         idempotencyBodyFingerprint: idemKey ? fingerprint : null,
-        summaryJson: { phase: "queued", message: "Pedido recebido." },
+        summaryJson: {
+          phase: "queued",
+          message: "Pedido recebido.",
+          fetchMode: parsedBody.data.fetchMode ?? "incremental",
+        },
       })
       .returning({ id: adnSyncJobs.id, status: adnSyncJobs.status });
 

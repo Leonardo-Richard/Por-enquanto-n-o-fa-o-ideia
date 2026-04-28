@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useUiToast } from "@/context/ui-toast";
 import type { CompanyCertificateGetResponse } from "@repo/shared";
 import { certUploadMessageForCode, formatCnpj, type CertUploadErrorCode } from "@repo/shared";
 
@@ -38,6 +39,7 @@ export function AdnCertificateRegistrationForm({
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const { showToast } = useUiToast();
   const maxMb = clientCertUploadMaxMbHint();
 
   const refreshMeta = useCallback(async () => {
@@ -91,9 +93,13 @@ export function AdnCertificateRegistrationForm({
       if (r.status === 204) {
         setPassword("");
         setFile(null);
-        setSuccessMsg(
-          "Certificado registado. O servidor de recolha pode demorar alguns minutos a ficar pronto.",
-        );
+        const msg = "Certificado registado. O servidor de recolha pode demorar alguns minutos a ficar pronto.";
+        setSuccessMsg(msg);
+        showToast({
+          title: "Certificado registado",
+          description: "A infraestrutura de recolha pode levar alguns minutos para aplicar.",
+          tone: "success",
+        });
         await refreshMeta();
         onRegistered();
         return;
@@ -104,20 +110,24 @@ export function AdnCertificateRegistrationForm({
         code = j.error_code;
         if (j.message) {
           setFormErr(j.message);
+          showToast({ title: "Falha no registo", description: j.message, tone: "error" });
           return;
         }
       } catch {
         /* ignore */
       }
-      setFormErr(
-        code ? certUploadMessageForCode(code, maxMb) : "Não foi possível concluir o registo. Tente novamente.",
-      );
+      const msg =
+        code ? certUploadMessageForCode(code, maxMb) : "Não foi possível concluir o registo. Tente novamente.";
+      setFormErr(msg);
+      showToast({ title: "Falha no registo", description: msg, tone: "error" });
     } catch {
-      setFormErr("Não foi possível concluir o registo. Tente novamente.");
+      const msg = "Não foi possível concluir o registo. Tente novamente.";
+      setFormErr(msg);
+      showToast({ title: "Falha no registo", description: msg, tone: "error" });
     } finally {
       setBusy(false);
     }
-  }, [file, password, organizationId, companyId, maxMb, onRegistered, refreshMeta]);
+  }, [file, password, organizationId, companyId, maxMb, onRegistered, refreshMeta, showToast]);
 
   const onClear = useCallback(() => {
     setFile(null);

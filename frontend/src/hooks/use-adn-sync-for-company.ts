@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AdnSyncLastJob } from "@/lib/adn-sync-client";
 import { fetchAdnSyncStatus, postAdnSyncRequest } from "@/lib/adn-sync-client";
+import { useUiToast } from "@/context/ui-toast";
 
 export type AdnSyncPanelAccess = "loading" | "active" | "feature_off" | "forbidden" | "error";
 
@@ -10,7 +11,7 @@ export type AdnSyncPanelAccess = "loading" | "active" | "feature_off" | "forbidd
 export type AdnSyncActionTone = "none" | "success" | "error";
 
 const CONFIRM_TEXT =
-  "Pedir a busca de notas agora? O pedido entra na fila no portal; os ficheiros no disco dependem da pasta raiz da organização e do worker.";
+  "Pedir a busca de notas agora? O pedido entra na fila no portal e tentará recolha completa (todas as notas disponíveis no ADN para a empresa).";
 
 export type UseAdnSyncForCompanyArgs = {
   /** `company.id` da API */
@@ -27,6 +28,7 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionTone, setActionTone] = useState<AdnSyncActionTone>("none");
   const [busy, setBusy] = useState(false);
+  const { showToast } = useUiToast();
 
   const refresh = useCallback(async () => {
     setAccess("loading");
@@ -72,12 +74,19 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
     setActionMsg(null);
     setActionTone("none");
     try {
-      const r = await postAdnSyncRequest(organizationId, companyId, crypto.randomUUID());
+      const r = await postAdnSyncRequest(organizationId, companyId, crypto.randomUUID(), {
+        fetchMode: "all",
+      });
       if (r.kind === "accepted") {
         setActionTone("success");
         setActionMsg(
           "Pedido aceite: o job foi enfileirado no portal. Quando o job concluir, os XML/PDF podem ser espelhados na pasta raiz configurada (se aplicável ao seu ambiente).",
         );
+        showToast({
+          title: "Pedido enfileirado",
+          description: "A recolha começou no worker em segundo plano.",
+          tone: "success",
+        });
         await refresh();
         onSyncAccepted?.();
         return;
@@ -87,19 +96,34 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
         setActionMsg(
           r.message ?? "Apenas administradores da organização podem pedir sincronização ADN.",
         );
+        showToast({
+          title: "Sem permissão",
+          description: r.message ?? "Apenas administradores da organização podem pedir sincronização ADN.",
+          tone: "error",
+        });
         return;
       }
       if (r.kind === "rate_limited") {
         setActionTone("error");
         setActionMsg(r.message);
+        showToast({
+          title: "Muitos pedidos",
+          description: r.message,
+          tone: "error",
+        });
         return;
       }
       setActionTone("error");
       setActionMsg(r.message);
+      showToast({
+        title: "Falha ao enfileirar",
+        description: r.message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
-  }, [companyId, organizationId, onSyncAccepted, refresh]);
+  }, [companyId, organizationId, onSyncAccepted, refresh, showToast]);
 
   return {
     access,

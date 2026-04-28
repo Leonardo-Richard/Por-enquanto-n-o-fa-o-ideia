@@ -188,9 +188,15 @@ export async function handlePostCompanyCertificate(
         organizationId,
         companyId,
         bytes: buf,
+        password,
       });
       vaultRef = w.vaultRef;
-    } catch {
+    } catch (e) {
+      console.error("cert_upload.store_failed", {
+        organization_id: organizationId,
+        company_id: companyId,
+        error: e instanceof Error ? e.message : String(e),
+      });
       await gate.ctx.db.insert(companyCertificateAudits).values({
         organizationId,
         companyId,

@@ -35,8 +35,11 @@ pip install -r requirements.txt
 | `DATABASE_URL` | `postgresql://…` | Igual ao portal. |
 | `PORTAL_INTERNAL_URL` | `http://localhost:3000` | URL base onde o Next responde. |
 | `ADN_WORKER_HMAC_SECRET` | *(hex forte)* | **O mesmo** valor no `.env` do portal. |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | `https://<ref>.supabase.co` | Necessário para o worker descarregar o certificado do cofre (vault_ref `supabase-storage:`). |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(service role)* | Necessário para leitura privada de `adn-certificates`. |
 | `NFSE_DIST_ROOT` | *(opcional)* | Default: `<repo>/third_party/NFSE_dist`. |
 | `NFSE_DIST_CLIENTS_LOCAL_PATH` | `C:\secrets\clients.local.json` | Opcional: ficheiro com thumbprint / `senha_cert` / PFX (não versionar). |
+| `NFSE_CLEAN_BEFORE_RUN` | `1` | Opcional: limpa XML/PDF antigos do CNPJ antes da recolha (por defeito **não** limpa, melhor para fluxos grandes). |
 | `POLL_INTERVAL_SEC` | `15` | Intervalo quando não há jobs. |
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Só smoke/testes:** não chama `run_download_workflow` (valida fila + `PATCH` + uploads vazios). |
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
@@ -68,16 +71,21 @@ Fluxo por job:
 
 1. Reserva um job `queued` (org com `adn_sync_enabled`).
 2. Escreve `clients.json` no NFSE_dist com o CNPJ da empresa monitorada.
-3. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`).
-4. Executa `run_download_workflow()` (XML + PDF como no repositório original).
-5. Limpa XML/PDF antigos em `data/<CNPJ>/` (best-effort) e só envia artefactos com timestamp desta execução, evitando falso positivo com ficheiros antigos (`uploads/prepare` → PUT → `artifacts/commit`).
-6. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{CNPJ}\{system_code}\` (`mirror_local.py`).
-7. Em modo normal (sem `NFSE_BRIDGE_SKIP_NFSE_DIST=1`), se não houver nenhum XML/PDF da empresa no fim da execução, o job é marcado como `failed` para forçar nova tentativa operacional.
-8. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
+   - Se `summary_json.fetchMode == "all"` no job, reinicia checkpoint para `0` e faz varredura completa (histórico disponível no ADN, não só incremental).
+3. Se existir `company_certificates.vault_ref` activo (`supabase-storage:`), descarrega o PKCS#12 do cofre, materializa `certificates/<CNPJ>.pfx` e actualiza `clients.local.json` com `senha_cert`.
+4. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`) e filtra para o CNPJ do job.
+5. Executa `run_download_workflow()` (XML + PDF como no repositório original).
+6. Limpa XML/PDF antigos em `data/<CNPJ>/` (best-effort) e só envia artefactos com timestamp desta execução, evitando falso positivo com ficheiros antigos (`uploads/prepare` → PUT → `artifacts/commit`).
+7. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{CNPJ}\{system_code}\` (`mirror_local.py`).
+8. Em modo normal (sem `NFSE_BRIDGE_SKIP_NFSE_DIST=1`), se não houver nenhum XML/PDF da empresa no fim da execução, o job é marcado como `failed` para forçar nova tentativa operacional.
+9. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
+
+**Compatibilidade de layouts (ingestão):**
+- Quando o XML não traz chave de acesso ADN com 44 dígitos, o bridge gera uma chave técnica determinística (44 dígitos) por `(cnpj, nsu/doc_id)` para manter idempotência XML/PDF e permitir ingestão no portal sem descarte (`syntheticAccessKeys` no resumo do job).
 
 ## 4. Certificado e organização
 
-- O certificado **não** passa pelo browser: continua na VM do worker, como no NFSE_dist.
+- O browser envia o certificado para cofre privado; o worker materializa o PFX no host local antes da recolha NFSE_dist.
 - No portal: activar **Sincronização ADN** na organização (**Configurações**) e pedir sync na ficha da empresa.
 
 ## 5. Limitações conhecidas

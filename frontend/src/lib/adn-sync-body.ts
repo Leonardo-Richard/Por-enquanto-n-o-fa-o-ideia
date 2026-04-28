@@ -6,6 +6,7 @@ const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 /** Corpo *strict* POST .../sync (story ADN-04 Dev Notes). */
 export const adnPostSyncBodySchema = z
   .object({
+    fetchMode: z.enum(["incremental", "all"]).optional(),
     issuedFrom: z
       .string()
       .trim()
@@ -24,6 +25,9 @@ export type AdnPostSyncBody = z.infer<typeof adnPostSyncBodySchema>;
 /** Objecto canónico para *fingerprint* (chaves ordenadas, trim nos valores). */
 export function canonicalSyncBodyForFingerprint(body: AdnPostSyncBody): Record<string, string> {
   const out: Record<string, string> = {};
+  if (body.fetchMode) {
+    out.fetchMode = body.fetchMode;
+  }
   if (body.issuedFrom) {
     out.issuedFrom = body.issuedFrom.trim();
   }

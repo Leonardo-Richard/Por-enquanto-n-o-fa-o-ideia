@@ -5,6 +5,12 @@ import { getAdnSupabaseServiceClient } from "@/lib/adn-supabase-server";
 const mockStore = new Map<string, Buffer>();
 
 type CertUploadVaultDriver = "mock" | "supabase-storage";
+type CertificateVaultEnvelopeV1 = {
+  version: 1;
+  format: "pkcs12";
+  pkcs12Base64: string;
+  password: string;
+};
 
 export function clearCertUploadVaultMockForTests(): void {
   mockStore.clear();
@@ -60,11 +66,19 @@ export async function writeCertificateToVault(input: {
   organizationId: string;
   companyId: string;
   bytes: Buffer;
+  password: string;
 }): Promise<{ vaultRef: string }> {
+  const envelope: CertificateVaultEnvelopeV1 = {
+    version: 1,
+    format: "pkcs12",
+    pkcs12Base64: input.bytes.toString("base64"),
+    password: input.password,
+  };
+  const payload = Buffer.from(JSON.stringify(envelope), "utf-8");
   const driver = getCertUploadVaultDriver();
   if (driver === "mock") {
     const vaultRef = `mock:${randomUUID()}`;
-    mockStore.set(vaultRef, Buffer.from(input.bytes));
+    mockStore.set(vaultRef, payload);
     return { vaultRef };
   }
 
@@ -73,9 +87,9 @@ export async function writeCertificateToVault(input: {
   const objectPath = buildSupabaseObjectPath(input.organizationId, input.companyId);
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(objectPath, input.bytes, {
+    .upload(objectPath, payload, {
       upsert: false,
-      contentType: "application/x-pkcs12",
+      contentType: "application/json",
       cacheControl: "0",
     });
   if (error) {

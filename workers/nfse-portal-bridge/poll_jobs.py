@@ -21,11 +21,16 @@ import os
 import sys
 import time
 import traceback
+import json
 from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
 
+from cert_materialization import (
+    load_active_company_certificate_ref,
+    materialize_company_certificate_from_vault,
+)
 from nfse_runner import clear_company_data_directory, run_download_workflow_once, write_clients_json
 from mirror_local import load_org_mirror_context, mirror_data_directory_to_local
 from portal_artifacts import patch_job, sync_data_directory
@@ -70,7 +75,7 @@ def claim_next_job(conn: psycopg.Connection) -> dict | None:
         updated_at = now()
     FROM picked
     WHERE j.id = picked.id
-    RETURNING j.id, j.organization_id, j.company_id;
+    RETURNING j.id, j.organization_id, j.company_id, j.summary_json;
     """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql)
@@ -91,23 +96,58 @@ def load_company(conn: psycopg.Connection, company_id: str) -> dict:
     return row
 
 
+def _fetch_mode_from_job(job: dict) -> str:
+    raw = job.get("summary_json")
+    data = raw if isinstance(raw, dict) else {}
+    mode = str(data.get("fetchMode") or "incremental").strip().lower()
+    return "all" if mode == "all" else "incremental"
+
+
+def _reset_checkpoint_for_full_fetch(nfse_root: Path, cnpj: str) -> None:
+    cp = nfse_root / "data" / cnpj / "checkpoint.json"
+    cp.parent.mkdir(parents=True, exist_ok=True)
+    cp.write_text(json.dumps({"last_nsu": "0"}, ensure_ascii=False), encoding="utf-8")
+
+
 def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Path) -> None:
     oid = str(job["organization_id"])
     cid = str(job["company_id"])
     jid = str(job["id"])
     with psycopg.connect(dsn) as conn:
         co = load_company(conn, cid)
+        cert_ref = load_active_company_certificate_ref(conn, oid, cid)
     cnpj = str(co["cnpj_digits"])
     nome = str(co["trade_name"] or cnpj)
     run_started_epoch = time.time()
+    fetch_mode = _fetch_mode_from_job(job)
 
     write_clients_json(nfse, cnpj, nome)
-    cleanup = clear_company_data_directory(nfse, cnpj)
-    if cleanup["failed"] > 0:
+    if fetch_mode == "all":
+        _reset_checkpoint_for_full_fetch(nfse, cnpj)
         print(
-            f"[nfse-portal-bridge] Aviso: {cleanup['failed']} ficheiro(s) antigos não puderam ser removidos para {cnpj}.",
+            f"[nfse-portal-bridge] Modo fetch=all: checkpoint reiniciado para {cnpj}.",
             flush=True,
         )
+    cert_sync = materialize_company_certificate_from_vault(
+        organization_id=oid,
+        company_id=cid,
+        cnpj_digits=cnpj,
+        nfse_root=nfse,
+        vault_ref=cert_ref,
+    )
+    if cert_sync.get("materialized"):
+        print(
+            f"[nfse-portal-bridge] Certificado materializado do cofre para {cnpj}.",
+            flush=True,
+        )
+    cleanup_enabled = os.environ.get("NFSE_CLEAN_BEFORE_RUN", "").strip() == "1"
+    if cleanup_enabled:
+        cleanup = clear_company_data_directory(nfse, cnpj)
+        if cleanup["failed"] > 0:
+            print(
+                f"[nfse-portal-bridge] Aviso: {cleanup['failed']} ficheiro(s) antigos não puderam ser removidos para {cnpj}.",
+                flush=True,
+            )
     skip_nfse_dist = os.environ.get("NFSE_BRIDGE_SKIP_NFSE_DIST", "").strip() == "1"
     if skip_nfse_dist:
         print(
@@ -154,10 +194,10 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         }
 
     artifacts_total = counts["xml"] + counts["pdf"]
-    if artifacts_total <= 0 and not skip_nfse_dist:
+    if artifacts_total <= 0 and not skip_nfse_dist and not bool(cert_sync.get("materialized")):
         raise NoCompanyArtifactsError(
-            "Nenhum XML/PDF da empresa foi encontrado após execução do job. "
-            "O job foi marcado como failed para forçar nova tentativa."
+            "Nenhum XML/PDF da empresa foi encontrado após execução do job e não houve "
+            "materialização de certificado a partir do cofre. O job foi marcado como failed."
         )
 
     patch_job(
@@ -169,9 +209,14 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         summary={
             "phase": "completed",
             "engine": "NFSE_dist",
+            "fetchMode": fetch_mode,
             "artifactsXml": counts["xml"],
             "artifactsPdf": counts["pdf"],
             "skipped": counts["skipped"],
+            "syntheticAccessKeys": counts.get("syntheticKey", 0),
+            "noNewArtifacts": artifacts_total <= 0,
+            "certificateMaterialized": bool(cert_sync.get("materialized")),
+            "certificateMaterializedReason": str(cert_sync.get("reason") or ""),
             **mirror_summary,
         },
     )

@@ -26,6 +26,12 @@ export type AdnSyncPostResult =
   | { kind: "rate_limited"; retryAfter: string | null; message: string }
   | { kind: "other_error"; message: string };
 
+export type AdnSyncPostPayload = {
+  fetchMode?: "incremental" | "all";
+  issuedFrom?: string;
+  issuedTo?: string;
+};
+
 const MAX_CONCURRENT_ADN_GETS = 3;
 let adnGetInFlight = 0;
 const adnGetWaitQueue: Array<() => void> = [];
@@ -112,6 +118,7 @@ export async function postAdnSyncRequest(
   organizationId: string,
   companyId: string,
   idempotencyKey: string,
+  payload: AdnSyncPostPayload = {},
   fetchFn: typeof fetch = fetch,
 ): Promise<AdnSyncPostResult> {
   const r = await fetchFn(buildAdnSyncSyncUrl(organizationId, companyId), {
@@ -121,7 +128,7 @@ export async function postAdnSyncRequest(
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify(payload),
   });
   return interpretAdnSyncPostResponse(r);
 }
