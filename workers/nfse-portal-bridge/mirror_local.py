@@ -38,7 +38,8 @@ def mirror_data_directory_to_local(
     disabled_env: bool,
 ) -> dict[str, Any]:
     """
-    Retorna contagens para summaryJson: mirrorWritten, mirrorFailed, mirrorHadFailures, mirrorErrorsSample.
+    Retorna contagens para summaryJson: mirrorWritten, mirrorFailed, mirrorHadFailures,
+    mirrorErrorsSample, mirrorDestinationPath, mirrorSourceXmlCount, mirrorOperationalHint.
     """
     out: dict[str, Any] = {
         "mirrorWritten": 0,
@@ -47,25 +48,46 @@ def mirror_data_directory_to_local(
     }
     if disabled_env:
         log.info("[mirror_local] NFSE_LOCAL_MIRROR_DISABLED=1 — espelho ignorado.")
+        out["mirrorOperationalHint"] = (
+            "Espelho desactivado: defina NFSE_LOCAL_MIRROR_DISABLED diferente de «1» no ambiente do worker."
+        )
+        out["mirrorSkipReason"] = "disabled_env"
         return out
 
     r = (root or "").strip()
     if not r:
         log.info("[mirror_local] Sem local_download_root — espelho ignorado.")
+        out["mirrorOperationalHint"] = (
+            "Sem pasta raiz na organização (local_download_root). Configure em Configurações do portal."
+        )
+        out["mirrorSkipReason"] = "no_local_download_root"
         return out
 
     safe_sys = sanitize_system_code(system_code)
     data_dir = nfse_root / "data" / cnpj_digits
-    if not data_dir.is_dir():
-        log.info("[mirror_local] data_dir inexistente: %s", data_dir)
-        return out
-
     # Requisito operacional: uma única pasta no root, sem subpastas por CNPJ/código.
     # Formato: "<codigo> - <cnpj>".
-    dest_root = Path(r) / f"{safe_sys} - {cnpj_digits}"
-    errors_sample: list[str] = []
+    dest_root = (Path(r) / f"{safe_sys} - {cnpj_digits}").resolve()
+    out["mirrorDestinationPath"] = str(dest_root)
+    out["mirrorSourceCnpj"] = cnpj_digits
+    out["mirrorSourceSystemCode"] = safe_sys
 
-    for xml_path in data_dir.rglob("*.xml"):
+    if not data_dir.is_dir():
+        log.info("[mirror_local] data_dir inexistente: %s", data_dir)
+        out["mirrorSourceXmlCount"] = 0
+        out["mirrorDataDirExpected"] = str(data_dir.resolve())
+        out["mirrorOperationalHint"] = (
+            f"Pasta de origem inexistente no NFSE_dist: {data_dir}. "
+            f"Confirme NFSE_DIST_ROOT e se o CNPJ {cnpj_digits} coincide com a empresa do job."
+        )
+        out["mirrorSkipReason"] = "no_nfse_data_directory"
+        return out
+
+    errors_sample: list[str] = []
+    xml_paths = sorted(data_dir.rglob("*.xml"), key=lambda p: str(p))
+    out["mirrorSourceXmlCount"] = len(xml_paths)
+
+    for xml_path in xml_paths:
         try:
             xml_text = xml_path.read_text(encoding="utf-8")
         except OSError as e:
@@ -119,12 +141,34 @@ def mirror_data_directory_to_local(
         out["mirrorFailed"],
         r[:3] + "…" if len(r) > 8 else r,
     )
-    if out["mirrorWritten"] == 0 and out["mirrorFailed"] == 0 and r:
-        print(
-            f"[mirror_local] Nenhum XML/PDF copiado para {dest_root} "
-            f"(pasta origem NFSE_dist: existe={data_dir.is_dir()}).",
-            flush=True,
-        )
+
+    if out["mirrorWritten"] == 0:
+        if out["mirrorSourceXmlCount"] == 0:
+            hint = (
+                f"Nenhum .xml em {data_dir} (recursivo). O NFSE_dist não gerou ficheiros para este CNPJ neste job, "
+                f"ou usou outra pasta de dados. Destino que seria usado: {dest_root}"
+            )
+            out["mirrorSkipReason"] = "no_xml_in_data_directory"
+        elif out["mirrorFailed"] > 0:
+            hint = (
+                f"Havia {out['mirrorSourceXmlCount']} XML na origem mas todas as cópias falharam "
+                f"(permissões, OneDrive «só online», antivírus, caminho inválido). Destino: {dest_root}"
+            )
+            out["mirrorSkipReason"] = "copy_failures"
+        else:
+            hint = (
+                f"Havia {out['mirrorSourceXmlCount']} XML mas 0 cópias e 0 falhas registadas — "
+                f"verifique conteúdo dos XML (doc_id vazio). Destino: {dest_root}"
+            )
+            out["mirrorSkipReason"] = "zero_writes_no_failures"
+        out["mirrorOperationalHint"] = hint[:500]
+        print(f"[mirror_local] {hint}", flush=True)
+    else:
+        out["mirrorOperationalHint"] = (
+            f"Copiados {out['mirrorWritten']} ficheiros para {dest_root} "
+            f"(origem: {out['mirrorSourceXmlCount']} XML encontrados)."
+        )[:500]
+
     return out
 
 

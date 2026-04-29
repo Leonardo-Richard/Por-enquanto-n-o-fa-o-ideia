@@ -295,11 +295,19 @@ export function AdnSyncPanel({ company }: { company: Company }) {
                 <p className="font-medium text-black/80 dark:text-white/75">Gravação no disco (worker)</p>
                 {lastJobMirrorSummary.hasMirrorMetrics ? (
                   <p className="mt-1 text-black/65 dark:text-white/60">
-                    {lastJobMirrorSummary.written} ficheiro(s) copiado(s) para a pasta raiz neste job
+                    {lastJobMirrorSummary.written} ficheiro(s) copiado(s) neste job
                     {lastJobMirrorSummary.failed > 0
                       ? ` · ${lastJobMirrorSummary.failed} falha(s)`
                       : ""}
                     .
+                    {lastJobMirrorSummary.sourceXmlCount !== null &&
+                    lastJobMirrorSummary.engine === "NFSE_dist" ? (
+                      <span className="ml-1">
+                        {" "}
+                        XML encontrados na origem NFSE_dist:{" "}
+                        <span className="font-mono tabular-nums">{lastJobMirrorSummary.sourceXmlCount}</span>.
+                      </span>
+                    ) : null}
                   </p>
                 ) : (
                   <p className="mt-1 text-amber-900/90 dark:text-amber-100/85">
@@ -307,10 +315,21 @@ export function AdnSyncPanel({ company }: { company: Company }) {
                     incompleto). Actualize o <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">nfse-portal-bridge</code>.
                   </p>
                 )}
+                {lastJobMirrorSummary.destinationPath ? (
+                  <p className="mt-2 break-all font-mono text-[11px] text-black/70 dark:text-white/65">
+                    Caminho usado pelo worker: {lastJobMirrorSummary.destinationPath}
+                  </p>
+                ) : null}
+                {lastJobMirrorSummary.operationalHint ? (
+                  <p className="mt-2 text-sm leading-relaxed text-amber-950/95 dark:text-amber-50/90">
+                    {lastJobMirrorSummary.operationalHint}
+                  </p>
+                ) : null}
                 {lastJobMirrorSummary.hasMirrorMetrics &&
                 lastJobMirrorSummary.written === 0 &&
                 lastJobMirrorSummary.failed === 0 &&
-                rootConfiguredForHints ? (
+                rootConfiguredForHints &&
+                !lastJobMirrorSummary.operationalHint ? (
                   <p className="mt-2 text-amber-900/90 dark:text-amber-100/85">
                     Com pasta raiz definida, 0 cópias costuma indicar que o processo{" "}
                     <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">poll_jobs.py</code>{" "}

@@ -11,6 +11,13 @@ export type AdnJobMirrorSummaryUi = {
   hadFailures: boolean;
   errorsSample: string[];
   engine: string | undefined;
+  /** Caminho absoluto onde o worker tentou gravar (subpasta «código - CNPJ»). */
+  destinationPath: string | null;
+  /** Quantos .xml o worker encontrou em NFSE_dist/data/<CNPJ>/ (só fluxo NFSE_dist). */
+  sourceXmlCount: number | null;
+  /** Mensagem curta vinda do worker (diagnóstico). */
+  operationalHint: string | null;
+  skipReason: string | null;
 };
 
 function num(v: unknown): number {
@@ -33,8 +40,9 @@ export function mirrorSummaryFromJobSummary(
   const engine = typeof summary.engine === "string" ? summary.engine : undefined;
   const hasMirrorMetrics = "mirrorWritten" in summary || "mirrorFailed" in summary;
   const mirrorRelevantEngine = engine === "NFSE_dist" || engine === "remirror_from_storage";
+  const hasOperationalHint = typeof summary.mirrorOperationalHint === "string";
 
-  if (!hasMirrorMetrics && !mirrorRelevantEngine) {
+  if (!hasMirrorMetrics && !mirrorRelevantEngine && !hasOperationalHint) {
     return null;
   }
 
@@ -46,6 +54,26 @@ export function mirrorSummaryFromJobSummary(
     ? summary.mirrorErrorsSample.filter((x): x is string => typeof x === "string").slice(0, 3)
     : [];
 
+  const destinationPath =
+    typeof summary.mirrorDestinationPath === "string" && summary.mirrorDestinationPath.trim().length > 0
+      ? summary.mirrorDestinationPath.trim()
+      : null;
+  const sourceXmlRaw = summary.mirrorSourceXmlCount;
+  const sourceXmlCount =
+    typeof sourceXmlRaw === "number" && Number.isFinite(sourceXmlRaw)
+      ? sourceXmlRaw
+      : typeof sourceXmlRaw === "string" && sourceXmlRaw.trim() !== ""
+        ? Number(sourceXmlRaw)
+        : null;
+  const operationalHint =
+    typeof summary.mirrorOperationalHint === "string" && summary.mirrorOperationalHint.trim().length > 0
+      ? summary.mirrorOperationalHint.trim()
+      : null;
+  const skipReason =
+    typeof summary.mirrorSkipReason === "string" && summary.mirrorSkipReason.trim().length > 0
+      ? summary.mirrorSkipReason.trim()
+      : null;
+
   return {
     hasMirrorMetrics,
     written,
@@ -53,5 +81,9 @@ export function mirrorSummaryFromJobSummary(
     hadFailures,
     errorsSample: sample,
     engine,
+    destinationPath,
+    sourceXmlCount: sourceXmlCount !== null && Number.isFinite(sourceXmlCount) ? sourceXmlCount : null,
+    operationalHint,
+    skipReason,
   };
 }

@@ -115,6 +115,12 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
         "mirrorWritten": written,
         "mirrorFailed": failed,
         "mirrorHadFailures": failed > 0,
+        "mirrorDestinationPath": str(dest_root),
+        "mirrorOperationalHint": (
+            f"Regravados {written} ficheiro(s) a partir do Storage em {dest_root}."
+            if written > 0
+            else f"Nada gravado em {dest_root}; falhas={failed}. Verifique permissões da pasta e credenciais Supabase no worker."
+        )[:500],
     }
     if errors_sample:
         out_summary["mirrorErrorsSample"] = errors_sample

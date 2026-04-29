@@ -197,6 +197,10 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             "mirrorFailed": 0,
             "mirrorHadFailures": True,
             "mirrorErrorsSample": [f"{err_hint}:{e!s}"[:200]],
+            "mirrorOperationalHint": (
+                f"Erro antes do espelho: {type(e).__name__}: {e!s}"[:500]
+            ),
+            "mirrorSkipReason": "mirror_context_error",
         }
 
     artifacts_total = counts["xml"] + counts["pdf"]
