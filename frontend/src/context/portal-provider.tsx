@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Company, Execution, PortalSettings } from "@repo/shared";
-import { sanitizeSystemCodeForMirrorPath } from "@/lib/mirror-destination-preview";
+import { mirrorDestinationFolderName } from "@/lib/mirror-destination-preview";
 
 const STORAGE_KEY = "portal-automacao-nf.data.v1";
 
@@ -50,7 +50,7 @@ type PortalContextValue = {
   settings: PortalSettings;
   appendExecution: (execution: Execution) => void;
   updateSettings: (patch: Partial<PortalSettings>) => void;
-  pathForCompany: (company: Pick<Company, "cnpjDigits" | "systemCode">) => string;
+  pathForCompany: (company: Pick<Company, "cnpjDigits" | "systemCode" | "tradeName">) => string;
 };
 
 const PortalContext = createContext<PortalContextValue | null>(null);
@@ -76,10 +76,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   }, [hydrated, executions, settings]);
 
   const pathForCompany = useCallback(
-    (company: Pick<Company, "cnpjDigits" | "systemCode">) => {
+    (company: Pick<Company, "cnpjDigits" | "systemCode" | "tradeName">) => {
       const root = settings.localRootPath.replace(/[/\\]+$/, "");
-      const safeCode = sanitizeSystemCodeForMirrorPath(company.systemCode);
-      return `${root}\\${safeCode} - ${company.cnpjDigits}`;
+      const sub = mirrorDestinationFolderName(
+        company.systemCode,
+        company.tradeName,
+        company.cnpjDigits,
+      );
+      return `${root}\\${sub}`;
     },
     [settings.localRootPath],
   );

@@ -227,6 +227,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             root=ctx.get("root"),
             cnpj_digits=str(ctx.get("cnpj_digits") or cnpj),
             system_code=str(ctx.get("system_code") or ""),
+            trade_name=str(ctx.get("trade_name") or ""),
             nfse_root=nfse,
             disabled_env=disabled,
         )

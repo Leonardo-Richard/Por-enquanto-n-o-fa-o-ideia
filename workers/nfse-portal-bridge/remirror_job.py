@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from cert_materialization import _download_supabase_object
 from job_logging import job_log
 from job_summary import summary_as_dict
-from mirror_local import load_org_mirror_context, sanitize_system_code
+from mirror_local import dominio_mirror_folder_name, load_org_mirror_context
 from portal_artifacts import patch_job
 
 
@@ -80,8 +80,12 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
         return
 
     cnpj = str(ctx.get("cnpj_digits") or "")
-    safe_sys = sanitize_system_code(str(ctx.get("system_code") or ""))
-    dest_root = Path(root) / f"{safe_sys} - {cnpj}"
+    folder = dominio_mirror_folder_name(
+        system_code=str(ctx.get("system_code") or ""),
+        trade_name=str(ctx.get("trade_name") or ""),
+        cnpj_digits=cnpj,
+    )
+    dest_root = Path(root) / folder
 
     if not rows:
         fail_job(portal_url, secret, oid, jid, "Nenhum artefacto encontrado para o job de origem.")

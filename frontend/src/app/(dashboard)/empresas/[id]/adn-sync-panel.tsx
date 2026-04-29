@@ -230,7 +230,8 @@ export function AdnSyncPanel({ company }: { company: Company }) {
               ficheiros directamente pelo browser. Os XML e PDF no disco do servidor de recolha
               dependem da pasta raiz configurada para a organização e do worker. O worker grava
               dentro de uma <strong className="font-medium">subpasta</strong> com o nome{" "}
-              <span className="font-mono text-[11px]">«código do sistema - CNPJ»</span>, não na raiz
+              <span className="font-mono text-[11px]">«Código-Apelido»</span> (como na Domínio Web: código
+              e nome fantasia da empresa neste portal, sem espaços em volta do hífen), não na raiz
               directamente.
             </p>
             <div className="mt-2">
@@ -240,6 +241,7 @@ export function AdnSyncPanel({ company }: { company: Company }) {
                   pathPreview={mirrorDestinationPathPreview(
                     String(settingsData.localDownloadRoot).trim(),
                     company.systemCode,
+                    company.tradeName,
                     company.cnpjDigits,
                   )}
                 />

@@ -21,7 +21,7 @@ _INVALID_SYS = re.compile(r'[<>:"|?*\\\x00-\x1f]')
 
 
 def sanitize_system_code(raw: str) -> str:
-    """Componente de pasta seguro (FR6 / arquitectura LM §7.1)."""
+    """Componente de pasta seguro (legado / segmento «código»)."""
     s = _INVALID_SYS.sub("_", (raw or "").strip())
     s = re.sub(r"_+", "_", s).strip("_")
     if not s:
@@ -29,11 +29,44 @@ def sanitize_system_code(raw: str) -> str:
     return s[:80]
 
 
+def sanitize_dominio_codigo_segment(raw: str) -> str:
+    """Código da empresa (ex.: Domínio Web): sem hífen interno — o único «-» separa código de apelido."""
+    s = _INVALID_SYS.sub("_", (raw or "").strip())
+    s = s.replace("-", "_")
+    s = re.sub(r"_+", "_", s).strip("_")
+    if not s:
+        return "0"
+    return s[:80]
+
+
+def sanitize_dominio_apelido_segment(raw: str) -> str:
+    """Apelido / nome fantasia: espaços internos permitidos (ex.: «EXEMPLO SP»); sem caracteres inválidos no Windows."""
+    s = _INVALID_SYS.sub("_", (raw or "").strip())
+    s = s.replace("-", "_")
+    s = re.sub(r"\s+", " ", s).strip()
+    s = s.rstrip(". ")
+    if not s:
+        return "EMPRESA"
+    return s[:120]
+
+
+def dominio_mirror_folder_name(*, system_code: str, trade_name: str, cnpj_digits: str) -> str:
+    """
+    Padrão alinhado à Central Domínio (rotinas automáticas): «Código-Apelido», sem espaços em volta do traço.
+    O utilizador deve alinhar system_code ao código da empresa na Domínio e trade_name ao apelido.
+    """
+    codigo = sanitize_dominio_codigo_segment(system_code)
+    apelido_raw = (trade_name or "").strip()
+    apelido = sanitize_dominio_apelido_segment(apelido_raw) if apelido_raw else sanitize_dominio_apelido_segment(cnpj_digits)
+    return f"{codigo}-{apelido}"
+
+
 def mirror_data_directory_to_local(
     *,
     root: str | None,
     cnpj_digits: str,
     system_code: str,
+    trade_name: str,
     nfse_root: Path,
     disabled_env: bool,
 ) -> dict[str, Any]:
@@ -63,14 +96,16 @@ def mirror_data_directory_to_local(
         out["mirrorSkipReason"] = "no_local_download_root"
         return out
 
-    safe_sys = sanitize_system_code(system_code)
+    folder = dominio_mirror_folder_name(
+        system_code=system_code, trade_name=trade_name, cnpj_digits=cnpj_digits
+    )
     data_dir = nfse_root / "data" / cnpj_digits
-    # Requisito operacional: uma única pasta no root, sem subpastas por CNPJ/código.
-    # Formato: "<codigo> - <cnpj>".
-    dest_root = (Path(r) / f"{safe_sys} - {cnpj_digits}").resolve()
+    # Uma pasta no root: «Código-Apelido» (Domínio Web / rotinas automáticas), sem espaços em volta do hífen.
+    dest_root = (Path(r) / folder).resolve()
     out["mirrorDestinationPath"] = str(dest_root)
     out["mirrorSourceCnpj"] = cnpj_digits
-    out["mirrorSourceSystemCode"] = safe_sys
+    out["mirrorSourceSystemCode"] = sanitize_system_code(system_code)
+    out["mirrorFolderPattern"] = "dominio_codigo_apelido"
 
     if not data_dir.is_dir():
         log.info("[mirror_local] data_dir inexistente: %s", data_dir)
@@ -173,11 +208,11 @@ def mirror_data_directory_to_local(
 
 
 def load_org_mirror_context(conn: Any, organization_id: str, company_id: str) -> dict[str, str | None]:
-    """organization.local_download_root + company.system_code + cnpj_digits."""
+    """organization.local_download_root + company.system_code, trade_name, cnpj_digits."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT o.local_download_root AS root, c.system_code, c.cnpj_digits
+            SELECT o.local_download_root AS root, c.system_code, c.cnpj_digits, c.trade_name
             FROM organizations o
             INNER JOIN companies c
               ON c.organization_id = o.id AND c.id = %s
@@ -193,4 +228,5 @@ def load_org_mirror_context(conn: Any, organization_id: str, company_id: str) ->
         "root": row["root"],
         "system_code": str(row["system_code"] or ""),
         "cnpj_digits": str(row["cnpj_digits"] or ""),
+        "trade_name": str(row["trade_name"] or ""),
     }
