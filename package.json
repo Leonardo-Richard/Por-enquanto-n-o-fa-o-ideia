@@ -2,12 +2,18 @@
   "name": "portal-automacao-nf",
   "private": true,
   "packageManager": "npm@11.9.0",
-  "workspaces": ["frontend", "backend", "packages/*"],
+  "workspaces": [
+    "frontend",
+    "backend",
+    "packages/*"
+  ],
   "scripts": {
     "probe:pooler": "npm run probe:pooler -w frontend",
     "vendor:nfse-dist": "node scripts/vendor-nfse-dist.mjs",
     "force:adn-bridge": "node scripts/run-adn-bridge-force-once.mjs",
     "smoke:adn-bridge": "node scripts/run-adn-bridge-smoke-once.mjs",
+    "worker:adn-bridge": "node scripts/run-adn-bridge-watch.mjs",
+    "dev:with-adn-bridge": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"npm run dev:frontend\" \"npm run worker:adn-bridge\"",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "dev": "turbo dev",
@@ -17,6 +23,7 @@
     "test": "turbo run test"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "is-regex": "^1.2.1",
     "turbo": "^2.4.4",
     "typescript": "^5.7.3"

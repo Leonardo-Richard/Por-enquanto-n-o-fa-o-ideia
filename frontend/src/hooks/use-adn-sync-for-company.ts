@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AdnSyncLastJob } from "@/lib/adn-sync-client";
+import type { AdnSyncLastJob, AdnSyncRecentJob } from "@/lib/adn-sync-client";
 import { fetchAdnSyncStatus, postAdnSyncRequest } from "@/lib/adn-sync-client";
 import { useUiToast } from "@/context/ui-toast";
 
@@ -55,6 +55,7 @@ export type UseAdnSyncForCompanyArgs = {
 export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted }: UseAdnSyncForCompanyArgs) {
   const [access, setAccess] = useState<AdnSyncPanelAccess>("loading");
   const [lastJob, setLastJob] = useState<AdnSyncLastJob | null>(null);
+  const [recentJobs, setRecentJobs] = useState<AdnSyncRecentJob[]>([]);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionTone, setActionTone] = useState<AdnSyncActionTone>("none");
   const [busy, setBusy] = useState(false);
@@ -74,11 +75,13 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
       if (result.kind === "feature_off") {
         setAccess("feature_off");
         setLastJob(null);
+        setRecentJobs([]);
         return;
       }
       if (result.kind === "forbidden") {
         setAccess("forbidden");
         setLastJob(null);
+        setRecentJobs([]);
         return;
       }
       if (result.kind === "error") {
@@ -86,10 +89,12 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
           setAccess("error");
         }
         setLastJob(null);
+        setRecentJobs([]);
         return;
       }
       setAccess("active");
       setLastJob(result.lastJob);
+      setRecentJobs(result.recentJobs);
     },
     [companyId, organizationId],
   );
@@ -185,13 +190,64 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
     }
   }, [companyId, lastJob, organizationId, onSyncAccepted, refresh, showToast]);
 
+  const requestRemirror = useCallback(
+    async (sourceJobId: string) => {
+      setBusy(true);
+      setActionMsg(null);
+      setActionTone("none");
+      try {
+        const r = await postAdnSyncRequest(organizationId, companyId, crypto.randomUUID(), {
+          remirrorFromJobId: sourceJobId,
+        });
+        if (r.kind === "accepted") {
+          setActionTone("success");
+          setActionMsg(
+            "Pedido aceite: o worker vai regravar na pasta raiz os XML/PDF já guardados no portal para esse job (quando o disco e o serviço de recolha estiverem configurados).",
+          );
+          showToast({
+            title: "Espelho na fila",
+            description: "O job de regravação foi enfileirado.",
+            tone: "success",
+          });
+          await refresh({ silent: true });
+          onSyncAccepted?.();
+          return;
+        }
+        if (r.kind === "forbidden") {
+          setActionTone("error");
+          setActionMsg(r.message ?? "Sem permissão.");
+          showToast({
+            title: "Sem permissão",
+            description: r.message ?? "Sem permissão.",
+            tone: "error",
+          });
+          return;
+        }
+        if (r.kind === "rate_limited") {
+          setActionTone("error");
+          setActionMsg(r.message);
+          showToast({ title: "Muitos pedidos", description: r.message, tone: "error" });
+          return;
+        }
+        setActionTone("error");
+        setActionMsg(r.message);
+        showToast({ title: "Não foi possível enfileirar", description: r.message, tone: "error" });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [companyId, organizationId, onSyncAccepted, refresh, showToast],
+  );
+
   return {
     access,
     lastJob,
+    recentJobs,
     busy,
     actionMsg,
     actionTone,
     refresh,
     requestSync,
+    requestRemirror,
   };
 }

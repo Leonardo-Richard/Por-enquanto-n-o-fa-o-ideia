@@ -119,6 +119,12 @@ def mirror_data_directory_to_local(
         out["mirrorFailed"],
         r[:3] + "…" if len(r) > 8 else r,
     )
+    if out["mirrorWritten"] == 0 and out["mirrorFailed"] == 0 and r:
+        print(
+            f"[mirror_local] Nenhum XML/PDF copiado para {dest_root} "
+            f"(pasta origem NFSE_dist: existe={data_dir.is_dir()}).",
+            flush=True,
+        )
     return out
 
 

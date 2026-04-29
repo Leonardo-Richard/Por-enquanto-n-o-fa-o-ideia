@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Company, Execution, PortalSettings } from "@repo/shared";
+import { sanitizeSystemCodeForMirrorPath } from "@/lib/mirror-destination-preview";
 
 const STORAGE_KEY = "portal-automacao-nf.data.v1";
 
@@ -23,12 +24,6 @@ const defaultSettings: PortalSettings = {
   notifyEmailOnFailure: true,
   timezone: "America/Sao_Paulo",
 };
-
-function sanitizeSystemCodeForPath(raw: string): string {
-  const replaced = raw.replace(/[<>:"|?*\\/\u0000-\u001F]/g, "_").trim();
-  const compact = replaced.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
-  return compact || "system";
-}
 
 function loadPersisted(): Persisted {
   if (typeof window === "undefined") {
@@ -83,7 +78,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const pathForCompany = useCallback(
     (company: Pick<Company, "cnpjDigits" | "systemCode">) => {
       const root = settings.localRootPath.replace(/[/\\]+$/, "");
-      const safeCode = sanitizeSystemCodeForPath(company.systemCode);
+      const safeCode = sanitizeSystemCodeForMirrorPath(company.systemCode);
       return `${root}\\${safeCode} - ${company.cnpjDigits}`;
     },
     [settings.localRootPath],

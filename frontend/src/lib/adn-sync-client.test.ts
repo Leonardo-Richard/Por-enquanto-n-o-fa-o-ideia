@@ -25,13 +25,13 @@ describe("interpretAdnSyncGetResponse", () => {
     };
     const r = new Response(JSON.stringify({ lastJob: job }), { status: 200 });
     const out = await interpretAdnSyncGetResponse(r);
-    expect(out).toEqual({ kind: "active", lastJob: job });
+    expect(out).toEqual({ kind: "active", lastJob: job, recentJobs: [] });
   });
 
   it("200 → active sem lastJob", async () => {
     const r = new Response(JSON.stringify({ lastJob: null }), { status: 200 });
     const out = await interpretAdnSyncGetResponse(r);
-    expect(out).toEqual({ kind: "active", lastJob: null });
+    expect(out).toEqual({ kind: "active", lastJob: null, recentJobs: [] });
   });
 
   it("404 → feature_off", async () => {

@@ -17,14 +17,31 @@ export const adnPostSyncBodySchema = z
       .trim()
       .regex(dateRe, "issuedTo deve ser YYYY-MM-DD.")
       .optional(),
+    /** Enfileira job só para regravar artefactos já no Storage na pasta raiz local (worker). */
+    remirrorFromJobId: z.string().uuid().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.remirrorFromJobId) {
+      if (val.fetchMode !== undefined || val.issuedFrom !== undefined || val.issuedTo !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "remirrorFromJobId não pode ser combinado com fetchMode, issuedFrom ou issuedTo.",
+        });
+      }
+    }
+  });
 
 export type AdnPostSyncBody = z.infer<typeof adnPostSyncBodySchema>;
 
 /** Objecto canónico para *fingerprint* (chaves ordenadas, trim nos valores). */
 export function canonicalSyncBodyForFingerprint(body: AdnPostSyncBody): Record<string, string> {
   const out: Record<string, string> = {};
+  if (body.remirrorFromJobId) {
+    out.remirrorFromJobId = body.remirrorFromJobId;
+    return out;
+  }
   if (body.fetchMode) {
     out.fetchMode = body.fetchMode;
   }

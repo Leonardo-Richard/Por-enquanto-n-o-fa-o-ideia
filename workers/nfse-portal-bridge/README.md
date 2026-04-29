@@ -48,7 +48,15 @@ pip install -r requirements.txt
 
 ## 3. Arranque
 
-Com o portal (`npm run dev`) e Postgres activos:
+**Monorepo (recomendado em dev):** na raiz do repositório, com `DATABASE_URL` e `ADN_WORKER_HMAC_SECRET` em `.env` ou `frontend/.env.local`, e venv Python com `pip install -r workers/nfse-portal-bridge/requirements.txt`:
+
+```bash
+npm run dev:with-adn-bridge
+```
+
+Isto inicia o Next (`npm run dev -w frontend`) e o worker (`poll_jobs.py`) em paralelo. Só o worker: `npm run worker:adn-bridge`.
+
+**Manual (produção ou depuração):** com o portal e Postgres activos:
 
 ```bash
 cd workers/nfse-portal-bridge
@@ -76,9 +84,13 @@ Fluxo por job:
 4. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`) e filtra para o CNPJ do job.
 5. Executa `run_download_workflow()` (XML + PDF como no repositório original).
 6. Limpa XML/PDF antigos em `data/<CNPJ>/` (best-effort) e só envia artefactos com timestamp desta execução, evitando falso positivo com ficheiros antigos (`uploads/prepare` → PUT → `artifacts/commit`).
-7. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{CNPJ}\{system_code}\` (`mirror_local.py`).
+7. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{codigo_sistema\}\ -\ \{CNPJ}\` (`mirror_local.py`).
 8. Em modo normal (sem `NFSE_BRIDGE_SKIP_NFSE_DIST=1`), se não houver nenhum XML/PDF da empresa no fim da execução, o job é marcado como `failed` para forçar nova tentativa operacional.
 9. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
+
+### Regravar na pasta raiz (job já executado)
+
+No portal, na ficha da empresa (ADN), é possível pedir um job **`retry`** com `remirrorFromJobId` no `summary_json`: o worker **não** volta ao ADN; apenas descarrega do Storage Supabase os artefactos já ligados a esse job e volta a gravá-los na pasta raiz (`remirror_job.py`). Requer `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente do worker (igual à materialização do certificado).
 
 **Compatibilidade de layouts (ingestão):**
 - Quando o XML não traz chave de acesso ADN com 44 dígitos, o bridge gera uma chave técnica determinística (44 dígitos) por `(cnpj, nsu/doc_id)` para manter idempotência XML/PDF e permitir ingestão no portal sem descarte (`syntheticAccessKeys` no resumo do job).

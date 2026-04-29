@@ -34,6 +34,8 @@ from cert_materialization import (
 from nfse_runner import clear_company_data_directory, run_download_workflow_once, write_clients_json
 from mirror_local import load_org_mirror_context, mirror_data_directory_to_local
 from portal_artifacts import patch_job, sync_data_directory
+from job_summary import summary_as_dict
+from remirror_job import process_remirror_job
 
 
 class NoCompanyArtifactsError(RuntimeError):
@@ -97,8 +99,7 @@ def load_company(conn: psycopg.Connection, company_id: str) -> dict:
 
 
 def _fetch_mode_from_job(job: dict) -> str:
-    raw = job.get("summary_json")
-    data = raw if isinstance(raw, dict) else {}
+    data = summary_as_dict(job.get("summary_json"))
     mode = str(data.get("fetchMode") or "incremental").strip().lower()
     return "all" if mode == "all" else "incremental"
 
@@ -113,6 +114,11 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     oid = str(job["organization_id"])
     cid = str(job["company_id"])
     jid = str(job["id"])
+    job_summary = summary_as_dict(job.get("summary_json"))
+    if job_summary.get("remirrorFromJobId"):
+        process_remirror_job(job, dsn, portal_url, secret)
+        print(f"[nfse-portal-bridge] Job {jid} (remirror) concluído.", flush=True)
+        return
     with psycopg.connect(dsn) as conn:
         co = load_company(conn, cid)
         cert_ref = load_active_company_certificate_ref(conn, oid, cid)

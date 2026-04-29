@@ -1,7 +1,7 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { adnPostSyncBodySchema, canonicalSyncBodyForFingerprint, fingerprintFromCanonical } from "@/lib/adn-sync-body";
-import { adnSyncJobs } from "@repo/db";
+import { adnArtifacts, adnSyncJobs } from "@repo/db";
 import { insertAuditEvent } from "@/lib/audit";
 import { adnPostSyncRateKey, getAdnPublicPostSyncLimit } from "@/lib/adn-rate-limit";
 import { consumeDistributedOrLocalRateLimit } from "@/lib/distributed-rate-limit";
@@ -18,24 +18,66 @@ export async function handleGetAdnSync(request: Request, organizationId: string,
     const { ctx } = gate;
     const { db } = ctx;
 
-    const [job] = await db
-      .select()
+    const jobsList = await db
+      .select({
+        id: adnSyncJobs.id,
+        status: adnSyncJobs.status,
+        trigger: adnSyncJobs.trigger,
+        summaryJson: adnSyncJobs.summaryJson,
+        createdAt: adnSyncJobs.createdAt,
+        updatedAt: adnSyncJobs.updatedAt,
+      })
       .from(adnSyncJobs)
       .where(and(eq(adnSyncJobs.organizationId, organizationId), eq(adnSyncJobs.companyId, companyId)))
       .orderBy(desc(adnSyncJobs.createdAt))
-      .limit(1);
+      .limit(25);
+
+    const lastRow = jobsList[0] ?? null;
+    const ids = jobsList.map((j) => j.id);
+    const artifactCounts: Record<string, number> = {};
+    if (ids.length > 0) {
+      const grouped = await db
+        .select({
+          jobId: adnArtifacts.adnSyncJobId,
+          n: count(adnArtifacts.id),
+        })
+        .from(adnArtifacts)
+        .where(
+          and(
+            eq(adnArtifacts.organizationId, organizationId),
+            eq(adnArtifacts.companyId, companyId),
+            isNotNull(adnArtifacts.adnSyncJobId),
+            inArray(adnArtifacts.adnSyncJobId, ids),
+          ),
+        )
+        .groupBy(adnArtifacts.adnSyncJobId);
+      for (const row of grouped) {
+        if (row.jobId) {
+          artifactCounts[row.jobId] = Number(row.n);
+        }
+      }
+    }
 
     const res = NextResponse.json({
-      lastJob: job
+      lastJob: lastRow
         ? {
-            id: job.id,
-            status: job.status,
-            trigger: job.trigger,
-            summary: job.summaryJson ?? null,
-            createdAt: job.createdAt,
-            updatedAt: job.updatedAt,
+            id: lastRow.id,
+            status: lastRow.status,
+            trigger: lastRow.trigger,
+            summary: lastRow.summaryJson ?? null,
+            createdAt: lastRow.createdAt,
+            updatedAt: lastRow.updatedAt,
           }
         : null,
+      recentJobs: jobsList.map((j) => ({
+        id: j.id,
+        status: j.status,
+        trigger: j.trigger,
+        summary: j.summaryJson ?? null,
+        createdAt: j.createdAt,
+        updatedAt: j.updatedAt,
+        artifactCount: artifactCounts[j.id] ?? 0,
+      })),
     });
     res.headers.set("Cache-Control", "no-store");
     return res;
@@ -125,6 +167,86 @@ export async function handlePostAdnSync(request: Request, organizationId: string
       );
       res.headers.set("Retry-After", String(rl.retryAfterSec));
       return res;
+    }
+
+    if (parsedBody.data.remirrorFromJobId) {
+      const sourceId = parsedBody.data.remirrorFromJobId;
+      const [src] = await db
+        .select()
+        .from(adnSyncJobs)
+        .where(
+          and(
+            eq(adnSyncJobs.id, sourceId),
+            eq(adnSyncJobs.organizationId, organizationId),
+            eq(adnSyncJobs.companyId, companyId),
+          ),
+        )
+        .limit(1);
+      if (!src) {
+        return jsonError(404, "Job de origem não encontrado.");
+      }
+      if (src.status !== "completed" && src.status !== "partial" && src.status !== "failed") {
+        return NextResponse.json(
+          {
+            message:
+              "Só é possível espelhar após o job terminar (estado concluído, parcial ou falhou).",
+            error_code: "ADN_REMIRROR_NOT_TERMINAL",
+          },
+          { status: 400 },
+        );
+      }
+      const [cntRow] = await db
+        .select({ n: count(adnArtifacts.id) })
+        .from(adnArtifacts)
+        .where(
+          and(
+            eq(adnArtifacts.adnSyncJobId, sourceId),
+            eq(adnArtifacts.organizationId, organizationId),
+            eq(adnArtifacts.companyId, companyId),
+          ),
+        );
+      const artifactTotal = Number(cntRow?.n ?? 0);
+      if (artifactTotal <= 0) {
+        return NextResponse.json(
+          {
+            message: "Este job não tem artefactos no portal para gravar na pasta raiz.",
+            error_code: "ADN_REMIRROR_NO_ARTIFACTS",
+          },
+          { status: 400 },
+        );
+      }
+
+      const [remirrorJob] = await db
+        .insert(adnSyncJobs)
+        .values({
+          organizationId,
+          companyId,
+          status: "queued",
+          trigger: "retry",
+          requestedByUserId: ctx.session.user.id,
+          idempotencyKey: idemKey,
+          idempotencyBodyFingerprint: idemKey ? fingerprint : null,
+          summaryJson: {
+            phase: "queued",
+            message: "Pedido de espelho na pasta raiz a partir de job concluído.",
+            remirrorFromJobId: sourceId,
+          },
+        })
+        .returning({ id: adnSyncJobs.id, status: adnSyncJobs.status });
+
+      if (!remirrorJob) {
+        return jsonError(500, "Não foi possível criar o job.");
+      }
+
+      await insertAuditEvent(db, {
+        actorUserId: ctx.session.user.id,
+        organizationId,
+        companyId,
+        eventType: "adn_sync_requested",
+        metadata: { adnSyncJobId: remirrorJob.id, remirrorFromJobId: sourceId },
+      });
+
+      return NextResponse.json({ job: { id: remirrorJob.id, status: remirrorJob.status } }, { status: 202 });
     }
 
     const [job] = await db

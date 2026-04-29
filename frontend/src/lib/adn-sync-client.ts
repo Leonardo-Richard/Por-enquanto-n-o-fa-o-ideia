@@ -15,8 +15,19 @@ export type AdnSyncLastJob = {
   updatedAt: string;
 };
 
+/** Histórico recente para acções como regravar na pasta raiz (servidor/worker). */
+export type AdnSyncRecentJob = {
+  id: string;
+  status: string;
+  trigger: string;
+  summary: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  artifactCount: number;
+};
+
 export type AdnSyncGetResult =
-  | { kind: "active"; lastJob: AdnSyncLastJob | null }
+  | { kind: "active"; lastJob: AdnSyncLastJob | null; recentJobs: AdnSyncRecentJob[] }
   | { kind: "feature_off" }
   | { kind: "forbidden" }
   | { kind: "error" };
@@ -31,6 +42,8 @@ export type AdnSyncPostPayload = {
   fetchMode?: "incremental" | "all";
   issuedFrom?: string;
   issuedTo?: string;
+  /** UUID do job de origem com artefactos já no portal — fila só espelho local (worker). */
+  remirrorFromJobId?: string;
 };
 
 const MAX_CONCURRENT_ADN_GETS = 3;
@@ -72,8 +85,15 @@ export async function interpretAdnSyncGetResponse(res: Response): Promise<AdnSyn
   if (!res.ok) {
     return { kind: "error" };
   }
-  const b = (await res.json()) as { lastJob: AdnSyncLastJob | null };
-  return { kind: "active", lastJob: b.lastJob ?? null };
+  const b = (await res.json()) as {
+    lastJob: AdnSyncLastJob | null;
+    recentJobs?: AdnSyncRecentJob[];
+  };
+  return {
+    kind: "active",
+    lastJob: b.lastJob ?? null,
+    recentJobs: Array.isArray(b.recentJobs) ? b.recentJobs : [],
+  };
 }
 
 export async function interpretAdnSyncPostResponse(res: Response): Promise<AdnSyncPostResult> {
