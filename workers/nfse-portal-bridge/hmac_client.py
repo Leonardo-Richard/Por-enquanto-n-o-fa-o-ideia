@@ -44,7 +44,21 @@ def internal_json_request(
             return json.loads(raw) if raw else {}
     except HTTPError as e:
         err = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {e.code} {method} {path}: {err}") from e
+        msg = f"HTTP {e.code} {method} {path}: {err}"
+        if e.code == 503 and "/api/internal/v1/adn/" in path:
+            msg += (
+                "\n[Dica ADN] O backend devolveu 503 — em geral falta ADN_WORKER_HMAC_SECRET "
+                "no processo do Next (:3001). Confirme backend/.env.local ou frontend/.env.local e reinicie "
+                "`npm run dev` no backend."
+            )
+        if e.code == 500 and "uploads/prepare" in path:
+            el = err.lower()
+            if "supabase" in el or "storage adn" in el:
+                msg += (
+                    "\n[Dica ADN] Storage Supabase no servidor: defina SUPABASE_SERVICE_ROLE_KEY e "
+                    "NEXT_PUBLIC_SUPABASE_URL (ou SUPABASE_URL) no backend e reinicie o Next em :3001."
+                )
+        raise RuntimeError(msg) from e
     except URLError as e:
         raise RuntimeError(f"URL {url}: {e}") from e
 

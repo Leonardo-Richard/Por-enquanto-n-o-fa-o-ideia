@@ -43,6 +43,8 @@ pip install -r requirements.txt
 | `POLL_INTERVAL_SEC` | `15` | Intervalo quando não há jobs. |
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Só smoke/testes:** não chama `run_download_workflow` (valida fila + `PATCH` + uploads vazios). |
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
+| `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
+| `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `npm run fix:adn-stale-jobs`. |
 
 **Importante (monorepo):** o Next lê `frontend/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 
@@ -55,6 +57,8 @@ npm run dev:with-adn-bridge
 ```
 
 Isto inicia o Next **frontend** (`npm run dev -w frontend`, porta 3000) e o worker em paralelo. Se trabalha só com o **backend** na porta 3001: `npm run dev:with-adn-bridge-backend`. O script `npm run worker:adn-bridge` tenta automaticamente `http://127.0.0.1:3000` e `:3001` onde `/api/health` responder, se `API_INTERNAL_URL` / `PORTAL_INTERNAL_URL` não estiverem definidos. Só o worker: `npm run worker:adn-bridge`.
+
+**Jobs presos em `running`:** o worker só consome `queued`. Se o processo morrer ou o `PATCH` falhar (ex. 503), o job fica `running` para sempre na base até ser libertado. Por omissão, cada arranque do worker corre a limpeza de órfãos (ver tabela). Limpeza manual: `npm run fix:adn-stale-jobs` ou `ADN_STALE_JOB_HOURS=6 npm run fix:adn-stale-jobs` se precisar de um limiar mais curto. **Reset total** (marca *todos* os `running` como `failed`): `npm run fix:adn-all-running` — só em dev / quando tiver a certeza de que nenhum worker está a meio de um job real. Estado: `npm run status:adn-jobs`.
 
 **Manual (produção ou depuração):** com o portal e Postgres activos:
 

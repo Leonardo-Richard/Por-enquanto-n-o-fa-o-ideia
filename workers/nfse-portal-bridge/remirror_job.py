@@ -13,12 +13,14 @@ import psycopg
 from psycopg.rows import dict_row
 
 from cert_materialization import _download_supabase_object
+from job_logging import job_log
 from job_summary import summary_as_dict
 from mirror_local import load_org_mirror_context, sanitize_system_code
 from portal_artifacts import patch_job
 
 
 def fail_job(portal_url: str, secret: str, oid: str, jid: str, msg: str) -> None:
+    job_log(jid, "remirror/portal", "PATCH job=failed (a aplicar…)")
     patch_job(
         base_url=portal_url,
         secret=secret,
@@ -27,6 +29,7 @@ def fail_job(portal_url: str, secret: str, oid: str, jid: str, msg: str) -> None
         status="failed",
         summary={"phase": "error", "message": msg[:2000]},
     )
+    job_log(jid, "remirror/portal", "PATCH job=failed aplicado.")
 
 
 def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> None:
@@ -64,6 +67,7 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
             )
             rows: list[dict[str, Any]] = list(cur.fetchall() or [])
 
+    job_log(jid, "remirror", f"artefactos na base para job_origem={source_id}: {len(rows)} linha(s).")
     root = (ctx.get("root") or "").strip()
     if not root:
         fail_job(
@@ -83,6 +87,7 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
         fail_job(portal_url, secret, oid, jid, "Nenhum artefacto encontrado para o job de origem.")
         return
 
+    job_log(jid, "remirror", f"a gravar até {len(rows)} ficheiro(s) em disco local…")
     written = 0
     failed = 0
     errors_sample: list[str] = []
@@ -126,6 +131,7 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
         out_summary["mirrorErrorsSample"] = errors_sample
 
     st = "completed" if failed == 0 else "partial"
+    job_log(jid, "remirror/portal", f"PATCH job={st} (written={written} failed={failed})…")
     patch_job(
         base_url=portal_url,
         secret=secret,
@@ -134,3 +140,4 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
         status=st,
         summary=out_summary,
     )
+    job_log(jid, "remirror/portal", f"PATCH job={st} aplicado no portal.")

@@ -5,11 +5,16 @@
  *   DATABASE_URL, ADN_WORKER_HMAC_SECRET
  *   API_INTERNAL_URL ou PORTAL_INTERNAL_URL — se omitidas, tenta-se automaticamente
  *   http://127.0.0.1:3000 e :3001 (onde `/api/health` responder).
+ *
+ * Órfãos `running` (worker morto / PATCH falhou): antes de iniciar o Python, por omissão
+ * corre a mesma lógica que `npm run fix:adn-stale-jobs` (limiar ADN_STALE_JOB_HOURS, default 24).
+ * Desactivar: ADN_CLEAN_STALE_ON_WORKER_START=0
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { releaseStaleRunningJobs } from "./lib/adn-release-stale-running.mjs";
 import { detectLocalPortalBaseUrl } from "./lib/detect-local-portal-base.mjs";
 import { loadMergedMonorepoDotenv, resolvePythonExe } from "./lib/merge-monorepo-dotenv.mjs";
 
@@ -104,6 +109,20 @@ async function main() {
     process.exit(1);
   }
 
+  const cleanStale = String(env.ADN_CLEAN_STALE_ON_WORKER_START ?? "1").trim() !== "0";
+  if (cleanStale) {
+    const staleHours = Math.max(1, Number(env.ADN_STALE_JOB_HOURS ?? "24"));
+    const stale = await releaseStaleRunningJobs(root, staleHours);
+    if (stale.ok && stale.count > 0) {
+      const ids = stale.released.map((r) => r?.id ?? r).join(", ");
+      console.error(
+        `[run-adn-bridge-watch] Libertados ${stale.count} job(s) em «running» órfão(s) (started_at há mais de ${stale.hours}h). IDs: ${ids}`,
+      );
+    } else if (!stale.ok) {
+      console.error(`[run-adn-bridge-watch] Aviso: não foi possível limpar jobs órfãos — ${stale.error}`);
+    }
+  }
+
   const shown = String(env.API_INTERNAL_URL ?? env.PORTAL_INTERNAL_URL ?? "").trim();
   console.error(
     `[run-adn-bridge-watch] A iniciar worker ADN (Ctrl+C para parar). Python=${py} PORTAL/API=${shown}`,
@@ -111,7 +130,13 @@ async function main() {
 
   const child = spawn(py, [pollScript], {
     cwd: bridgeDir,
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      ...env,
+      /** Evita UnicodeEncodeError no print() do bridge no Windows (cp1252). */
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8",
+    },
     stdio: "inherit",
     shell: false,
   });

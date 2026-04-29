@@ -30,6 +30,8 @@ async function main() {
       merged.API_INTERNAL_URL?.trim() ||
       merged.PORTAL_INTERNAL_URL?.trim() ||
       "http://127.0.0.1:3000",
+    PYTHONUTF8: "1",
+    PYTHONIOENCODING: "utf-8",
   };
 
   const py = resolvePythonExe(bridgeDir);

@@ -34,6 +34,7 @@ from cert_materialization import (
 from nfse_runner import clear_company_data_directory, run_download_workflow_once, write_clients_json
 from mirror_local import load_org_mirror_context, mirror_data_directory_to_local
 from portal_artifacts import patch_job, sync_data_directory
+from job_logging import job_log
 from job_summary import summary_as_dict
 from remirror_job import process_remirror_job
 
@@ -104,6 +105,22 @@ def _fetch_mode_from_job(job: dict) -> str:
     return "all" if mode == "all" else "incremental"
 
 
+def _count_xml_for_upload(nfse_root: Path, cnpj: str, min_mtime: float | None) -> int:
+    data_dir = nfse_root / "data" / cnpj
+    if not data_dir.is_dir():
+        return 0
+    n = 0
+    for p in data_dir.rglob("*.xml"):
+        if min_mtime is not None:
+            try:
+                if p.stat().st_mtime < min_mtime:
+                    continue
+            except OSError:
+                continue
+        n += 1
+    return n
+
+
 def _reset_checkpoint_for_full_fetch(nfse_root: Path, cnpj: str) -> None:
     cp = nfse_root / "data" / cnpj / "checkpoint.json"
     cp.parent.mkdir(parents=True, exist_ok=True)
@@ -116,9 +133,13 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     jid = str(job["id"])
     job_summary = summary_as_dict(job.get("summary_json"))
     if job_summary.get("remirrorFromJobId"):
+        src = str(job_summary.get("remirrorFromJobId") or "").strip()
+        job_log(jid, "remirror", f"org={oid} company={cid} job_origem={src}")
         process_remirror_job(job, dsn, portal_url, secret)
+        job_log(jid, "remirror", "fluxo remirror terminado (ver PATCH no portal).")
         print(f"[nfse-portal-bridge] Job {jid} (remirror) concluído.", flush=True)
         return
+    job_log(jid, "início", f"org={oid} company={cid} API={portal_url}")
     with psycopg.connect(dsn) as conn:
         co = load_company(conn, cid)
         cert_ref = load_active_company_certificate_ref(conn, oid, cid)
@@ -126,6 +147,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     nome = str(co["trade_name"] or cnpj)
     run_started_epoch = time.time()
     fetch_mode = _fetch_mode_from_job(job)
+    job_log(jid, "contexto", f"CNPJ={cnpj} fetchMode={fetch_mode}")
 
     write_clients_json(nfse, cnpj, nome)
     if fetch_mode == "all":
@@ -160,9 +182,22 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             "[nfse-portal-bridge] NFSE_BRIDGE_SKIP_NFSE_DIST=1 — a saltar run_download_workflow (smoke).",
             flush=True,
         )
+        job_log(jid, "NFSE_dist", "saltado (smoke)")
     else:
+        job_log(
+            jid,
+            "NFSE_dist",
+            "a iniciar recolha no Ambiente Nacional (demora comum: vários minutos a horas; não interrompa).",
+        )
         run_download_workflow_once(nfse)
+        job_log(jid, "NFSE_dist", "recolha local terminou; a preparar upload para o portal.")
 
+    n_xml_cand = _count_xml_for_upload(nfse, cnpj, run_started_epoch)
+    job_log(
+        jid,
+        "upload",
+        f"{n_xml_cand} XML elegiveis (mtime >= inicio do job) em data/{cnpj}/ -> POST .../adn/uploads/prepare",
+    )
     counts = sync_data_directory(
         base_url=portal_url,
         secret=secret,
@@ -173,6 +208,11 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         nfse_root=nfse,
         min_xml_mtime_epoch=run_started_epoch,
     )
+    job_log(
+        jid,
+        "upload",
+        f"concluído: xml={counts['xml']} pdf={counts['pdf']} skipped={counts['skipped']} syntheticKey={counts.get('syntheticKey', 0)}",
+    )
     mirror_summary: dict = {
         "mirrorWritten": 0,
         "mirrorFailed": 0,
@@ -181,6 +221,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     try:
         with psycopg.connect(dsn) as mconn:
             ctx = load_org_mirror_context(mconn, oid, cid)
+        job_log(jid, "espelho_local", "a copiar XML/PDF para pasta raiz da organização (se configurada).")
         disabled = os.environ.get("NFSE_LOCAL_MIRROR_DISABLED", "").strip() == "1"
         mirror_summary = mirror_data_directory_to_local(
             root=ctx.get("root"),
@@ -202,6 +243,12 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             ),
             "mirrorSkipReason": "mirror_context_error",
         }
+    job_log(
+        jid,
+        "espelho_local",
+        f"resumo written={mirror_summary.get('mirrorWritten', 0)} failed={mirror_summary.get('mirrorFailed', 0)} "
+        f"hadFailures={mirror_summary.get('mirrorHadFailures')}",
+    )
 
     artifacts_total = counts["xml"] + counts["pdf"]
     if artifacts_total <= 0 and not skip_nfse_dist and not bool(cert_sync.get("materialized")):
@@ -210,6 +257,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             "materialização de certificado a partir do cofre. O job foi marcado como failed."
         )
 
+    job_log(jid, "portal", "PATCH job=completed (a aplicar resumo no portal…)")
     patch_job(
         base_url=portal_url,
         secret=secret,
@@ -230,9 +278,11 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             **mirror_summary,
         },
     )
+    job_log(jid, "portal", "PATCH job=completed aplicado no portal.")
 
 
 def fail_job(portal_url: str, secret: str, oid: str, jid: str, msg: str) -> None:
+    job_log(jid, "portal", "PATCH job=failed (a aplicar no portal…)")
     patch_job(
         base_url=portal_url,
         secret=secret,
@@ -241,6 +291,7 @@ def fail_job(portal_url: str, secret: str, oid: str, jid: str, msg: str) -> None
         status="failed",
         summary={"phase": "error", "message": msg[:2000]},
     )
+    job_log(jid, "portal", "PATCH job=failed gravado no portal (pode actualizar a UI).")
 
 
 def main() -> None:
@@ -272,8 +323,10 @@ def main() -> None:
             jid = str(job["id"])
             oid = str(job["organization_id"])
             print(f"[nfse-portal-bridge] Job {jid} em execução…", flush=True)
+            job_log(jid, "fila", "job reservado (status=running na base); a processar.")
             try:
                 process_one_job(job, dsn, portal_url, secret, nfse)
+                job_log(jid, "fim", "process_one_job terminou sem excepção.")
                 print(f"[nfse-portal-bridge] Job {jid} concluído.", flush=True)
                 if poll_once:
                     return
@@ -291,6 +344,7 @@ def main() -> None:
                 return
             except Exception as e:  # noqa: BLE001
                 tb = traceback.format_exc()
+                job_log(jid, "ERRO", f"{type(e).__name__}: {e!s}"[:500])
                 print(tb, file=sys.stderr, flush=True)
                 try:
                     fail_job(portal_url, secret, oid, jid, f"{e!s}\n{tb}")

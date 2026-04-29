@@ -57,6 +57,33 @@ for (const p of [
   injectAdnWorkerSecretFromFile(p);
 }
 
+/** Mesmo padrão que o worker (`merge-monorepo-dotenv`): garante Storage ADN no processo do Next em :3001. */
+const ADN_SUPABASE_KEYS = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+function mergeAdnSupabaseFromFile(filePath: string) {
+  if (!existsSync(filePath)) return;
+  try {
+    const vars = parseDotEnvFile(readFileSync(filePath, "utf8"));
+    for (const k of ADN_SUPABASE_KEYS) {
+      const v = vars[k]?.trim();
+      if (v) {
+        process.env[k] = v;
+      }
+    }
+  } catch {
+    /* ficheiro bloqueado ou inválido */
+  }
+}
+for (const p of [
+  path.join(monorepoRoot, ".env"),
+  path.join(monorepoRoot, ".env.local"),
+  path.join(frontendDir, ".env"),
+  path.join(frontendDir, ".env.local"),
+  path.join(cwd, ".env"),
+  path.join(cwd, ".env.local"),
+]) {
+  mergeAdnSupabaseFromFile(p);
+}
+
 const nextConfig: NextConfig = {
   transpilePackages: ["@repo/shared"],
   eslint: {

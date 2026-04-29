@@ -7,11 +7,12 @@ export function getAdnSupabaseServiceClient(): SupabaseClient {
   if (cached) {
     return cached;
   }
-  const url = process.env["NEXT_PUBLIC_SUPABASE_URL"]?.trim();
+  const url =
+    process.env["NEXT_PUBLIC_SUPABASE_URL"]?.trim() || process.env["SUPABASE_URL"]?.trim();
   const key = process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim();
   if (!url || !key) {
     throw new Error(
-      "Storage ADN: defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY (servidor apenas).",
+      "Storage ADN: defina NEXT_PUBLIC_SUPABASE_URL (ou SUPABASE_URL) e SUPABASE_SERVICE_ROLE_KEY (servidor apenas).",
     );
   }
   cached = createClient(url, key, {
