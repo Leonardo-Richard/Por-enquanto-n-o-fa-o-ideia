@@ -14,6 +14,8 @@
     "smoke:adn-bridge": "node scripts/run-adn-bridge-smoke-once.mjs",
     "worker:adn-bridge": "node scripts/run-adn-bridge-watch.mjs",
     "dev:with-adn-bridge": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"npm run dev:frontend\" \"npm run worker:adn-bridge\"",
+    "dev:with-adn-bridge-backend": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run worker:adn-bridge\"",
+    "dev:auto": "npm run dev:auto -w backend",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "dev": "turbo dev",

@@ -1,6 +1,6 @@
 /**
- * Carrega variáveis de `.env` na raiz e `frontend/.env.local` (esta sobrepõe a primeira).
- * Por fim aplica `process.env` para permitir overrides na shell / CI.
+ * Carrega `.env` na raiz, `frontend/.env.local`, `backend/.env.local` (cada um sobrepõe o anterior).
+ * Por fim aplica `process.env` para overrides na shell / CI.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,7 +35,8 @@ export function parseDotEnvFile(path) {
 export function loadMergedMonorepoDotenv(repoRoot) {
   const root = parseDotEnvFile(join(repoRoot, ".env"));
   const fe = parseDotEnvFile(join(repoRoot, "frontend", ".env.local"));
-  return Object.assign({}, root, fe, process.env);
+  const be = parseDotEnvFile(join(repoRoot, "backend", ".env.local"));
+  return Object.assign({}, root, fe, be, process.env);
 }
 
 /**

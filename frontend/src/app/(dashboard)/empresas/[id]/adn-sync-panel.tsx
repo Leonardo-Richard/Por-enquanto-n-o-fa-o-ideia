@@ -383,7 +383,12 @@ export function AdnSyncPanel({ company }: { company: Company }) {
                   <li>
                     <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/15">PORTAL_INTERNAL_URL</code>{" "}
                     ou <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/15">API_INTERNAL_URL</code>{" "}
-                    aponta para o Next (ex.: <code className="font-mono text-[11px]">http://127.0.0.1:3000</code>).
+                    aponta para o mesmo Next que serve{" "}
+                    <code className="font-mono text-[11px]">/api/internal/v1/adn/</code> (frontend em{" "}
+                    <code className="font-mono text-[11px]">:3000</code> ou backend em{" "}
+                    <code className="font-mono text-[11px]">:3001</code>). O script{" "}
+                    <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/15">npm run worker:adn-bridge</code>{" "}
+                    tenta detectar a porta automaticamente se não definir estas variáveis.
                   </li>
                   <li>
                     <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/15">ADN_WORKER_HMAC_SECRET</code>{" "}

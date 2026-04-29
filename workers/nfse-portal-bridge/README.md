@@ -48,13 +48,13 @@ pip install -r requirements.txt
 
 ## 3. Arranque
 
-**Monorepo (recomendado em dev):** na raiz do repositório, com `DATABASE_URL` e `ADN_WORKER_HMAC_SECRET` em `.env` ou `frontend/.env.local`, e venv Python com `pip install -r workers/nfse-portal-bridge/requirements.txt`:
+**Monorepo (recomendado em dev):** na raiz do repositório, com `DATABASE_URL` e `ADN_WORKER_HMAC_SECRET` em `.env`, `frontend/.env.local` ou `backend/.env.local`, e venv Python com `pip install -r workers/nfse-portal-bridge/requirements.txt`:
 
 ```bash
 npm run dev:with-adn-bridge
 ```
 
-Isto inicia o Next (`npm run dev -w frontend`) e o worker (`poll_jobs.py`) em paralelo. Só o worker: `npm run worker:adn-bridge`.
+Isto inicia o Next **frontend** (`npm run dev -w frontend`, porta 3000) e o worker em paralelo. Se trabalha só com o **backend** na porta 3001: `npm run dev:with-adn-bridge-backend`. O script `npm run worker:adn-bridge` tenta automaticamente `http://127.0.0.1:3000` e `:3001` onde `/api/health` responder, se `API_INTERNAL_URL` / `PORTAL_INTERNAL_URL` não estiverem definidos. Só o worker: `npm run worker:adn-bridge`.
 
 **Manual (produção ou depuração):** com o portal e Postgres activos:
 
