@@ -11,6 +11,12 @@
 | `ADN_PLAYWRIGHT_MOTOR_SCRIPT` | Worker | Caminho absoluto para `cli.js` do motor. |
 | `ADN_BROWSER_PHASE_TIMEOUT_SEC` | Worker / motor | Tempo máximo do subprocesso (kill → `timeout` no portal). |
 | `ADN_BROWSER_LOCK_PATH` | Worker | Caminho do ficheiro de lock entre processos (opcional; ver §3). |
+| `ADN_CHROME_USER_DATA_DIR` | Motor Node | Perfil Chrome persistente (modo browser real). |
+| `ADN_BROWSER_EXTENSION_DIR` | Motor Node | Pasta da extensão descompactada. |
+| `ADN_NFSE_LOGIN_URL` | Motor Node | URL do login (defeito: Emissor Nacional). |
+| `ADN_PLAYWRIGHT_CHANNEL` | Motor Node | `chrome` recomendado no Windows com certificado digital. |
+| `ADN_PLAYWRIGHT_USE_BROWSER` | Motor Node | `1` força modo browser; senão activa se perfil e extensão estiverem definidos. |
+| `ADN_PLAYWRIGHT_FATIA_ZERO` | Motor Node | `1` — só XML de teste (sem abrir browser). |
 | `ADN_CHROME_USER_DATA_DIR` | Motor (Node) | Perfil reutilizável; **nunca** exposto em `summary_json` do portal. |
 | `ADN_BROWSER_DEBUG` | Motor | `1` = logs adicionais no host (redigidos). |
 | `ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN` | Portal (Next) | Limite GET execuções org (default 60/min). |

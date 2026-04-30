@@ -4,6 +4,9 @@
 .env
 .env.local
 .env.*.local
+
+# ADN Playwright: perfil Chrome, downloads da extensão (não versionar)
+.local/
 *.key
 *.pem
 

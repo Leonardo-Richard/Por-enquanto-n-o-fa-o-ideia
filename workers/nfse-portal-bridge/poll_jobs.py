@@ -15,6 +15,12 @@ Variáveis de ambiente:
   ADN_PLAYWRIGHT_MOTOR_SCRIPT — Opcional; default <repo>/workers/adn-playwright-motor/cli.js
   ADN_BROWSER_PHASE_TIMEOUT_SEC — Opcional; timeout do subprocesso motor B (default 3600)
   ADN_BROWSER_LOCK_PATH — Opcional; ficheiro de lock entre processos do motor B (default <repo>/.adn_browser_worker.lock)
+  ADN_CHROME_USER_DATA_DIR — Perfil Chrome (modo browser real no motor Node; ver workers/adn-playwright-motor/README.md)
+  ADN_BROWSER_EXTENSION_DIR — Pasta da extensão descompactada (modo browser real)
+  ADN_NFSE_LOGIN_URL — Opcional; URL do Emissor Nacional (motor Node)
+  ADN_PLAYWRIGHT_CHANNEL — Opcional; ex. chrome (Chrome instalado; certificado Windows)
+  ADN_PLAYWRIGHT_USE_BROWSER — Opcional; 1 força modo browser; senão activa se perfil+extensão definidos
+  ADN_PLAYWRIGHT_FATIA_ZERO — Opcional; 1 força só XML de teste (sem Playwright)
   NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre descarga NFSE_dist nem motor Playwright (smoke).
       Recomendação (FR-ADN-B-07): skip ambos os motores de descarga; ver runbook adn-motor-cenario-b.
   NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia XML/PDF para organizations.local_download_root (LM-02A).
@@ -31,6 +37,15 @@ import time
 import traceback
 import json
 from pathlib import Path
+
+# Carrega `.env` na raiz do repo (override=False: variáveis já definidas no shell ganham).
+try:
+    from dotenv import load_dotenv
+
+    _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+    load_dotenv(_REPO_ROOT / ".env", override=False)
+except ImportError:
+    pass
 
 import psycopg
 from psycopg.rows import dict_row

@@ -10,6 +10,9 @@
   "scripts": {
     "probe:pooler": "npm run probe:pooler -w frontend",
     "vendor:nfse-dist": "node scripts/vendor-nfse-dist.mjs",
+    "setup:adn-playwright": "node scripts/setup-adn-playwright.mjs",
+    "sync:adn-extension-from-chrome": "node scripts/sync-adn-extension-from-chrome.mjs",
+    "adn:enqueue-real-company": "python scripts/enqueue_adn_real_company_job.py",
     "force:adn-bridge": "node scripts/run-adn-bridge-force-once.mjs",
     "smoke:adn-bridge": "node scripts/run-adn-bridge-smoke-once.mjs",
     "worker:adn-bridge": "node scripts/run-adn-bridge-watch.mjs",

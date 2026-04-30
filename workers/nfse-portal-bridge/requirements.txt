@@ -3,3 +3,4 @@
 psycopg[binary]>=3.2
 pytest>=8.0
 filelock>=3.16
+python-dotenv>=1.0

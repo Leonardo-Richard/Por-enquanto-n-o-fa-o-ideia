@@ -252,11 +252,12 @@ O incremento **motor cenário B + transparência na UI** considera-se **entregue
 - **ADN-B-01–B-05** implementados: worker com `ADN_DOWNLOAD_ENGINE`, `summary_json` com `downloadEngine` / `failureCategory`, motor Node `workers/adn-playwright-motor` (fatia zero), `GET …/adn/recent-jobs` com cursor + rate limit, UI Execuções com `useAppSession`, runbook e template O5.
 - Testes: `workers/nfse-portal-bridge` — `python -m pytest tests/ -q`. Integração ADN (`adn-api.integration.test.ts`): no CI (job `quality`) já existe `DATABASE_URL` para Postgres — os testes de integração incluem `adn-api.integration.test.ts` quando não estão em skip.
 - **Correcções pós-QA:** lock entre processos (`filelock`, `.adn_browser_worker.lock` / `ADN_BROWSER_LOCK_PATH`); heurística `failureCategory` **portal** em `infer_failure_category_from_exception` (HTTP 503/429, indisponível, etc.); Execuções com padrão **disclosure** (`<details>`) + `aria-live` no carregamento; `.gitignore` do ficheiro de lock.
+- **Motor browser real:** `run-browser.mjs` + `cli.js` — Playwright abre `ADN_NFSE_LOGIN_URL` (defeito Emissor Nacional), carrega extensão (`ADN_BROWSER_EXTENSION_DIR`), perfil `ADN_CHROME_USER_DATA_DIR`, tenta clique em certificado digital; aguarda XML novo em `--output-dir`. Sem perfil+extensão mantém fatia zero.
 
 ### File List
 
 - `workers/nfse-portal-bridge/poll_jobs.py`, `download_engine.py`, `tests/test_download_engine.py`, `requirements.txt`, `README.md`
-- `workers/adn-playwright-motor/package.json`, `package-lock.json`, `cli.js`, `README.md`
+- `workers/adn-playwright-motor/package.json`, `package-lock.json`, `cli.js`, `run-browser.mjs`, `README.md`
 - `frontend/src/server/api/v1/handlers/adn-public-access.ts`, `adn-recent-jobs-org.ts`, `frontend/src/lib/adn-rate-limit.ts`, `adn-executions-display.ts`, `adn-recent-jobs-client.ts`
 - `frontend/src/app/api/v1/organizations/[organizationId]/adn/recent-jobs/route.ts`, `frontend/src/app/(dashboard)/execucoes/page.tsx`
 - `frontend/src/app/api/v1/adn-api.integration.test.ts`, `frontend/.env.example`
@@ -267,6 +268,7 @@ O incremento **motor cenário B + transparência na UI** considera-se **entregue
 
 - 2026-04-30: Incremento cenário B ADN (motor configurável, API org-wide, UI Execuções, runbook O5).
 - 2026-04-30: Correcções QA — lock `filelock`, heurística portal, a11y Execuções (`details` + live region).
+- 2026-04-30: Motor Playwright — fluxo browser (URL NFS-e, extensão, perfil, clique certificado, espera por XML).
 
 ---
 

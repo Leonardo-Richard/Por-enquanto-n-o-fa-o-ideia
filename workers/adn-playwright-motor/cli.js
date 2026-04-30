@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
  * Motor ADN cenário B — subprocesso invocado pelo worker Python (poll_jobs).
- * Não escrever caminhos de perfil Chrome ou extensão em stdout/stderr em produção.
  *
  * Uso: node cli.js --output-dir <dir> --cnpj <14 dígitos> --job-id <uuid>
  *
- * Variáveis: ADN_BROWSER_DEBUG=1 (logs extra para stderr, ainda redigidos)
- *            ADN_PLAYWRIGHT_FATIA_ZERO_FAIL=1 — força falha mapeável (testes)
+ * Modos:
+ * - **Browser real:** quando `ADN_CHROME_USER_DATA_DIR` e `ADN_BROWSER_EXTENSION_DIR` estão definidos,
+ *   ou quando `ADN_PLAYWRIGHT_USE_BROWSER=1`. Abre o Emissor Nacional, carrega a extensão, tenta
+ *   «Certificado digital» e aguarda XML novo em `--output-dir`.
+ * - **Fatia zero (teste):** se não cumprir as condições acima (ou `ADN_PLAYWRIGHT_FATIA_ZERO=1`), grava XML mínimo.
+ *
+ * Variáveis: ver README.md
  */
 
 import fs from "node:fs";
@@ -38,10 +42,6 @@ function dlog(msg) {
   }
 }
 
-/**
- * XML mínimo para fatia zero (artefacto de teste). Chave 44 dígitos fictícia
- * alinhada ao padrão synthetic do bridge quando o parser extrair.
- */
 function fatiaZeroXml(cnpj14, jobId) {
   const key = `9${cnpj14.slice(0, 2)}${"0".repeat(41)}`.slice(0, 44);
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -52,7 +52,32 @@ function fatiaZeroXml(cnpj14, jobId) {
 </root>`;
 }
 
-const main = () => {
+function useRealBrowserMode() {
+  if ((process.env.ADN_PLAYWRIGHT_FATIA_ZERO || "").trim() === "1") {
+    return false;
+  }
+  if ((process.env.ADN_PLAYWRIGHT_USE_BROWSER || "").trim() === "1") {
+    return true;
+  }
+  const profile = (process.env.ADN_CHROME_USER_DATA_DIR || "").trim();
+  const ext = (process.env.ADN_BROWSER_EXTENSION_DIR || "").trim();
+  return Boolean(profile && ext);
+}
+
+function runFatiaZero(outputDir, cnpjDigits, jobId) {
+  try {
+    fs.mkdirSync(outputDir, { recursive: true });
+    const outFile = path.join(outputDir, `adn-fatia-zero-${jobId}.xml`);
+    fs.writeFileSync(outFile, fatiaZeroXml(cnpjDigits, jobId), "utf8");
+    dlog(`artefacto escrito (tamanho ${fs.statSync(outFile).size} bytes)`);
+  } catch (e) {
+    process.stderr.write(`STDERR_CAT_DISK ${e && e.message ? e.message : "write error"}\n`);
+    process.exit(13);
+  }
+  process.exit(0);
+}
+
+async function main() {
   const { outputDir, cnpj, jobId } = parseArgs(process.argv);
   if (!outputDir || !cnpj || !jobId) {
     process.stderr.write("STDERR_CAT_EXTENSION argumentos em falta\n");
@@ -64,22 +89,21 @@ const main = () => {
     process.exit(10);
   }
 
-  if (process.env.ADN_PLAYWRIGHT_FATIA_ZERO_FAIL === "1") {
+  if ((process.env.ADN_PLAYWRIGHT_FATIA_ZERO_FAIL || "").trim() === "1") {
     process.stderr.write("STDERR_CAT_EXTENSION falha simulada (ADN_PLAYWRIGHT_FATIA_ZERO_FAIL)\n");
     process.exit(12);
   }
 
-  try {
-    fs.mkdirSync(outputDir, { recursive: true });
-    const outFile = path.join(outputDir, `adn-fatia-zero-${jobId}.xml`);
-    fs.writeFileSync(outFile, fatiaZeroXml(cnpjDigits, jobId), "utf8");
-    dlog(`artefacto escrito (tamanho ${fs.statSync(outFile).size} bytes)`);
-  } catch (e) {
-    process.stderr.write(`STDERR_CAT_DISK ${e && e.message ? e.message : "write error"}\n`);
-    process.exit(13);
+  if (useRealBrowserMode()) {
+    const { runBrowserFlow } = await import("./run-browser.mjs");
+    await runBrowserFlow({ outputDir, cnpjDigits, jobId });
+    return;
   }
 
-  process.exit(0);
-};
+  runFatiaZero(outputDir, cnpjDigits, jobId);
+}
 
-main();
+main().catch((e) => {
+  process.stderr.write(`STDERR_CAT_UNKNOWN ${e && e.message ? e.message : String(e)}\n`);
+  process.exit(1);
+});

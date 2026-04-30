@@ -46,6 +46,9 @@ pip install -r requirements.txt
 | `ADN_PLAYWRIGHT_MOTOR_SCRIPT` | *(caminho)* | Script de entrada; por defeito `<repo>/workers/adn-playwright-motor/cli.js`. |
 | `ADN_BROWSER_PHASE_TIMEOUT_SEC` | `3600` | Tempo máximo de espera do subprocesso motor B. |
 | `ADN_BROWSER_LOCK_PATH` | *(opcional)* | Ficheiro de lock entre processos `poll_jobs` durante motor B (default: `.adn_browser_worker.lock` na raiz do repo). |
+| `ADN_CHROME_USER_DATA_DIR` | *(caminho)* | Modo browser real: perfil Chrome persistente (ver `workers/adn-playwright-motor/README.md`). |
+| `ADN_BROWSER_EXTENSION_DIR` | *(caminho)* | Modo browser real: pasta da extensão descompactada. |
+| `ADN_PLAYWRIGHT_CHANNEL` | `chrome` | Recomendado no Windows para usar certificado do sistema com o motor Node. |
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Smoke/testes:** não executa **nenhum** motor de descarga (nem NFSE_dist nem Playwright); valida fila + `PATCH` + uploads vazios. |
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
 | `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
@@ -54,6 +57,8 @@ pip install -r requirements.txt
 **Importante (monorepo):** o Next lê `frontend/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 
 **Motor cenário B (Playwright / extensão):** rollback, env e versões — [`docs/runbooks/adn-motor-cenario-b.md`](../../docs/runbooks/adn-motor-cenario-b.md).
+
+O `poll_jobs.py` carrega automaticamente o ficheiro **`.env` na raiz do repositório** (via `python-dotenv` em `requirements.txt`), sem sobrescrever variáveis que já estiverem definidas no processo.
 
 ## 3. Arranque
 
