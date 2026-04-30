@@ -21,7 +21,8 @@ COPY package.json package-lock.json ./
 COPY frontend ./frontend
 COPY backend ./backend
 COPY packages ./packages
-RUN npm run build -w frontend
+# Monorepo: o binário `next` fica hoisted na raiz; `npm run -w frontend` nem sempre mete .bin no PATH.
+RUN cd frontend && npx next build
 
 FROM base AS runner
 ENV NODE_ENV=production
