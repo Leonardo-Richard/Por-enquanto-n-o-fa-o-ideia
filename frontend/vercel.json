@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/internal/v1/adn/cron/monthly-enqueue",
+      "schedule": "5 9 * * *"
+    }
+  ]
+}

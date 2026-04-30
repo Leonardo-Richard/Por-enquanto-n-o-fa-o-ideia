@@ -234,6 +234,12 @@ export function AdnSyncPanel({ company }: { company: Company }) {
               e nome fantasia da empresa neste portal, sem espaços em volta do hífen), não na raiz
               directamente.
             </p>
+            {access === "active" ? (
+              <p className="mt-2 text-xs text-black/55 dark:text-white/50">
+                Com ADN activo para a organização, a coleta mensal pode ser enfileirada automaticamente no
+                dia configurado na ficha (fuso América/São Paulo).
+              </p>
+            ) : null}
             <div className="mt-2">
               {isLocalDownloadRootConfigured(settingsData.localDownloadRoot) ? (
                 <LocalDownloadRootCallout

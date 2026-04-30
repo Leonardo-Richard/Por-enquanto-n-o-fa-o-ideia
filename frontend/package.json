@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@repo/db": "file:../packages/db",
+    "@repo/scheduling": "file:../packages/scheduling",
     "@repo/shared": "file:../packages/shared",
     "@supabase/supabase-js": "^2.104.0",
     "@upstash/ratelimit": "^2.0.5",

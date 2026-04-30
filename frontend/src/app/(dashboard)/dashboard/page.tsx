@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { displayCnpjLabel } from "@repo/shared";
+import { executionStatusLabel, executionTriggerLabel } from "@/lib/execution-display";
 import { MonitoredCompaniesSection } from "@/components/monitored-companies-section";
 import { usePortal } from "@/context/portal-provider";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
@@ -122,10 +123,15 @@ export default function DashboardPage() {
       />
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold">Rotina mensal (dia 1º)</h2>
+        <h2 className="text-sm font-semibold">Rotina mensal</h2>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Em produção, cada empresa com agente ativo recebe uma coleta no dia 1º ({settings.timezone}). Na lista
-          acima pode solicitar sincronização ADN (fila no portal) ou abrir a ficha da empresa para testes locais.
+          Cada empresa usa o <strong className="font-medium">dia D</strong> configurado na ficha (1–28), interpretado
+          em <strong className="font-medium">{settings.timezone}</strong>. Quando a organização tem ADN activo na
+          nuvem, o portal pode enfileirar coleta automática nesse dia civil.
+        </p>
+        <p className="mt-2 text-sm text-black/65 dark:text-white/60">
+          Na lista acima pode solicitar sincronização ADN (fila no portal) ou abrir a ficha da empresa para testes
+          locais.
         </p>
       </section>
 
@@ -144,12 +150,12 @@ export default function DashboardPage() {
             <p className="font-medium text-[var(--foreground)]">
               {displayCnpjLabel(lastRun.companyCnpjDigits)} ·{" "}
               <span className="text-black/60 dark:text-white/55">
-                {triggerLabel(lastRun.trigger)}
+                {executionTriggerLabel(lastRun.trigger)}
               </span>
             </p>
             <p className="mt-1 text-xs text-black/55 dark:text-white/50">
               {new Date(lastRun.startedAt).toLocaleString("pt-BR")} ·{" "}
-              {statusLabel(lastRun.status)}
+              {executionStatusLabel(lastRun.status)}
             </p>
             {lastRun.detail ? (
               <p className="mt-2 text-xs leading-relaxed text-black/60 dark:text-white/55">
@@ -204,22 +210,3 @@ export default function DashboardPage() {
   );
 }
 
-function triggerLabel(t: string) {
-  if (t === "signup") {
-    return "Pós-cadastro";
-  }
-  if (t === "monthly") {
-    return "Agendada (dia 1º)";
-  }
-  return "Manual";
-}
-
-function statusLabel(s: string) {
-  if (s === "running") {
-    return "Em execução";
-  }
-  if (s === "failed") {
-    return "Falhou";
-  }
-  return "Concluída";
-}

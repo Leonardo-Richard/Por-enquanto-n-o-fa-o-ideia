@@ -155,28 +155,38 @@ export const companyMemberships = pgTable(
   (t) => [uniqueIndex("company_memberships_user_company_unique").on(t.userId, t.companyId)],
 );
 
-export const adnSyncJobs = pgTable("adn_sync_jobs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .notNull()
-    .references(() => organizations.id, { onDelete: "cascade" }),
-  companyId: uuid("company_id")
-    .notNull()
-    .references(() => companies.id, { onDelete: "cascade" }),
-  status: text("status").notNull().default("queued"),
-  trigger: text("trigger").notNull().default("manual"),
-  requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
-  idempotencyKey: text("idempotency_key"),
-  idempotencyBodyFingerprint: char("idempotency_body_fingerprint", { length: 64 }),
-  startedAt: timestamp("started_at", { withTimezone: true }),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
-  summaryJson: jsonb("summary_json").$type<Record<string, unknown> | null>(),
-  workerCorrelationId: text("worker_correlation_id"),
-  http429Count: integer("http_429_count").notNull().default(0),
-  http503Count: integer("http_503_count").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+/** CHECK em `trigger` e índice UNIQUE parcial em `idempotency_key`: migr. `20260430120000_adn_sync_jobs_monthly_idempotency.sql`. */
+export const adnSyncJobs = pgTable(
+  "adn_sync_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    /** Valores DB incluem `monthly` (cron) — ver migração CM-01. */
+    trigger: text("trigger").notNull().default("manual"),
+    requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key"),
+    idempotencyBodyFingerprint: char("idempotency_body_fingerprint", { length: 64 }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    summaryJson: jsonb("summary_json").$type<Record<string, unknown> | null>(),
+    workerCorrelationId: text("worker_correlation_id"),
+    http429Count: integer("http_429_count").notNull().default(0),
+    http503Count: integer("http_503_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("adn_sync_jobs_idempotency_key_unique_partial")
+      .on(t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} IS NOT NULL`),
+  ],
+);
 
 export const adnArtifactDrafts = pgTable("adn_artifact_drafts", {
   id: uuid("id").primaryKey().defaultRandom(),

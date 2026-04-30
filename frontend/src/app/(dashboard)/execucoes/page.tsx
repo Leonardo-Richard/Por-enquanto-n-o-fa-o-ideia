@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { displayCnpjLabel } from "@repo/shared";
+import { executionStatusLabel, executionTriggerLabel } from "@/lib/execution-display";
 import { usePortal } from "@/context/portal-provider";
 
 export default function ExecucoesPage() {
@@ -46,7 +47,7 @@ export default function ExecucoesPage() {
                   <td className="px-4 py-3 font-mono text-xs tabular-nums">
                     {displayCnpjLabel(e.companyCnpjDigits)}
                   </td>
-                  <td className="px-4 py-3 text-xs">{triggerLabel(e.trigger)}</td>
+                  <td className="px-4 py-3 text-xs">{executionTriggerLabel(e.trigger)}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -57,7 +58,7 @@ export default function ExecucoesPage() {
                             : "bg-emerald-600/15 text-emerald-900 dark:text-emerald-100"
                       }`}
                     >
-                      {statusLabel(e.status)}
+                      {executionStatusLabel(e.status)}
                     </span>
                   </td>
                   <td className="max-w-xs px-4 py-3 text-xs text-black/60 dark:text-white/55">
@@ -78,22 +79,3 @@ export default function ExecucoesPage() {
   );
 }
 
-function triggerLabel(t: string) {
-  if (t === "signup") {
-    return "Pós-cadastro";
-  }
-  if (t === "monthly") {
-    return "Agendada (dia 1º)";
-  }
-  return "Manual";
-}
-
-function statusLabel(s: string) {
-  if (s === "running") {
-    return "Em execução";
-  }
-  if (s === "failed") {
-    return "Falhou";
-  }
-  return "Concluída";
-}

@@ -31,3 +31,8 @@ Após `succeeded` / `failed` / pendente / retry, a chave `sched_monthly:…:{YYY
 - Lógica pura (TZ + chave + `scheduled_for`): `packages/scheduling` — `decideMonthlyScheduledEnqueue`; telemetria duplicate — `logStructuredMonthlyEnqueueDuplicateIgnored` / `maybeLogMonthlyEnqueueDecision`.
 - Validação HTTP / hidratação portal: `@repo/shared` — `parseMonthlyRunDayFromRequest`, `hydrateMonthlyRunDay`.
 - DDL: `db/migrations/20260422120000_companies_monthly_run_day.sql`.
+- **Tick HTTP (produção):** `GET` ou `POST` `/api/internal/v1/adn/cron/monthly-enqueue` com `Authorization: Bearer <CRON_SECRET>`. Vercel Cron (projecto **frontend**): `frontend/vercel.json` — `5 9 * * *` (UTC) ≈ 06:05 `America/Sao_Paulo` (sem DST). Ver `frontend/.env.example` (`CRON_SECRET`, `DATABASE_URL`).
+
+### #endpoint-cron-mensal-adn
+
+Chamada diária protegida; o handler enfileira `adn_sync_jobs` com `trigger = monthly` e chave `sched_monthly:{companyId}:{YYYY-MM}`. Não logar o token.
