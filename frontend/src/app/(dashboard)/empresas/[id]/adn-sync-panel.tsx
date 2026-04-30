@@ -1,22 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Company } from "@repo/shared";
+import { AdnPortalDownloadLinks } from "@/app/(dashboard)/empresas/[id]/adn-portal-download-links";
 import { AdnCertificateReadinessCard } from "@/app/(dashboard)/empresas/[id]/adn-certificate-readiness-card";
-import { LocalDownloadRootCallout } from "@/app/(dashboard)/empresas/[id]/local-download-root-callout";
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
-import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import { isCertUploadUiEnabled } from "@/lib/cert-upload-ui-enabled";
 import { mirrorSummaryFromJobSummary } from "@/lib/adn-job-mirror-summary";
-import { mirrorDestinationPathPreview } from "@/lib/mirror-destination-preview";
-
-function isLocalDownloadRootConfigured(root: string | null | undefined): boolean {
-  return typeof root === "string" && root.trim().length > 0;
-}
 
 function isAdnJobInProgress(status: string | null | undefined): boolean {
   return status === "queued" || status === "running";
@@ -24,27 +17,6 @@ function isAdnJobInProgress(status: string | null | undefined): boolean {
 
 function isTerminalAdnJobStatus(status: string | null | undefined): boolean {
   return status === "completed" || status === "partial" || status === "failed";
-}
-
-function JobMirrorLine({ summary }: { summary: Record<string, unknown> | null }) {
-  const ms = mirrorSummaryFromJobSummary(summary);
-  if (!ms?.hasMirrorMetrics) {
-    return null;
-  }
-  return (
-    <span className="mt-1 block text-black/45 dark:text-white/42">
-      Espelho neste job: {ms.written} cópia(s)
-      {ms.failed > 0 ? ` · ${ms.failed} falha(s)` : ""}
-    </span>
-  );
-}
-
-/** Jobs terminados com pelo menos um artefacto no portal — elegíveis para regravar na pasta raiz. */
-function canRemirrorFromJobRow(j: { status: string; artifactCount: number }): boolean {
-  if (j.artifactCount <= 0) {
-    return false;
-  }
-  return j.status === "completed" || j.status === "partial" || j.status === "failed";
 }
 
 export function AdnSyncPanel({ company }: { company: Company }) {
@@ -64,13 +36,11 @@ export function AdnSyncPanel({ company }: { company: Company }) {
   const {
     access,
     lastJob,
-    recentJobs,
     busy,
     actionMsg,
     actionTone,
     refresh,
     requestSync,
-    requestRemirror,
   } = useAdnSyncForCompany({
       companyId: company.id,
       organizationId: company.organizationId,
@@ -95,18 +65,6 @@ export function AdnSyncPanel({ company }: { company: Company }) {
       );
     }
   }, [meOrgLoading, effectiveOrganizationId, company.organizationId]);
-
-  const settingsFetchEnabled =
-    orgAligned && !meOrgLoading && (access === "active" || access === "forbidden");
-
-  const {
-    loading: settingsLoading,
-    data: settingsData,
-    error: settingsError,
-  } = useOrganizationAdnSyncSettings({
-    organizationId: company.organizationId,
-    fetchEnabled: settingsFetchEnabled,
-  });
 
   /** Certificado + readiness: sempre que não for explícito «sem permissão» (inclui org sem fila ADN e o carregamento inicial). */
   const showCertificateSection =
@@ -157,25 +115,18 @@ export function AdnSyncPanel({ company }: { company: Company }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [helpOpen, closeHelp]);
 
-  const showAdnRootContext = settingsFetchEnabled;
-  /** Spec UX §5.1: último job e acções imediatamente após FR67/callout; certificado/readiness depois no ramo `active`. */
+  /** Spec UX §5.1: último job e acções; certificado/readiness depois no ramo `active`. */
   const showCertificateAfterAdnActions = access === "active";
   const hasJobInProgress = isAdnJobInProgress(lastJob?.status);
-  const remirrorCandidates = recentJobs.filter(canRemirrorFromJobRow);
-  const remirrorRootReady =
-    !settingsLoading &&
-    Boolean(
-      settingsData &&
-        !settingsError &&
-        isLocalDownloadRootConfigured(settingsData.localDownloadRoot),
-    );
 
   const lastJobMirrorSummary =
     lastJob && isTerminalAdnJobStatus(lastJob.status)
       ? mirrorSummaryFromJobSummary(lastJob.summary)
       : null;
-  const rootConfiguredForHints =
-    Boolean(settingsData && !settingsError && isLocalDownloadRootConfigured(settingsData?.localDownloadRoot));
+  const showDiskMirrorFootnote =
+    lastJobMirrorSummary &&
+    lastJobMirrorSummary.hasMirrorMetrics &&
+    lastJobMirrorSummary.written > 0;
 
   return (
     <section
@@ -220,55 +171,17 @@ export function AdnSyncPanel({ company }: { company: Company }) {
         </p>
       ) : null}
 
-      {showAdnRootContext ? (
-        settingsLoading ? (
-          <p className="mt-3 text-xs text-black/50 dark:text-white/45">A carregar definições…</p>
-        ) : settingsData && !settingsError ? (
-          <>
-            <p className="mt-3 text-xs text-black/55 dark:text-white/50" role="status">
-              O pedido no portal enfileira um job de recolha no Ambiente Nacional; não transfere
-              ficheiros directamente pelo browser. Os XML e PDF no disco do servidor de recolha
-              dependem da pasta raiz configurada para a organização e do worker. O worker grava
-              dentro de uma <strong className="font-medium">subpasta</strong> com o nome{" "}
-              <span className="font-mono text-[11px]">«Código-Apelido»</span> (como na Domínio Web: código
-              e nome fantasia da empresa neste portal, sem espaços em volta do hífen), não na raiz
-              directamente.
-            </p>
-            {access === "active" ? (
-              <p className="mt-2 text-xs text-black/55 dark:text-white/50">
-                Com ADN activo para a organização, a coleta mensal pode ser enfileirada automaticamente no
-                dia configurado na ficha (fuso América/São Paulo).
-              </p>
-            ) : null}
-            <div className="mt-2">
-              {isLocalDownloadRootConfigured(settingsData.localDownloadRoot) ? (
-                <LocalDownloadRootCallout
-                  variant="configured"
-                  pathPreview={mirrorDestinationPathPreview(
-                    String(settingsData.localDownloadRoot).trim(),
-                    company.systemCode,
-                    company.tradeName,
-                    company.cnpjDigits,
-                  )}
-                />
-              ) : (
-                <LocalDownloadRootCallout variant="missing" />
-              )}
-            </div>
-          </>
-        ) : settingsError ? (
-          <p className="mt-3 text-xs text-black/55 dark:text-white/50" role="status">
-            Não foi possível carregar a pasta raiz da organização. Pode continuar a usar a fila ADN;
-            tente &quot;Actualizar&quot; ou abra{" "}
-            <Link
-              href="/configuracoes"
-              className="font-medium text-emerald-800 underline decoration-emerald-800/40 underline-offset-2 dark:text-emerald-300 dark:decoration-emerald-300/40"
-            >
-              Configurações
-            </Link>{" "}
-            para confirmar o caminho local.
-          </p>
-        ) : null
+      {orgAligned && !meOrgLoading && access !== "loading" ? (
+        <p className="mt-3 text-xs text-black/55 dark:text-white/50" role="status">
+          Pedido manual ou <strong className="font-medium">coleta mensal agendada</strong>: o worker envia
+          XML/PDF para o portal (mesmo fluxo). Quando o job concluir, use os links em{" "}
+          <strong className="font-medium">Ficheiros no portal</strong> para o navegador descarregar. Cópia
+          automática para pasta no PC do operador só com{" "}
+          <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">
+            NFSE_LOCAL_MIRROR_ENABLED=1
+          </code>{" "}
+          no worker e pasta raiz em Configurações.
+        </p>
       ) : null}
 
       {!showCertificateAfterAdnActions && showCertificateSection ? (
@@ -295,69 +208,23 @@ export function AdnSyncPanel({ company }: { company: Company }) {
             ) : (
               <p className="text-xs text-black/55 dark:text-white/50">Ainda sem jobs ADN.</p>
             )}
-            {lastJobMirrorSummary ? (
-              <div
-                className="mt-3 rounded-lg border border-black/8 bg-black/[0.03] p-3 text-xs leading-relaxed dark:border-white/10 dark:bg-white/[0.04]"
-                role="status"
-              >
-                <p className="font-medium text-black/80 dark:text-white/75">Gravação no disco (worker)</p>
-                {lastJobMirrorSummary.hasMirrorMetrics ? (
-                  <p className="mt-1 text-black/65 dark:text-white/60">
-                    {lastJobMirrorSummary.written} ficheiro(s) copiado(s) neste job
-                    {lastJobMirrorSummary.failed > 0
-                      ? ` · ${lastJobMirrorSummary.failed} falha(s)`
-                      : ""}
-                    .
-                    {lastJobMirrorSummary.sourceXmlCount !== null &&
-                    lastJobMirrorSummary.engine === "NFSE_dist" ? (
-                      <span className="ml-1">
-                        {" "}
-                        XML encontrados na origem NFSE_dist:{" "}
-                        <span className="font-mono tabular-nums">{lastJobMirrorSummary.sourceXmlCount}</span>.
-                      </span>
-                    ) : null}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-amber-900/90 dark:text-amber-100/85">
-                    O resumo deste job não inclui contadores de espelho (worker desactualizado ou resumo
-                    incompleto). Actualize o <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">nfse-portal-bridge</code>.
-                  </p>
-                )}
+            <AdnPortalDownloadLinks
+              organizationId={company.organizationId}
+              companyId={company.id}
+              refreshSignal={readinessKick}
+            />
+            {showDiskMirrorFootnote && lastJobMirrorSummary ? (
+              <p className="mt-2 text-[11px] text-black/50 dark:text-white/45" role="status">
+                Espelho opcional no disco do worker: {lastJobMirrorSummary.written} cópia(s)
                 {lastJobMirrorSummary.destinationPath ? (
-                  <p className="mt-2 break-all font-mono text-[11px] text-black/70 dark:text-white/65">
-                    Caminho usado pelo worker: {lastJobMirrorSummary.destinationPath}
-                  </p>
+                  <>
+                    {" "}
+                    em{" "}
+                    <span className="break-all font-mono text-[10px]">{lastJobMirrorSummary.destinationPath}</span>
+                  </>
                 ) : null}
-                {lastJobMirrorSummary.operationalHint ? (
-                  <p className="mt-2 text-sm leading-relaxed text-amber-950/95 dark:text-amber-50/90">
-                    {lastJobMirrorSummary.operationalHint}
-                  </p>
-                ) : null}
-                {lastJobMirrorSummary.hasMirrorMetrics &&
-                lastJobMirrorSummary.written === 0 &&
-                lastJobMirrorSummary.failed === 0 &&
-                rootConfiguredForHints &&
-                !lastJobMirrorSummary.operationalHint ? (
-                  <p className="mt-2 text-amber-900/90 dark:text-amber-100/85">
-                    Com pasta raiz definida, 0 cópias costuma indicar que o processo{" "}
-                    <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">poll_jobs.py</code>{" "}
-                    não corre na máquina onde esse caminho existe, ou{" "}
-                    <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">NFSE_LOCAL_MIRROR_DISABLED=1</code>
-                    , ou não houve XML/PDF em{" "}
-                    <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">NFSE_dist/data/&lt;CNPJ&gt;/</code>{" "}
-                    após a recolha.
-                  </p>
-                ) : null}
-                {lastJobMirrorSummary.hadFailures && lastJobMirrorSummary.errorsSample.length > 0 ? (
-                  <ul className="mt-2 list-disc pl-4 text-black/55 dark:text-white/50">
-                    {lastJobMirrorSummary.errorsSample.map((err) => (
-                      <li key={err} className="break-all font-mono text-[11px]">
-                        {err}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+                .
+              </p>
             ) : null}
             {lastJob?.status === "queued" ? (
               <div
@@ -459,54 +326,6 @@ export function AdnSyncPanel({ company }: { company: Company }) {
               Como funciona?
             </button>
           </div>
-          {remirrorCandidates.length > 0 ? (
-            <div className="mt-6 rounded-lg border border-black/10 p-4 dark:border-white/15">
-              <h3 className="text-xs font-semibold text-black/90 dark:text-white/90">
-                Gravar na pasta raiz (jobs já executados)
-              </h3>
-              <p className="mt-1 text-xs text-black/55 dark:text-white/50">
-                Volta a copiar para a pasta configurada em Configurações os XML/PDF já guardados no portal
-                nesses jobs. O serviço de recolha (worker) tem de estar a correr no PC onde essa pasta existe.
-              </p>
-              {!remirrorRootReady ? (
-                <p className="mt-2 text-xs text-amber-800 dark:text-amber-200" role="status">
-                  Defina e guarde a pasta raiz da organização em Configurações para activar estes botões.
-                </p>
-              ) : null}
-              <ul className="mt-3 space-y-2" aria-label="Jobs com artefactos para regravar">
-                {remirrorCandidates.map((j) => (
-                  <li
-                    key={j.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 bg-black/[0.02] px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]"
-                  >
-                    <div className="min-w-0 text-xs">
-                      <span className="font-mono text-[11px] text-black/70 dark:text-white/65">
-                        {j.id.slice(0, 8)}…
-                      </span>
-                      <span className="ml-2 text-black/55 dark:text-white/50">{j.status}</span>
-                      <span className="ml-2 text-black/45 dark:text-white/45">
-                        · {j.artifactCount} ficheiro(s)
-                      </span>
-                      {j.createdAt ? (
-                        <span className="ml-2 text-black/40 dark:text-white/40">
-                          {new Date(j.createdAt).toLocaleString("pt-BR")}
-                        </span>
-                      ) : null}
-                      <JobMirrorLine summary={j.summary ?? null} />
-                    </div>
-                    <button
-                      type="button"
-                      disabled={busy || !remirrorRootReady}
-                      className="shrink-0 rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium dark:border-white/20 disabled:opacity-50"
-                      onClick={() => void requestRemirror(j.id)}
-                    >
-                      Gravar na pasta raiz
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </>
       ) : (
         <div className="mt-4">
@@ -567,8 +386,12 @@ export function AdnSyncPanel({ company }: { company: Company }) {
             períodos de pico, a conclusão pode demorar.
           </li>
           <li>
-            Com pasta raiz configurada em Configurações, o worker pode espelhar XML/PDF no disco
-            do servidor de recolha após o job concluir — fluxo assíncrono, independente do browser.
+            Os XML/PDF ficam no portal; use os links em «Ficheiros no portal» para o navegador descarregar
+            (manual ou após coleta mensal). Cópia automática para pasta no PC do operador só com{" "}
+            <code className="rounded bg-black/10 px-1 font-mono text-[11px] dark:bg-white/10">
+              NFSE_LOCAL_MIRROR_ENABLED=1
+            </code>{" "}
+            no worker e pasta raiz em Configurações.
           </li>
           <li>
             O certificado digital da empresa é tratado pela infraestrutura de recolha. Saiba mais

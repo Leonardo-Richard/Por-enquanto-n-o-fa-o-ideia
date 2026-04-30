@@ -15,6 +15,7 @@ from psycopg.rows import dict_row
 from cert_materialization import _download_supabase_object
 from job_logging import job_log
 from job_summary import summary_as_dict
+from local_mirror_policy import local_mirror_writes_enabled
 from mirror_local import dominio_mirror_folder_name, load_org_mirror_context
 from portal_artifacts import patch_job
 
@@ -42,14 +43,14 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
         fail_job(portal_url, secret, oid, jid, "Job de espelho sem remirrorFromJobId no resumo.")
         return
 
-    disabled = os.environ.get("NFSE_LOCAL_MIRROR_DISABLED", "").strip() == "1"
-    if disabled:
+    if not local_mirror_writes_enabled():
         fail_job(
             portal_url,
             secret,
             oid,
             jid,
-            "Espelho local desactivado (NFSE_LOCAL_MIRROR_DISABLED=1).",
+            "Espelho em disco não activo no worker (defina NFSE_LOCAL_MIRROR_ENABLED=1 para regravar em pasta raiz). "
+            "Os ficheiros já estão no portal para descarregar pelo browser.",
         )
         return
 

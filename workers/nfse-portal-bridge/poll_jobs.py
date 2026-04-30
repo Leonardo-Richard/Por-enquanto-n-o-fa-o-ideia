@@ -23,7 +23,8 @@ Variáveis de ambiente:
   ADN_PLAYWRIGHT_FATIA_ZERO — Opcional; 1 força só XML de teste (sem Playwright)
   NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre descarga NFSE_dist nem motor Playwright (smoke).
       Recomendação (FR-ADN-B-07): skip ambos os motores de descarga; ver runbook adn-motor-cenario-b.
-  NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia XML/PDF para organizations.local_download_root (LM-02A).
+  NFSE_LOCAL_MIRROR_ENABLED — Se "1", copia XML/PDF para organizations.local_download_root quando definida (opt-in).
+  NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia mesmo com ENABLED (prevalece; LM-02A).
   Argumentos: --once — processa no máximo um job (ou sai se a fila estiver vazia).
 
 Runbook motor cenário B: docs/runbooks/adn-motor-cenario-b.md
@@ -55,6 +56,7 @@ from cert_materialization import (
     materialize_company_certificate_from_vault,
 )
 from nfse_runner import clear_company_data_directory, run_download_workflow_once, write_clients_json
+from local_mirror_policy import local_mirror_writes_enabled
 from mirror_local import load_org_mirror_context, mirror_data_directory_to_local
 from portal_artifacts import patch_job, sync_data_directory
 from job_logging import job_log
@@ -280,15 +282,14 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     try:
         with psycopg.connect(dsn) as mconn:
             ctx = load_org_mirror_context(mconn, oid, cid)
-        job_log(jid, "espelho_local", "a copiar XML/PDF para pasta raiz da organização (se configurada).")
-        disabled = os.environ.get("NFSE_LOCAL_MIRROR_DISABLED", "").strip() == "1"
+        job_log(jid, "espelho_local", "espelho em disco só com NFSE_LOCAL_MIRROR_ENABLED=1 (senão só portal).")
         mirror_summary = mirror_data_directory_to_local(
             root=ctx.get("root"),
             cnpj_digits=str(ctx.get("cnpj_digits") or cnpj),
             system_code=str(ctx.get("system_code") or ""),
             trade_name=str(ctx.get("trade_name") or ""),
             nfse_root=nfse,
-            disabled_env=disabled,
+            disabled_env=not local_mirror_writes_enabled(),
         )
     except Exception as e:  # noqa: BLE001
         print(f"[nfse-portal-bridge] espelho local ignorado após erro: {e!s}", flush=True)

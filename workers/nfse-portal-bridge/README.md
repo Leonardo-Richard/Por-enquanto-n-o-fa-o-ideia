@@ -2,6 +2,8 @@
 
 Este directório liga o portal (jobs `adn_sync_jobs` + API interna HMAC) ao cliente **[NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist)** — o mesmo fluxo que o menu **«1) Baixar Notas de Todos os Clientes»** (`run_download_workflow` em `main.py`).
 
+**Alteração de política (espelho em disco):** por omissão o worker **não** copia XML/PDF para `local_download_root`. Os ficheiros ficam no portal para download pelo browser. Para repor o espelho automático na pasta raiz (fluxo antigo), defina **`NFSE_LOCAL_MIRROR_ENABLED=1`** no ambiente do worker (e mantenha `NFSE_LOCAL_MIRROR_DISABLED` diferente de `1`).
+
 ## Requisitos
 
 - **Windows** (recomendado): `curl.exe` no PATH, certificado e-CNPJ na loja ou PFX em `certificates/`, conforme o [README do NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist).
@@ -50,7 +52,8 @@ pip install -r requirements.txt
 | `ADN_BROWSER_EXTENSION_DIR` | *(caminho)* | Modo browser real: pasta da extensão descompactada. |
 | `ADN_PLAYWRIGHT_CHANNEL` | `chrome` | Recomendado no Windows para usar certificado do sistema com o motor Node. |
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Smoke/testes:** não executa **nenhum** motor de descarga (nem NFSE_dist nem Playwright); valida fila + `PATCH` + uploads vazios. |
-| `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
+| `NFSE_LOCAL_MIRROR_ENABLED` | `1` | **Opt-in:** copia XML/PDF para `organizations.local_download_root` quando definida. Sem isto, só portal (download pelo browser). |
+| `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia mesmo com `ENABLED=1` (cloud / sem disco). |
 | `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
 | `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `npm run fix:adn-stale-jobs`. |
 
@@ -102,7 +105,7 @@ Fluxo por job:
 4. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`) e filtra para o CNPJ do job.
 5. Executa `run_download_workflow()` (XML + PDF como no repositório original).
 6. Limpa XML/PDF antigos em `data/<CNPJ>/` (best-effort) e só envia artefactos com timestamp desta execução, evitando falso positivo com ficheiros antigos (`uploads/prepare` → PUT → `artifacts/commit`).
-7. Se a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{Código-Apelido}\` — `system_code` + `trade_name` da empresa, no padrão Domínio Web (`mirror_local.py`).
+7. Se `NFSE_LOCAL_MIRROR_ENABLED=1`, a organização tiver `local_download_root` e `NFSE_LOCAL_MIRROR_DISABLED` ≠ `1`, espelha para `{root}\{Código-Apelido}\` — `system_code` + `trade_name` da empresa, no padrão Domínio Web (`mirror_local.py`). Caso contrário, os ficheiros ficam só no portal.
 8. Em modo normal (sem `NFSE_BRIDGE_SKIP_NFSE_DIST=1`), se não houver nenhum XML/PDF da empresa no fim da execução, o job é marcado como `failed` para forçar nova tentativa operacional.
 9. Marca o job `completed` ou `failed` (`PATCH …/adn/jobs/:id`, com `mirrorWritten` / `mirrorFailed` / `mirrorHadFailures` no resumo quando aplicável).
 

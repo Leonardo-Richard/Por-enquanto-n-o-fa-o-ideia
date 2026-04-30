@@ -11,7 +11,7 @@ export type AdnSyncPanelAccess = "loading" | "active" | "feature_off" | "forbidd
 export type AdnSyncActionTone = "none" | "success" | "error";
 
 const CONFIRM_TEXT =
-  "Pedir a busca de notas agora? O pedido entra na fila no portal e tentará recolha completa (todas as notas disponíveis no ADN para a empresa).";
+  "Pedir a busca de notas agora? O pedido entra na fila no portal com recolha incremental (notas novas desde o último checkpoint — mais rápido que varredura completa). O motor efectivo (ex. Playwright) é o definido no ambiente do worker.";
 
 const ADN_ADAPTIVE_POLLING_ENABLED =
   typeof process.env.NEXT_PUBLIC_ADN_ADAPTIVE_POLLING_ENABLED === "string" &&
@@ -136,12 +136,12 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
     setActionTone("none");
     try {
       const r = await postAdnSyncRequest(organizationId, companyId, crypto.randomUUID(), {
-        fetchMode: "all",
+        fetchMode: "incremental",
       });
       if (r.kind === "accepted") {
         setActionTone("success");
         setActionMsg(
-          "Pedido aceite: o job foi enfileirado no portal. Quando o job concluir, os XML/PDF podem ser espelhados na pasta raiz configurada (se aplicável ao seu ambiente).",
+          "Pedido aceite: o job foi enfileirado no portal. Quando concluir, use «Ficheiros no portal» nesta ficha para o navegador descarregar (igual para coleta mensal). Espelho em disco no worker só com NFSE_LOCAL_MIRROR_ENABLED=1.",
         );
         showToast({
           title: "Pedido enfileirado",

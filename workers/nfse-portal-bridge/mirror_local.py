@@ -80,11 +80,13 @@ def mirror_data_directory_to_local(
         "mirrorHadFailures": False,
     }
     if disabled_env:
-        log.info("[mirror_local] NFSE_LOCAL_MIRROR_DISABLED=1 — espelho ignorado.")
+        log.info("[mirror_local] espelho em disco omitido (política do worker).")
         out["mirrorOperationalHint"] = (
-            "Espelho desactivado: defina NFSE_LOCAL_MIRROR_DISABLED diferente de «1» no ambiente do worker."
+            "Espelho em disco omitido (predefinição). Os XML/PDF ficam no portal para descarregar pelo browser. "
+            "Para cópia automática para a pasta raiz, defina NFSE_LOCAL_MIRROR_ENABLED=1 no worker "
+            "(e não use NFSE_LOCAL_MIRROR_DISABLED=1)."
         )
-        out["mirrorSkipReason"] = "disabled_env"
+        out["mirrorSkipReason"] = "mirror_writes_disabled"
         return out
 
     r = (root or "").strip()
