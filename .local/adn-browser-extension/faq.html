@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<!-- Baixar NFSe - Copyright (c) 2018-2026 CECHINEL CERTIFICACAO DIGITAL LTDA - CNPJ 29.480.028/0001-55 -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="CECHINEL CERTIFICACAO DIGITAL LTDA">
+  <title>FAQ - Baixar NFSe</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 0;
+    }
+
+    /* Header */
+    .faq-header {
+      background: #1a1a1a;
+      color: #fff;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .faq-header svg { flex-shrink: 0; }
+    .faq-header h1 { font-size: 15px; font-weight: 600; }
+    .btn-voltar {
+      margin-left: auto;
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-weight: 500;
+    }
+    .btn-voltar:hover { background: rgba(255,255,255,0.25); }
+
+    /* Conteudo */
+    .faq-content { padding: 12px; }
+
+    /* Accordion */
+    .faq-item {
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+    .faq-item:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .faq-question {
+      padding: 12px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 13.5px;
+      color: #fff;
+      background: #4a4a4a;
+      user-select: none;
+      transition: background 0.15s;
+      border-radius: 7px 7px 0 0;
+    }
+    .faq-item:not(.open) .faq-question { border-radius: 7px; }
+    .faq-question:hover { background: #5a5a5a; }
+    .faq-question .arrow {
+      font-size: 10px;
+      color: rgba(255,255,255,0.5);
+      transition: transform 0.2s;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .faq-item.open .faq-question .arrow { transform: rotate(90deg); }
+    .faq-answer {
+      display: none;
+      padding: 4px 14px 14px;
+      font-size: 13px;
+      color: #444;
+      line-height: 1.7;
+    }
+    .faq-item.open .faq-answer { display: block; }
+    .faq-answer p { margin-bottom: 10px; }
+    .faq-answer ul { margin: 6px 0 8px 16px; }
+    .faq-answer li { margin-bottom: 4px; }
+    .faq-answer strong { color: #333; }
+    .faq-answer code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'SF Mono', Consolas, monospace;
+      color: #c7254e;
+    }
+    .faq-answer .highlight {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 10px 0;
+      font-size: 12.5px;
+    }
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: #1a1a1a;
+      color: #fff;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    .faq-answer .highlight.warn {
+      background: #fffbeb;
+      border-color: #fde68a;
+    }
+    .faq-answer table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      font-size: 12.5px;
+    }
+    .faq-answer th {
+      background: #f5f5f5;
+      font-weight: 600;
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid #e8e8e8;
+      font-size: 12px;
+    }
+    .faq-answer td {
+      padding: 7px 10px;
+      border: 1px solid #e8e8e8;
+    }
+
+    /* Footer */
+    .faq-footer {
+      text-align: center;
+      padding: 14px;
+      font-size: 11.5px;
+      color: #bbb;
+      border-top: 1px solid #e8e8e8;
+      margin-top: 8px;
+    }
+    .faq-footer a { color: #999; text-decoration: none; }
+    .faq-footer a:hover { color: #555; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="faq-header">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5" fill="#fff"/></svg>
+    <h1>Perguntas Frequentes</h1>
+    <button class="btn-voltar" id="btnVoltar">&#10005; Fechar</button>
+  </div>
+
+  <div class="faq-content">
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>1. Como funciona a extensão?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>A extensão baixa notas fiscais de serviço (NFS-e) diretamente do portal nacional <code>nfse.gov.br</code>. Funciona em 4 passos:</p>
+
+        <p><strong><span class="step-badge">1</span> Faça login no portal NFS-e</strong></p>
+        <p>Acesse o portal e faça login com certificado digital. A extensão usa sua sessão para buscar as notas.</p>
+
+        <p><strong><span class="step-badge">2</span> Tipo de NFS-e</strong></p>
+        <ul>
+          <li><strong>Emitidas</strong> — notas que você/empresa emitiu</li>
+          <li><strong>Recebidas</strong> — notas que você/empresa recebeu de terceiros</li>
+        </ul>
+
+        <p><strong><span class="step-badge">3</span> Período de Geração</strong></p>
+        <p>Defina a data inicial e final para buscar as notas. Use os atalhos rápidos (Mês Anterior, Mês Atual, etc.) ou personalize.</p>
+        <ul>
+          <li><strong>Competência</strong> — filtra notas pelo mês de competência (dCompet) em vez da data de geração. Útil quando a nota foi gerada em um mês mas a competência é de outro.</li>
+        </ul>
+
+        <p><strong><span class="step-badge">4</span> Formato do download</strong></p>
+        <ul>
+          <li><strong>XML</strong> — arquivo XML da nota fiscal</li>
+          <li><strong>PDF</strong> — DANFSe em PDF</li>
+          <li><strong>XML + PDF</strong> — ambos os formatos</li>
+          <li><strong>Compactar em .zip</strong> — agrupa todos os arquivos em um único ZIP</li>
+        </ul>
+
+        <p><strong>Mais opções:</strong> clique em <strong>"Mais opções"</strong> logo abaixo do formato para revelar filtros e configurações avançadas (ficam recolhidos por padrão).</p>
+
+        <p><strong>🔎 Filtrar notas a baixar:</strong></p>
+        <table>
+          <tr><th>Opção</th><th>O que faz</th></tr>
+          <tr><td><strong>— sem filtro —</strong></td><td>Baixa todas as notas do período (padrão)</td></tr>
+          <tr><td><strong>Somente Eventos (lento)</strong></td><td>Baixa somente notas com eventos registrados (manifestações, cancelamento, substituição). Acessa cada nota individualmente no portal, por isso é mais lento.</td></tr>
+          <tr><td><strong>Somente Canceladas/Substituídas</strong></td><td>Baixa apenas as notas com situação Cancelada ou Substituída (rápido, usa a listagem)</td></tr>
+          <tr><td><strong>Exceto Canceladas/Substituídas</strong></td><td>Baixa todas as notas, exceto as Canceladas ou Substituídas</td></tr>
+          <tr><td><strong>Faixa de números (nNFSe)</strong></td><td>Baixa apenas notas cujo nº esteja na faixa informada. Preenchendo só o inicial = "a partir de X"; só o final = "até X"; ambos = range fechado. Em Recebidas, os números podem não ser sequenciais (vêm de emissores diferentes).</td></tr>
+        </table>
+
+        <p><strong>📦 Organizar em lotes:</strong></p>
+        <ul>
+          <li>Divide o download em grupos de N notas (ex: 500 por lote) com base na ordem da listagem</li>
+          <li>Cada lote vira uma pasta ou ZIP separado com o nome do lote + quantidade esperada (ex: <code>... LOTE 1 (500 notas).zip</code>)</li>
+          <li>Útil para baixar grandes volumes em partes gerenciáveis ou refazer apenas um lote específico</li>
+          <li><strong>Modos:</strong>
+            <ul>
+              <li><strong>Todos os lotes</strong> — baixa tudo organizado em lotes</li>
+              <li><strong>Somente lotes X a Y</strong> — baixa apenas o range informado (ex: "Somente lotes 3 a 3" baixa só o LOTE 3)</li>
+            </ul>
+          </li>
+          <li>Ao final, um resumo mostra <strong>real/esperado</strong> por lote (ex: <code>LOTE 3: 347/500 ⚠️</code>) para identificar lotes incompletos</li>
+        </ul>
+
+        <div class="highlight">
+          <strong>💡 Dica:</strong> O tamanho do lote é <strong>lembrado entre sessões</strong> — importante para que "LOTE 3" signifique sempre o mesmo range ao rebaixar.
+        </div>
+
+        <p><strong>💾 Salvar:</strong></p>
+        <table>
+          <tr><th>Opção</th><th>O que faz</th></tr>
+          <tr><td><strong>Renomear por nº</strong></td><td>Renomeia os arquivos baixados com o número da NFS-e (ex: <code>12345.xml</code>)</td></tr>
+          <tr><td><strong>Pasta personalizada</strong></td><td>Salva em uma pasta customizada (clique em Selecionar para escolher).<br><br>
+            <strong>Sem Pasta personalizada:</strong><br>
+            <code>Downloads/NFSe/EMPRESA/01-03-2026 a 31-03-2026 Emitidas/</code><br>
+            <code>Downloads/NFSe/EMPRESA/01-03-2026 a 31-03-2026 Emitidas.zip</code><br><br>
+            <strong>Com Pasta personalizada:</strong><br>
+            <code>MINHA PASTA/01-03-2026 a 31-03-2026 Emitidas 14032026-210242/</code><br>
+            <code>MINHA PASTA/01-03-2026 a 31-03-2026 Emitidas 14032026-210242.zip</code><br><br>
+            ⚠️ Não selecione pastas do sistema (Área de Trabalho, Documentos, Downloads, Imagens, etc.). Crie uma pasta própria, ex: <code>C:\NFS-e</code>
+          </td></tr>
+          <tr><td><strong>Confirmar</strong></td><td>Confirma (manifesta) as notas recebidas ainda pendentes (aparece apenas em modo Recebidas)</td></tr>
+        </table>
+
+        <p><strong>Relatório:</strong></p>
+        <p>Após baixar, arraste a pasta ou ZIP para a área de relatório. A extensão gera um relatório HTML interativo ou exporta para Excel.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>2. O que a extensão faz e NÃO faz?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p><strong>✅ O que a extensão faz:</strong></p>
+        <ul>
+          <li><strong>Baixa</strong> os arquivos XML e PDF diretamente do portal NFS-e</li>
+          <li><strong>Organiza</strong> os arquivos em pastas por empresa, período e situação (Cancelada, Substituída, Manifestação)</li>
+          <li><strong>Gera relatórios</strong> (Excel, HTML) a partir dos dados que já existem nos XMLs baixados</li>
+          <li><strong>Compacta</strong> os arquivos em ZIP quando solicitado</li>
+          <li><strong>Confirma</strong> (manifesta) notas recebidas pendentes, quando solicitado</li>
+        </ul>
+
+        <p><strong>❌ O que a extensão NÃO faz:</strong></p>
+        <ul>
+          <li><strong>Não altera</strong> o conteúdo dos arquivos XML ou PDF — são idênticos aos do portal</li>
+          <li><strong>Não modifica</strong> nomes de tags, valores ou estrutura dos XMLs</li>
+          <li><strong>Não acessa</strong> seu certificado digital (e-CNPJ / e-CPF), senhas ou dados sensíveis</li>
+          <li><strong>Não coleta</strong> nenhum dado pessoal ou informação do usuário</li>
+          <li><strong>Não envia</strong> dados para servidores externos — funciona 100% local no seu navegador</li>
+          <li><strong>Não envia</strong> e-mails ou notificações de qualquer tipo</li>
+        </ul>
+
+        <div class="highlight">
+          <strong>🔒 Sobre privacidade:</strong> A comunicação ocorre <strong>exclusivamente</strong> entre o seu navegador e o portal <code>nfse.gov.br</code>. Nenhum dado passa por servidores intermediários. O relatório apenas <strong>lê e exibe</strong> as informações que já existem dentro dos XMLs.
+        </div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>3. A extensão funciona na janela anônima (incógnito)?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>Sim! A extensão <strong>funciona em janela anônima</strong>, mas é necessário ativá-la nas configurações do Chrome.</p>
+        <p><strong>Como ativar:</strong></p>
+        <p>1. Acesse <code>chrome://extensions</code> no navegador</p>
+        <p>2. Encontre a extensão <strong>Baixar NFSe</strong> e clique em <strong>Detalhes</strong></p>
+        <p>3. Verifique se as seguintes opções estão ativadas:</p>
+        <ul>
+          <li>✅ <strong>Permitir acesso automaticamente nos seguintes sites</strong> → <code>https://www.nfse.gov.br/*</code></li>
+          <li>✅ <strong>Fixar na barra de ferramentas</strong></li>
+          <li>✅ <strong>Permitir na navegação anônima</strong></li>
+        </ul>
+        <p>⚠️ <strong>Importante:</strong> Mantenha o portal NFS-e aberto em uma aba anônima enquanto usa a extensão. A extensão precisa dessa aba para acessar sua sessão no portal.</p>
+        <p>⚠️ <strong>Está logado mas aparece o erro</strong> <em>"Faça login no portal NFS-e primeiro"</em>? Verifique se as opções acima estão todas ativadas. Essa é a causa mais comum desse erro no modo anônimo.</p>
+        <p>⚠️ <strong>Limitações no modo anônimo:</strong> Alguns recursos não funcionam nesse modo. Por exemplo, a opção <strong>"Pasta personalizada"</strong> fica desabilitada, pois utiliza uma API do Chrome que não está disponível em janelas anônimas.</p>
+        <div class="highlight">
+          <strong>⚠️ Não recomendamos o uso da extensão em aba anônima.</strong> O próprio Google também não recomenda — por isso essa opção vem <strong>desativada por padrão</strong>. Ativar extensões no modo anônimo anula parte do propósito da navegação privada, além de tornar o funcionamento da extensão <strong>mais lento e com menos recursos disponíveis</strong>.
+        </div>
+        <p><strong>Alternativas melhores:</strong></p>
+        <ul>
+          <li>🟢 Usar uma <strong>aba normal</strong> do Chrome — é a forma mais rápida e estável</li>
+          <li>🟢 Criar um <strong>Perfil do Chrome</strong> separado — ideal para separar contas ou ambientes de trabalho</li>
+          <li>🟢 Usar <strong>outro computador</strong> ou uma <strong>máquina virtual</strong> — para isolamento completo</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>4. Como usar perfis do Chrome com a extensão?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>Perfis do Chrome permitem separar sessões, configurações e pastas de download. Isso é útil quando você trabalha com <strong>várias empresas</strong> ou precisa de ambientes isolados.</p>
+        <p><strong>Como criar um perfil:</strong></p>
+        <p>1. Clique no ícone do perfil (canto superior direito do Chrome)</p>
+        <p>2. Clique em <strong>Adicionar</strong></p>
+        <p>3. Nomeie o perfil (ex: "Empresa X")</p>
+        <p>4. Instale a extensão nesse perfil</p>
+        <p><strong>Vantagens:</strong></p>
+        <ul>
+          <li>🔒 Cada perfil mantém sua própria sessão no portal (login separado)</li>
+          <li>📁 Cada perfil pode ter sua própria pasta de downloads</li>
+          <li>⚙️ Configurações da extensão são independentes por perfil</li>
+          <li>🟢 Alternativa mais estável que a janela anônima</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>5. Por que notas canceladas aparecem como normais no XML?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>Até o momento, o XML retornado pelo portal <strong>não apresenta uma tag que informe o cancelamento</strong> da nota.</p>
+        <p>A extensão organiza as notas canceladas em uma subpasta separada (<strong>Cancelada/</strong>), baseando-se na informação exibida pelo próprio portal. Porém, o conteúdo do XML em si não contém essa distinção.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>6. Por que algumas notas não aparecem no período selecionado?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>O portal NFS-e filtra pela <strong>data de geração/transmissão</strong>, e <strong>não</strong> pela data do serviço ou competência. Isso pode causar confusão em dois cenários:</p>
+
+        <p><strong>Cenário 1 — Nota emitida à noite:</strong></p>
+        <p>O portal trabalha com <strong>fuso horário de +3 horas em relação a Brasília</strong>. Notas emitidas após as 21h só aparecem no filtro do dia seguinte. Na virada do mês (ex: 31/01 às 23h), a nota será registrada como 01/02 e só aparecerá no filtro de fevereiro.</p>
+
+        <p><strong>Cenário 2 — Competência diferente da geração:</strong></p>
+        <p>Uma nota gerada em 05/02 com data do serviço em 31/01 <strong>não</strong> aparece no filtro de janeiro — só no de fevereiro. Para esses casos, use o filtro de <strong>Competência</strong> da extensão.</p>
+
+        <div class="highlight">
+          <strong>💡 Dica:</strong> Use o atalho <strong>"Mês Anterior e Atual"</strong> para cobrir essas situações, ou o filtro de <strong>Competência</strong> para buscar notas de um mês específico independente da data de geração.
+        </div>
+
+        <p>ℹ️ <strong>Observação:</strong> Esse é o comportamento do <strong>portal NFS-e</strong>, não da extensão. A extensão reproduz os mesmos resultados que o portal retorna.</p>
+
+        <p><strong>Cenário 3 — Mensagem "x notas ignoradas":</strong></p>
+        <p>Se aparecer a mensagem <strong>"x notas ignoradas"</strong> durante o download, verifique se o checkbox <strong>Competência</strong> está marcado. Quando ativo, a extensão baixa somente as notas cuja competência corresponde ao mês selecionado — as demais são ignoradas. Para baixar <strong>todas</strong> as notas do período, desmarque a Competência.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>7. Por que os valores de retenção de ISS não batem?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>Em alguns casos, constatamos que o XML gerado pelo portal apresenta <strong>inconsistência nos valores de retenção de ISS</strong> quando a opção é <strong>2 - Retido pelo Tomador</strong>.</p>
+        <p><strong>O problema:</strong> O valor de <strong>Retenção ISSQN (vISSQN)</strong> é diferente do <strong>Valor Total Retenções (vTotalRet)</strong>. A extensão calcula a retenção de duas formas (individual por nota e pelo total), e os resultados deveriam ser iguais — mas não são.</p>
+        <p>Isso acontece porque em algumas notas a <strong>tag vTotalRet está ausente no XML</strong>, mesmo quando foi informado 2 - Retido pelo Tomador na emissão.</p>
+        <p><strong>Como identificar:</strong></p>
+        <p>📊 <strong>Pelo relatório Excel:</strong> Verifique a coluna <strong>Valor Total Retenções (R$) (vTotalRet)</strong>. As notas com problema terão valor <strong>zero</strong> nessa coluna, mesmo sendo retidas pelo tomador.</p>
+        <p>📄 <strong>Pelo PDF da nota:</strong> Observe que mesmo constando <strong>"Retenção do ISSQN: Retido pelo Tomador"</strong> e <strong>"ISSQN Retido: R$ 5,00"</strong> (por exemplo), o <strong>Valor Líquido da NFS-e aparece com o valor bruto</strong>, sem descontar a retenção.</p>
+        <p>ℹ️ <strong>Observação:</strong> Esse é um defeito de origem no XML gerado pelo <strong>portal NFS-e</strong>, e não da extensão. A extensão apenas lê e exibe os dados conforme estão no XML.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>8. Pede login mas já estou logado no portal</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>Esse problema geralmente ocorre porque a extensão <strong>não tem permissão</strong> para acessar o portal NFS-e. Siga os passos abaixo para resolver:</p>
+        <p>1. Acesse <code>chrome://extensions</code> no navegador</p>
+        <p>2. Encontre a extensão <strong>Baixar NFSe</strong> e clique em <strong>Detalhes</strong></p>
+        <p>3. Verifique se as seguintes opções estão ativadas:</p>
+        <ul>
+          <li>✅ <strong>Permitir acesso automaticamente nos seguintes sites</strong> → <code>https://www.nfse.gov.br/*</code></li>
+          <li>✅ <strong>Fixar na barra de ferramentas</strong></li>
+          <li>✅ <strong>Permitir na navegação anônima</strong> (se estiver usando aba anônima)</li>
+        </ul>
+        <div class="highlight warn">
+          <strong>⚠️ Importante:</strong> Após ativar as opções, <strong>feche e abra novamente</strong> a aba do portal NFS-e. A extensão precisa que a aba seja recarregada para reconhecer a sessão.
+        </div>
+        <p>Se o problema persistir, tente:</p>
+        <ul>
+          <li>🔄 Desativar e reativar a extensão em <code>chrome://extensions</code></li>
+          <li>🗑️ Limpar cookies do site <code>nfse.gov.br</code> e fazer login novamente</li>
+          <li>🌐 Usar uma <strong>janela normal</strong> do Chrome (não anônima) para descartar problemas de permissão</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">
+        <span>9. Como verificar eventos de manifestação das notas?</span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="faq-answer">
+        <p>O XML da NFS-e <strong>não contém tags de manifestação</strong>. Essas informações (rejeição, confirmação, cancelamento por manifestação, etc.) só estão disponíveis na <strong>página de visualização</strong> de cada nota no portal. Por isso, a extensão precisa acessar individualmente cada nota para verificar esses eventos.</p>
+
+        <p><strong>Como usar:</strong></p>
+        <p>1. Selecione o tipo de NFS-e (<strong>Emitidas</strong> ou <strong>Recebidas</strong>)</p>
+        <p>2. Defina o período desejado</p>
+        <p>3. Clique em <strong>Mais opções</strong> e, no dropdown <strong>Filtrar</strong>, selecione <strong>Somente Eventos (lento)</strong></p>
+        <p>4. Escolha o formato e clique em <strong>Iniciar Download</strong></p>
+
+        <p><strong>O que acontece:</strong></p>
+        <ul>
+          <li>🔍 A extensão acessa a <strong>página de detalhes</strong> de cada nota para verificar os eventos</li>
+          <li>📂 Baixa <strong>somente as notas que possuem manifestação</strong> (rejeição, confirmação, cancelamento, etc.)</li>
+          <li>📁 Organiza automaticamente em subpastas por tipo de evento (ex: <code>Confirmacao do Tomador/</code>, <code>Rejeicao do Tomador/</code>, <code>Cancelada/</code>)</li>
+        </ul>
+
+        <p><strong>Estrutura de pastas gerada:</strong></p>
+        <p><code>NFSe / Empresa / Período Manifestacoes Emitidas /</code></p>
+        <p><code>NFSe / Empresa / Período Manifestacoes Recebidas /</code></p>
+
+        <div class="highlight warn">
+          <strong>⚠️ Atenção:</strong> Essa opção é mais lenta pois precisa acessar individualmente a página de visualização de cada nota (~5 segundos por nota). Para um volume grande de notas, o processo pode demorar vários minutos.
+        </div>
+
+        <p><strong>No relatório (Visualizar / Excel):</strong></p>
+        <p>Para gerar o relatório, <strong>arraste a pasta baixada</strong> ou o <strong>arquivo ZIP</strong> para a área de relatório da extensão. A extensão identifica automaticamente as notas de manifestação pelo nome das pastas.</p>
+        <ul>
+          <li>📊 As notas com manifestação recebem o badge <strong>"Manifestação - Tipo"</strong> (ex: Manifestação - Rejeição do Tomador)</li>
+          <li>🔘 Use o filtro <strong>"Cancelada / Substituída / Manifestação"</strong> para visualizar apenas as notas com eventos</li>
+          <li>🔘 Use o filtro <strong>"Somente NFSe"</strong> para visualizar apenas as notas normais (sem eventos)</li>
+          <li>📑 No Excel, as notas são organizadas em <strong>abas separadas</strong>: NFSe, Cancelada, Substituida e Manifestacao</li>
+        </ul>
+        <div class="highlight">
+          <strong>💡 Dica:</strong> Você pode arrastar <strong>ambas as pastas</strong> (Emitidas + Manifestacoes Emitidas) de uma vez para o relatório. A extensão reconhece e classifica cada nota corretamente, permitindo comparar lado a lado as notas normais com as que possuem manifestação.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="faq.js"></script>
+
+</body>
+</html>

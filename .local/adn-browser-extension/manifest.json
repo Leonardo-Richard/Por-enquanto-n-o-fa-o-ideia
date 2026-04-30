@@ -1,0 +1,31 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "icon128.png",
+         "16": "icon16.png",
+         "48": "icon48.png"
+      }
+   },
+   "author": "CECHINEL CERTIFICACAO DIGITAL LTDA",
+   "background": {
+      "service_worker": "background.js"
+   },
+   "description": "Extensão para download de arquivos XML e PDF da Nota Fiscal de Serviço Eletrônica NFSe filtradas por período",
+   "homepage_url": "https://chromewebstore.google.com/detail/enehmclajcndmgefbmjhecccoegbdgea",
+   "host_permissions": [ "https://www.nfse.gov.br/*" ],
+   "icons": {
+      "128": "icon128.png",
+      "16": "icon16.png",
+      "48": "icon48.png"
+   },
+   "incognito": "spanning",
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsF6Ob/1kft9OsubS9xDhaGd/SvsI/OOxw2Bf/S+8ozQHuYG5eqcDF89l2Z3NQs1ouTw4WdsTd8Kl7Bn1CWF5b33r19TqBOIwL2niawVt7GYTd2z08NxB/+ntMdPH9uREuSQNGCdpp1Wxq8ySyEE+0Y+Rxbmupbtor4pLKyCoKJRX3VvsJcDPVuSc7KEm3gzS/s5KMq0pm9o9t/wRJaBDoLF/xCWmREOvR5fEpU5vox+pCRrJyoAfvMFFUiaa9EPgBmK22oLALx8ilV03+EF8pewxP9+LFMGmawhtZsnGcP/jb3VGQW0Z786pXGqS/RGQhjDo3FbaY4oQwcSQO644BwIDAQAB",
+   "manifest_version": 3,
+   "name": "Baixar NFSe Nota Fiscal de Serviço Eletrônica Emitidas e Recebidas",
+   "permissions": [ "activeTab", "downloads", "scripting", "sidePanel", "storage", "unlimitedStorage", "offscreen" ],
+   "side_panel": {
+      "default_path": "popup.html"
+   },
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "2.8.6.19"
+}

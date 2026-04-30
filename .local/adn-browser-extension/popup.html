@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<!-- Baixar NFSe - Copyright (c) 2018-2026 CECHINEL CERTIFICACAO DIGITAL LTDA - CNPJ 29.480.028/0001-55 -->
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="CECHINEL CERTIFICACAO DIGITAL LTDA">
+  <title>Baixar NFSe</title>
+  <link rel="stylesheet" href="fonts/inter.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      height: 100%;
+    }
+
+    body {
+      width: 100%;
+      max-width: 420px;
+      padding: 10px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a1a;
+      line-height: 1.5;
+      overflow-x: hidden;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 6px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #acacac;
+      width: 100%;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      margin: 0 auto 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    h1 {
+      font-size: 13px;
+      margin-bottom: 1px;
+      color: #1a1a1a;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .subtitle {
+      font-size: 10px;
+      color: #737373;
+    }
+
+    /* Step container */
+    .step {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: none;
+      width: 100%;
+    }
+
+    .step:last-of-type {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    /* Remove border do step antes do divider OPCIONAL */
+    .section-divider {
+      margin-top: -4px;
+    }
+    .step:nth-of-type(4) {
+      border-bottom: none;
+    }
+
+    .step-no-number {
+      padding-left: 30px;
+    }
+
+    /* Número do passo */
+    .step-number {
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      border: none;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 10px;
+      color: #ffffff;
+      background: #1a1a1a;
+      margin-top: 1px;
+    }
+
+
+
+    /* Conteúdo do passo */
+    .step-content {
+      flex: 1;
+      padding-top: 0px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    /* Título do passo */
+    .step-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+      line-height: 1.4;
+      letter-spacing: -0.015em;
+    }
+
+    /* Dica do passo */
+    .step-hint {
+      font-size: 10px;
+      color: #999;
+      margin-top: 4px;
+      display: block;
+      font-style: normal;
+    }
+
+    /* Link do passo */
+    .step-link {
+      font-size: 9px;
+      color: #737373;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .step-link:hover {
+      color: #525252;
+    }
+
+    /* Link inline do passo 1 */
+    .step-inline-link {
+      font-size: 11px;
+      font-weight: 600;
+      color: #2563eb;
+      text-decoration: none;
+      transition: none;
+    }
+
+    .step-inline-link:hover {
+      color: #1d4ed8;
+      text-decoration: underline;
+    }
+
+
+
+
+    /* Botões de tipo de NFS-e */
+    .nfse-type-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 0px;
+      width: 100%;
+    }
+
+    .nfse-type-btn {
+      flex: 1;
+      padding: 6px 10px;
+      background: #ffffff;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #1a1a1a;
+      text-decoration: none;
+      text-align: center;
+      transition: none;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .nfse-type-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+    }
+
+    .external-icon {
+      font-size: 11px;
+      opacity: 0.4;
+      margin-left: auto;
+      transition: none;
+    }
+
+    .nfse-type-btn:hover .external-icon {
+      opacity: 0.7;
+    }
+
+    .nfse-type-btn:hover {
+      background: #f5f5f5;
+      border-color: #d4d4d4;
+    }
+
+    .nfse-type-btn.selected {
+      background: #1a1a1a;
+      color: #ffffff;
+      border-color: #1a1a1a;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    .nfse-type-btn.selected:hover {
+      background: #333333;
+      border-color: #333333;
+    }
+
+    .nfse-type-btn.selected .nfse-type-icon {
+      filter: brightness(0) invert(1);
+    }
+
+    /* Seção de datas */
+    .date-section {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      background: #fafafa;
+      border: 1px solid #ccd0d5;
+      border-radius: 10px;
+      padding: 8px 10px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .date-indicator {
+      width: 3px;
+      background: #1a1a1a;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .date-content {
+      flex: 1;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .date-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #525252;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .date-inputs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 0;
+      width: 100%;
+    }
+
+    .date-input-group {
+      flex: 1;
+    }
+
+    .date-input-group label {
+      display: block;
+      margin-bottom: 3px;
+      font-weight: 500;
+      color: #525252;
+      font-size: 9px;
+    }
+
+    input {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1.5px solid #e5e5e5;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      transition: none;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #1a1a1a;
+      background: #ffffff;
+    }
+
+    input::placeholder {
+      color: #a3a3a3;
+    }
+
+    /* Atalhos de data */
+    .date-shortcuts {
+      padding-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .date-shortcuts-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #525252;
+      white-space: nowrap;
+      min-width: 95px;
+    }
+
+    .date-shortcuts select {
+      flex: 1;
+      padding: 5px 8px;
+      border: 1.5px solid #e5e5e5;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      color: #1a1a1a;
+      cursor: pointer;
+    }
+
+    .date-shortcuts select:focus {
+      outline: none;
+      border-color: #1a1a1a;
+    }
+
+    .badge-pro {
+      display: inline-block;
+      padding: 1px 4px;
+      font-size: 8px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    /* Tooltip styles */
+    .tooltip-icon {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      background: #e5e5e5;
+      border-radius: 50%;
+      font-size: 9px;
+      font-weight: 600;
+      color: #737373;
+      cursor: help;
+    }
+
+    .tooltip-icon:hover {
+      background: #d4d4d4;
+      color: #525252;
+    }
+
+    .tooltip-content {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(200px, 90vw);
+      background: #ffffff;
+      color: #525252;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 10px;
+      line-height: 1.5;
+      text-align: left;
+      z-index: 100;
+      margin-top: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      border: 1px solid #e5e5e5;
+      transition: none;
+    }
+
+    .tooltip-content::after {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 6px;
+      border-style: solid;
+      border-color: transparent transparent #ffffff transparent;
+      filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.05));
+    }
+
+    .tooltip-icon:hover .tooltip-content {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .tooltip-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .tooltip-item:last-of-type {
+      border-bottom: none;
+    }
+
+    .tooltip-item-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+
+    .tooltip-item-icon.blue {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+
+    .tooltip-item-icon.green {
+      background: #f0fdf4;
+      color: #16a34a;
+    }
+
+    .tooltip-item strong {
+      color: #1a1a1a;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 2px;
+      font-size: 10px;
+    }
+
+    .tooltip-item span {
+      font-size: 9px;
+      color: #737373;
+    }
+
+    .tooltip-tip {
+      margin-top: 8px;
+      padding: 8px;
+      background: #fef3c7;
+      border-radius: 6px;
+      font-size: 9px;
+      color: #92400e;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .tooltip-tip-icon {
+      font-size: 10px;
+    }
+
+    /* Seção de download */
+    .download-section {
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .download-radio-group {
+      display: flex;
+      gap: 4px;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .download-radio-option {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 4px;
+      background: #ffffff;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 9px;
+      font-weight: 600;
+      color: #1a1a1a;
+      cursor: pointer;
+      transition: none;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .download-radio-option:hover {
+      background: #f5f5f5;
+      border-color: #d4d4d4;
+    }
+
+    .download-radio-option:has(input:checked) {
+      background: #1a1a1a;
+      color: #ffffff;
+      border-color: #1a1a1a;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    .download-radio-option input[type="radio"] {
+      display: none;
+    }
+
+    .radio-label {
+      pointer-events: none;
+    }
+
+    #startDownloadBtn {
+      width: 100%;
+      padding: 7px 12px;
+      font-size: 11px;
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      color: #ffffff;
+      border-color: #16a34a;
+      box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+    }
+
+    #startDownloadBtn:hover {
+      background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+      border-color: #15803d;
+      box-shadow: 0 3px 8px rgba(22, 163, 74, 0.35);
+    }
+
+    #startDownloadBtn.modo-confirmar {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      border-color: #16a34a;
+      box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+    }
+
+    #startDownloadBtn.modo-confirmar:hover {
+      background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+      border-color: #15803d;
+      box-shadow: 0 3px 8px rgba(22, 163, 74, 0.35);
+    }
+
+    .certificate-banner.modo-confirmar {
+      background: linear-gradient(135deg, #1a1a1a 0%, #333333 100%) !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px 12px;
+      background: #ffffff;
+      color: #1a1a1a;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: none;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    button:hover {
+      background: #f0f0f0;
+      border-color: #c0c0c0;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #1a1a1a 0%, #333333 100%);
+      color: #ffffff;
+      border-color: #1a1a1a;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    button.primary:hover {
+      background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+      border-color: #000000;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+    }
+
+
+    .report-buttons {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .report-buttons button {
+      flex: 1;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+      font-size: 9px;
+    }
+
+    .btn-icon {
+      width: 14px;
+      height: 14px;
+      object-fit: contain;
+    }
+
+    .step-subtitle {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 5px 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: none;
+      position: relative;
+      margin-bottom: 6px;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      border: 0;
+    }
+
+    .drop-zone-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      font-size: 11px;
+      color: #666;
+    }
+
+    .drop-icon {
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drop-hint {
+      font-size: 9px;
+      color: #999;
+    }
+
+    .folder-name {
+      font-size: 10px;
+      color: #16a34a;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .report-buttons button:disabled {
+      background: #f0f0f0;
+      color: #a3a3a3;
+      border-color: #e0e0e0;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-config {
+      flex: 0 0 auto !important;
+      width: 32px;
+      padding: 6px !important;
+      font-size: 14px;
+      color: #737373;
+    }
+
+    .btn-config:hover {
+      color: #1a1a1a;
+    }
+
+    /* Separador de seção */
+    .section-divider {
+      display: flex;
+      align-items: center;
+      margin: 20px 0 8px;
+      gap: 10px;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #ccd0d5;
+    }
+
+    .divider-label {
+      font-size: 9px;
+      font-weight: 600;
+      color: #1a1a1a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Badge de empresa logada */
+    .company-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 4px 0;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+
+    .company-name {
+      font-size: 10px;
+      font-weight: 600;
+      color: #1a1a1a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 70%;
+    }
+
+    .company-status {
+      font-size: 8px;
+      font-weight: 600;
+      color: #16a34a;
+      flex-shrink: 0;
+    }
+
+    /* Highlight de atenção */
+    .step.highlight {
+      background: #fef2f2;
+      border-radius: 8px;
+      padding: 10px;
+      margin-left: -10px;
+      margin-right: -10px;
+    }
+
+    /* Status */
+    #status {
+      margin-top: 8px;
+      padding: 8px;
+      background: #f5f5f5;
+      border-radius: 5px;
+      text-align: center;
+      font-size: 10px;
+      display: none;
+      color: #1a1a1a;
+      border: 1px solid #e5e5e5;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    #status.show {
+      display: block;
+    }
+
+    /* Barra de progresso */
+    .progress-container {
+      width: 100%;
+      margin-top: 6px;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: #e5e5e5;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1a1a1a, #404040);
+      border-radius: 4px;
+      transition: none;
+    }
+
+    .progress-bar-fill.complete {
+      background: linear-gradient(90deg, #16a34a, #22c55e);
+    }
+
+    .progress-bar-fill.error {
+      background: linear-gradient(90deg, #dc2626, #ef4444);
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #737373;
+      margin-top: 3px;
+    }
+
+    #status a {
+      color: #1a1a1a;
+      text-decoration: underline;
+      font-weight: 500;
+    }
+
+    /* Banner de certificado - flutuante (sticky) */
+    .certificate-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 0;
+      margin: -10px -10px 8px -10px;
+      width: calc(100% + 20px);
+      transition: none;
+      border: none;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    /* Cor única - Preto: simples, profissional */
+    .certificate-banner.morning,
+    .certificate-banner.afternoon,
+    .certificate-banner.evening,
+    .certificate-banner.night {
+      background: linear-gradient(135deg, #1a1a1a 0%, #333333 100%);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    .certificate-banner:hover {
+      opacity: 0.95;
+    }
+
+    .banner-icon-img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    .banner-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .banner-title {
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .banner-cta {
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.95;
+      letter-spacing: 0.02em;
+      margin-top: 1px;
+    }
+
+    /* Responsivo para telas com pouca altura (notebooks) */
+    @media (max-height: 750px) {
+      body { padding: 6px 10px; }
+      .header { margin-bottom: 3px; padding-bottom: 6px; }
+      .logo { width: 28px; height: 28px; margin-bottom: 4px; }
+      h1 { font-size: 12px; }
+      .step { margin-bottom: 2px; padding-bottom: 2px; gap: 8px; }
+      .step-title { margin-bottom: 4px; }
+      .step-hint { margin-top: 3px; }
+      .certificate-banner { padding: 5px 10px; margin: -6px -10px 6px -10px; width: calc(100% + 20px); }
+      .section-divider { margin: 2px 0; }
+      .drop-zone { padding: 10px; }
+      .drop-icon { font-size: 18px; }
+      .drop-zone-label { font-size: 10px; }
+      .drop-hint { font-size: 8px; }
+    }
+
+    @media (max-height: 600px) {
+      body { padding: 4px 8px; }
+      .header { margin-bottom: 2px; padding-bottom: 4px; }
+      .logo { width: 22px; height: 22px; margin-bottom: 2px; }
+      .step { margin-bottom: 1px; padding-bottom: 1px; }
+      .step-title { font-size: 11px; margin-bottom: 3px; }
+      .certificate-banner { padding: 4px 8px; margin: -4px -8px 4px -8px; width: calc(100% + 16px); }
+      .banner-icon-img { width: 16px; height: 16px; }
+      .banner-title { font-size: 10px; }
+      .banner-cta { font-size: 9px; }
+      .drop-zone { padding: 8px; }
+      .drop-icon { font-size: 16px; }
+      .popup-footer { margin: 0 -8px !important; padding-left: 8px !important; padding-right: 8px !important; }
+    }
+
+    /* Footer links hover */
+    .footer-link:hover {
+      color: #555 !important;
+    }
+    .footer-link:hover svg {
+      stroke: #555;
+    }
+
+    /* Botão "Mais opções" — toggle discreto, sem sombra de botão */
+    #btnMaisOpcoes {
+      box-shadow: none !important;
+      flex: 0 0 auto;
+    }
+    #btnMaisOpcoes:hover {
+      color: #1a1a1a;
+      text-decoration: underline;
+      background: transparent;
+      border-color: transparent;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Banner Título -->
+  <div class="certificate-banner">
+    <span class="banner-title" id="bannerTitle">Baixar NFSe</span>
+  </div>
+
+  <main style="flex: 1;">
+  <!-- PASSO 1: Login -->
+  <div class="step" id="step1">
+    <div class="step-number">1</div>
+    <div class="step-content">
+      <div class="step-title" title="A partir do passo 2, tudo é feito por aqui na extensão.">Faça login no portal NFS-e: <a href="#" id="linkAcessarPortal" class="step-inline-link">Acessar ↗</a></div>
+    </div>
+  </div>
+
+  <!-- PASSO 2: Tipo de NFS-e -->
+  <div class="step" id="step2">
+    <div class="step-number">2</div>
+    <div class="step-content">
+      <div class="step-title">Tipo de NFS-e:</div>
+      <div class="nfse-type-buttons">
+        <a href="https://www.nfse.gov.br/EmissorNacional/Notas/Emitidas" target="_blank" class="nfse-type-btn">
+          <img src="menu-emitidas-35.svg" alt="" class="nfse-type-icon">
+          Emitidas
+        </a>
+        <a href="https://www.nfse.gov.br/EmissorNacional/Notas/Recebidas" target="_blank" class="nfse-type-btn">
+          <img src="menu-recebidas-35.svg" alt="" class="nfse-type-icon">
+          Recebidas
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSO 3: Período -->
+  <div class="step">
+    <div class="step-number">3</div>
+    <div class="step-content">
+      <div class="step-title">Período de Geração:</div>
+
+      <div class="date-section">
+        <div class="date-indicator"></div>
+        <div class="date-content">
+
+          <div class="date-inputs">
+            <div class="date-input-group">
+              <label for="dateStart">Data Inicial</label>
+              <input type="date" id="dateStart" />
+            </div>
+            <div class="date-input-group">
+              <label for="dateEnd">Data Final</label>
+              <input type="date" id="dateEnd" />
+            </div>
+          </div>
+          <div class="date-shortcuts" id="dateShortcuts"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSO 4: Tipo de Download -->
+  <div class="step">
+    <div class="step-number">4</div>
+    <div class="step-content">
+      <div class="step-title" id="step4Title">Formato do download:</div>
+
+      <div class="download-section">
+        <fieldset id="formatFieldset" style="border:1px solid #ccd0d5; border-radius:8px; padding:6px 10px; margin:0 0 12px;">
+          <legend style="font-size:10px; color:#64748b; padding:0 4px;">
+            <label title="Compacta todos os arquivos baixados em um único arquivo ZIP" style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
+              <input type="checkbox" id="chkZip" style="margin:0; width:12px; height:12px; cursor:pointer;">
+              Compactar em .zip
+            </label>
+          </legend>
+          <div class="download-radio-group">
+            <label class="download-radio-option">
+              <input type="radio" name="downloadType" value="xml" checked>
+              <span class="radio-label">XML</span>
+            </label>
+            <label class="download-radio-option">
+              <input type="radio" name="downloadType" value="pdf">
+              <span class="radio-label">PDF</span>
+            </label>
+            <label class="download-radio-option">
+              <input type="radio" name="downloadType" value="both">
+              <span class="radio-label">XML + PDF</span>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset id="maisOpcoesFieldset" style="border:none; padding:0; margin:0 0 12px;">
+          <legend style="font-size:12px; color:#64748b; padding:0 4px; width:auto; margin:0 auto; display:block; text-align:center;">
+            <button type="button" id="btnMaisOpcoes" style="padding:4px 8px; background:transparent; border:none; font-size:12px; font-family:'Inter',sans-serif; color:#64748b; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+              <span id="btnMaisOpcoesArrow">▾</span>
+              <span id="btnMaisOpcoesLabel">Mais opções</span>
+            </button>
+          </legend>
+          <div id="maisOpcoesSection" style="display:none; flex-direction:column; gap:8px; padding:6px 0 8px;">
+        <div id="filtroNotasRow" style="display:flex; align-items:center; gap:6px; margin:0; padding:0;">
+          <label id="lblFiltroNotas" title="Filtra quais notas do período serão baixadas.&#10;&#10;• Somente Eventos: notas com eventos (manifestações, cancelamento, substituição). Modo mais lento — cada nota precisa ser aberta.&#10;• Somente Canceladas/Substituídas: apenas essas (rápido).&#10;• Exceto Canceladas/Substituídas: todas as demais.&#10;• Faixa de números: baixa apenas notas cujo nº esteja entre os valores informados. Útil para recuperar faixas específicas. Para Recebidas, os números podem não ser sequenciais." style="display:inline-flex; align-items:center; gap:6px; font-size:10px; color:#64748b; cursor:pointer; white-space:nowrap; flex:1;">
+            <select id="selectFiltroNotas" style="flex:1; padding:3px 6px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff; color:#999; font-style:italic; cursor:pointer;">
+              <option value="" style="color:#999; font-style:italic;">— sem filtro —</option>
+              <option value="eventos" style="color:#1a1a1a; font-style:normal;">Somente Eventos (lento)</option>
+              <option value="cs" style="color:#1a1a1a; font-style:normal;">Somente Canceladas/Substituídas</option>
+              <option value="exceto" style="color:#1a1a1a; font-style:normal;">Exceto Canceladas/Substituídas</option>
+              <option value="faixa" style="color:#1a1a1a; font-style:normal;">Faixa de números (nNFSe)</option>
+            </select>
+          </label>
+        </div>
+        <div id="filtroNumerosRow" style="display:none; align-items:center; gap:6px; margin:0; padding-left:18px;">
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:10px; color:#64748b; white-space:nowrap; flex:1;">
+            Nº NFSe:
+            <input type="number" id="inputNumIni" min="1" placeholder="inicial" style="width:70px; padding:3px 6px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff;">
+            <span style="color:#999;">a</span>
+            <input type="number" id="inputNumFim" min="1" placeholder="final" style="width:70px; padding:3px 6px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff;">
+          </label>
+        </div>
+        <div id="competenciaSection" style="display:flex; align-items:center; gap:6px; margin:0;">
+          <label id="lblCompetencia" title="Filtra pela data de competência (data do serviço) dentro do período de geração/transmissão informado.&#10;&#10;Exemplo: Período 01/04 a 30/04 com Competência Março&#10;→ Busca nas notas geradas em Abril que possuem data de serviço em Março.&#10;→ Baixa apenas notas de Março.&#10;&#10;⚠️ Pode ser mais lento, pois cada nota precisa ser lida para verificar a competência.&#10;&#10;Os meses disponíveis incluem 2 meses antes da Data Inicial do Período de Geração." style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:#64748b; cursor:pointer; white-space:nowrap;">
+            <input type="checkbox" id="chkCompetencia" style="margin:0; width:12px; height:12px; cursor:pointer;">
+            Competência:
+          </label>
+          <select id="selectCompetencia" style="flex:1; padding:3px 6px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff; cursor:pointer;"></select>
+        </div>
+        <div id="loteRow" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:6px; margin:0;">
+          <label id="lblLote" title="Organiza o download em lotes (grupos de N notas), cada um numa pasta/ZIP separado.&#10;&#10;Útil para:&#10;• Baixar grandes volumes em partes gerenciáveis&#10;• Refazer apenas um lote específico se algo falhar&#10;&#10;Os lotes são definidos pela ordem da listagem do portal.&#10;Em Recebidas, notas de emissores variados ficam misturadas dentro do mesmo lote." style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:#64748b; cursor:pointer; white-space:nowrap; flex:0 0 auto; width:fit-content;">
+            <input type="checkbox" id="chkLote" style="margin:0; width:12px; height:12px; cursor:pointer;">
+            Organizar em lotes de
+            <input type="number" id="selectLoteSize" min="1" value="500" style="width:60px; padding:2px 6px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff; text-align:center;">
+            notas
+          </label>
+        </div>
+        <div id="loteSubRow" style="display:none; flex-direction:column; align-items:flex-start; gap:3px; margin:4px 0 0 8px; padding-left:12px; border-left:2px solid #e0e0e0;">
+          <span style="font-size:10px; font-weight:600; color:#64748b; margin-bottom:4px;">Lotes a baixar:</span>
+          <label style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:#64748b; cursor:pointer;">
+            <input type="radio" name="loteRange" value="all" checked style="margin:0; cursor:pointer; width:auto;">
+            Todos
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:#64748b; cursor:pointer; white-space:nowrap;">
+            <input type="radio" name="loteRange" value="some" style="margin:0; cursor:pointer; width:auto;">
+            Somente lotes
+            <span id="loteInputsWrapper" style="display:none; align-items:center; gap:4px;">
+              <input type="number" id="loteIni" min="1" placeholder="início" style="width:54px; padding:2px 4px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff;">
+              <span style="color:#999;">a</span>
+              <input type="number" id="loteFim" min="1" placeholder="fim" style="width:54px; padding:2px 4px; border:1px solid #e5e5e5; border-radius:4px; font-size:10px; font-family:'Inter',sans-serif; background:#ffffff;">
+            </span>
+          </label>
+        </div>
+        <div id="organizacaoRow" style="display:flex; flex-direction:column; gap:8px; margin:0; padding:0;">
+          <label id="lblRenameToNNFSe" title="Renomeia os arquivos baixados usando o número da NFS-e (ex: 12345.xml) em vez do nome original" style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:#64748b; cursor:pointer; white-space:nowrap; align-self:flex-start;">
+            <input type="checkbox" id="chkRenameToNNFSe" style="margin:0; width:12px; height:12px; cursor:pointer;">
+            Renomear por nº
+          </label>
+          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px;">
+            <label id="lblEscolherPasta" title="Permite escolher em qual pasta do computador os arquivos serão salvos, em vez de usar a pasta padrão de downloads.&#10;&#10;⚠️ Não selecione pastas do sistema (Área de Trabalho, Documentos, Downloads, Imagens, etc.). Crie uma pasta própria, ex: C:\NFS-e" style="display:none; align-items:center; gap:4px; font-size:10px; color:#64748b; cursor:pointer; white-space:nowrap;">
+              <input type="checkbox" id="chkEscolherPasta" style="margin:0; width:12px; height:12px; cursor:pointer;">
+              Pasta personalizada
+            </label>
+            <span id="folderPickerSection" style="display:none; align-items:center; gap:4px;">
+              <button type="button" id="btnEscolherPasta" style="padding:2px 6px; font-size:10px; white-space:nowrap; background:#f3f4f6; border:1px solid #d1d5db; border-radius:4px; cursor:pointer;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:2px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Selecionar
+              </button>
+              <span id="selectedFolderPath" style="font-size:10px; color:#999; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px;">Nenhuma pasta selecionada</span>
+            </span>
+          </div>
+          <label id="lblConfirmar" title="Confirma (manifesta) as notas selecionadas recebidas ainda pendentes" style="display:none; align-items:center; gap:4px; font-size:10px; color:#dc2626; cursor:pointer; white-space:nowrap; font-weight:600; align-self:flex-start;">
+            <input type="checkbox" id="chkConfirmar" style="margin:0; width:12px; height:12px; cursor:pointer;">
+            Confirmar
+          </label>
+        </div>
+        <div id="folderPermissionWarning" style="display:none; margin:4px 0 8px 18px; padding:4px 6px; background:#fef3c7; border-radius:4px; font-size:9px; color:#92400e;">
+          ⚠️ Permissão expirada. <a href="#" id="btnReauthorize" style="color:#2563eb; font-weight:600; text-decoration:underline;">Reautorizar</a>
+        </div>
+        </div>
+        </fieldset>
+        <button id="startDownloadBtn"><svg id="btnIconDownload" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><svg id="btnIconConfirmar" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px; display:none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span id="btnLabel">Iniciar Download</span></button>
+        <!-- Status (fora do relatorioSection para ficar visível no modo confirmar) -->
+        <div id="status"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Separador opcional -->
+  <div id="relatorioDivider" class="section-divider">
+    <span class="divider-label">Relatório das NFS-e</span>
+  </div>
+
+  <!-- Relatório (opcional) -->
+  <div id="relatorioSection" class="step step-no-number">
+    <div class="step-content">
+      <div id="dropZone" class="drop-zone">
+        <div class="drop-zone-label" style="flex-direction:row; gap:8px; align-items:center; justify-content:center;">
+          <span class="drop-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+          <span style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+            <span>Arraste a <strong>Pasta</strong> ou o <strong>ZIP</strong> aqui</span>
+            <span class="drop-hint" style="font-size:8px; opacity:0.75;">(Emitidas, Recebidas ou Manifestações)</span>
+          </span>
+        </div>
+        <input type="file" id="xmlFilesInput" multiple accept=".xml,.zip" style="display:none;">
+      </div>
+      <span id="folderName" class="folder-name"></span>
+      <div class="report-buttons" style="margin-top:10px;">
+        <button id="reportBtn" disabled><img src="icone-ver.svg" alt="" class="btn-icon"> Visualizar</button>
+        <button id="exportExcelBtn" disabled><img src="icone-excel.svg" alt="" class="btn-icon"> Gerar Excel</button>
+      </div>
+      <div class="report-buttons" style="margin-top:6px;">
+        <button id="exportCustomExcelBtn" disabled><img src="icone-excel.svg" alt="" class="btn-icon"> Gerar Excel Personalizado</button>
+        <button id="configCustomExcelBtn" class="btn-config" title="Configurar campos">&#9881;</button>
+      </div>
+    </div>
+  </div>
+
+  </main>
+
+  <div class="popup-footer" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 10px 4px; background: #f8f9fa; margin: 0 -10px; border-top: 1px solid #ccd0d5; margin-top: auto; position: relative;">
+    <a href="https://forms.gle/tJWUW8cvMFdwrrbFA"
+        target="_blank"
+        class="footer-link"
+        style="font-size: 11.5px; color: #666; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: none;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>
+        Suporte</a>
+    <span style="font-size: 10px; color: #bbb;">|</span>
+    <a href="#" id="btnCompartilhar"
+        class="footer-link"
+        style="font-size: 11.5px; color: #666; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; transition: none;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Compartilhar</a>
+    <span style="font-size: 10px; color: #bbb;">|</span>
+    <a href="faq.html"
+        target="_blank"
+        class="footer-link"
+        style="font-size: 11.5px; color: #666; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: none;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        FAQ</a>
+    <span style="font-size: 10px; color: #bbb;">|</span>
+    <span style="font-size: 10.5px; color: #888;" id="extVersion"></span>
+
+    <!-- Menu Compartilhar -->
+    <div id="shareMenu" style="display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 8px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 999; white-space: nowrap;">
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button id="shareCopy" title="Copiar link" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 52px; height: 48px; border: none; background: #f5f5f5; border-radius: 10px; cursor: pointer; transition: none; gap: 3px; position: relative;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span style="font-size: 9px; color: #888;">Link</span>
+        </button>
+        <button id="shareWhatsApp" title="WhatsApp" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 52px; height: 48px; border: none; background: #f5f5f5; border-radius: 10px; cursor: pointer; transition: none; gap: 3px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          <span style="font-size: 9px; color: #888;">Zap</span>
+        </button>
+        <button id="shareEmail" title="E-mail" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 52px; height: 48px; border: none; background: #f5f5f5; border-radius: 10px; cursor: pointer; transition: none; gap: 3px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>
+          <span style="font-size: 9px; color: #888;">Email</span>
+        </button>
+      </div>
+      <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid #fff;"></div>
+      <div style="position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 7px solid #e0e0e0; z-index: -1;"></div>
+    </div>
+  </div>
+
+  <script src="jszip.min.js"></script>
+  <script src="xlsx.min.js"></script>
+  <script src="nfse-fields.js"></script>
+  <script src="popup.js"></script>
+</body>
+
+</html>

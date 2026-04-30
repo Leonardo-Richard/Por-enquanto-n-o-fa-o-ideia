@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<!-- Baixar NFSe - Copyright (c) 2018-2026 CECHINEL CERTIFICACAO DIGITAL LTDA - CNPJ 29.480.028/0001-55 -->
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="CECHINEL CERTIFICACAO DIGITAL LTDA">
+  <title>Configurar Excel Personalizado</title>
+  <link rel="stylesheet" href="fonts/inter.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a1a;
+      line-height: 1.4;
+      overflow-x: hidden;
+    }
+
+    .config-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #acacac;
+    }
+
+    .config-header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .config-header .subtitle {
+      font-size: 12px;
+      color: #737373;
+    }
+
+    .btn-back {
+      background: #f5f5f5;
+      border: 1px solid #d4d4d4;
+      cursor: pointer;
+      font-size: 11px;
+      color: #525252;
+      padding: 4px 12px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-back:hover {
+      background: #e5e5e5;
+      border-color: #a3a3a3;
+      color: #1a1a1a;
+    }
+
+    /* Actions bar */
+    .actions-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .actions-bar button {
+      padding: 6px 12px;
+      border: 1px solid #d4d4d4;
+      border-radius: 6px;
+      background: white;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      color: #525252;
+      transition: all 0.15s;
+    }
+
+    .actions-bar button:hover {
+      background: #f5f5f5;
+      border-color: #a3a3a3;
+    }
+
+    .actions-bar button.active {
+      background: #1a1a1a;
+      color: white;
+      border-color: #1a1a1a;
+    }
+
+    /* Counter */
+    .counter {
+      font-size: 12px;
+      color: #737373;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .counter strong {
+      color: #1a1a1a;
+    }
+
+    /* Search */
+    .search-box {
+      margin-bottom: 10px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid #d4d4d4;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      background: white;
+    }
+
+    .search-box input:focus {
+      border-color: #1a1a1a;
+    }
+
+    .search-box input::placeholder {
+      color: #a3a3a3;
+    }
+
+    /* Groups */
+    .group {
+      margin-bottom: 6px;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      background: white;
+      overflow: hidden;
+    }
+
+    .group-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      cursor: pointer;
+      user-select: none;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+
+    .group-header:hover {
+      background: #fafafa;
+    }
+
+    .group-toggle {
+      font-size: 10px;
+      color: #a3a3a3;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+
+    .group.open .group-toggle {
+      transform: rotate(90deg);
+    }
+
+    .group-checkbox {
+      flex-shrink: 0;
+    }
+
+    .group-checkbox input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      accent-color: #1a1a1a;
+    }
+
+    .group-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .group-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .group-desc {
+      font-size: 11px;
+      color: #a3a3a3;
+      margin-top: 1px;
+    }
+
+    .group-count {
+      font-size: 11px;
+      color: #737373;
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .group-count.has-selected {
+      background: #1a1a1a;
+      color: white;
+    }
+
+    /* Fields */
+    .group-fields {
+      display: none;
+      border-top: 1px solid #f0f0f0;
+      padding: 4px 0;
+    }
+
+    .group.open .group-fields {
+      display: block;
+    }
+
+    .field-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 5px 10px 5px 36px;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .field-item:hover {
+      background: #fafafa;
+    }
+
+    .field-item.hidden {
+      display: none;
+    }
+
+    .field-item input[type="checkbox"] {
+      width: 13px;
+      height: 13px;
+      cursor: pointer;
+      accent-color: #1a1a1a;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .field-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .field-label {
+      font-size: 13px;
+      color: #1a1a1a;
+    }
+
+    .field-tag {
+      font-size: 10px;
+      color: #2563eb;
+      font-family: 'Courier New', monospace;
+      background: #eff6ff;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-left: 4px;
+    }
+
+    .field-desc {
+      font-size: 11px;
+      color: #a3a3a3;
+      margin-top: 1px;
+      line-height: 1.3;
+    }
+
+    /* Footer */
+    .config-footer {
+      position: sticky;
+      bottom: 0;
+      background: #f8f9fa;
+      padding: 10px 0 0;
+      margin-top: 10px;
+      border-top: 1px solid #e5e5e5;
+    }
+
+    .btn-save {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #1a1a1a 0%, #333333 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .btn-save:hover {
+      opacity: 0.9;
+    }
+
+    .btn-save:active {
+      opacity: 0.8;
+    }
+
+    .save-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #a3a3a3;
+      margin-top: 6px;
+      padding-bottom: 4px;
+    }
+
+    /* Footer buttons row */
+    .footer-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn-back-step {
+      padding: 10px 16px;
+      background: white;
+      color: #525252;
+      border: 1px solid #d4d4d4;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-back-step:hover {
+      background: #f5f5f5;
+      border-color: #a3a3a3;
+    }
+
+    /* Step 2: Reorder */
+    .reorder-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .reorder-counter {
+      font-size: 12px;
+      color: #737373;
+      padding: 4px 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .reorder-tip {
+      font-size: 11px;
+      color: #a3a3a3;
+    }
+
+    .reorder-container {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .reorder-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: white;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      cursor: grab;
+      user-select: none;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+
+    .reorder-item:hover {
+      border-color: #c0c0c0;
+    }
+
+    .reorder-item:active, .reorder-item.dragging {
+      cursor: grabbing;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border-color: #2563eb;
+      background: #f8faff;
+      z-index: 10;
+    }
+
+    .reorder-item.drag-over-above {
+      border-top: 2px solid #2563eb;
+    }
+
+    .reorder-item.drag-over-below {
+      border-bottom: 2px solid #2563eb;
+    }
+
+    .reorder-handle {
+      color: #c0c0c0;
+      font-size: 14px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .reorder-number {
+      font-size: 11px;
+      color: #a3a3a3;
+      min-width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+      font-weight: 500;
+    }
+
+    .reorder-field-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .reorder-field-label {
+      font-size: 13px;
+      color: #1a1a1a;
+      font-weight: 500;
+    }
+
+    .reorder-field-group {
+      font-size: 10px;
+      color: #a3a3a3;
+      margin-top: 1px;
+    }
+
+    .reorder-field-tag {
+      font-size: 10px;
+      color: #2563eb;
+      font-family: 'Courier New', monospace;
+      background: #eff6ff;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="config-header">
+    <div>
+      <h1>Excel Personalizado</h1>
+      <div class="subtitle" id="headerSubtitle">1. Selecione os campos &nbsp;→&nbsp; 2. Ordenar colunas &nbsp;→&nbsp; 3. Salvar &nbsp;→&nbsp; 4. Gerar Excel Personalizado</div>
+    </div>
+    <button class="btn-back" id="btnBack" title="Fechar" style="margin-left:auto;">Fechar</button>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Buscar campo ou tag...">
+  </div>
+
+  <div class="actions-bar">
+    <button id="btnSelectAll">Selecionar todos</button>
+    <button id="btnDeselectAll">Desmarcar todos</button>
+    <button id="btnExpandAll">Expandir todos</button>
+    <button id="btnCollapseAll">Recolher todos</button>
+  </div>
+
+  <div class="counter" id="counter">
+    <strong>0</strong> de <strong>0</strong> campos selecionados
+  </div>
+
+  <div id="groupsContainer"></div>
+
+  <div class="config-footer" id="footer-step1">
+    <button class="btn-save" id="btnNext">Avançar — Ordenar colunas</button>
+    <div class="save-hint">Próximo passo: definir a ordem das colunas no Excel</div>
+  </div>
+
+  <!-- STEP 2: Reordenação -->
+  <div id="step2" style="display:none;">
+    <div class="reorder-info">
+      <span class="reorder-counter" id="reorderCounter">0 campos selecionados</span>
+      <span class="reorder-tip">Arraste os itens para reordenar as colunas do Excel</span>
+    </div>
+    <div id="reorderContainer" class="reorder-container"></div>
+  </div>
+
+  <div class="config-footer" id="footer-step2" style="display:none;">
+    <div class="footer-buttons">
+      <button class="btn-back-step" id="btnBackStep">← Voltar</button>
+      <button class="btn-save" id="btnSave" style="flex:1;">Salvar configuração</button>
+    </div>
+    <div class="save-hint">Após salvar, clique em <b>Gerar Excel Personalizado</b> na tela principal</div>
+  </div>
+
+  <script src="nfse-fields.js"></script>
+  <script src="config-excel.js"></script>
+</body>
+
+</html>
