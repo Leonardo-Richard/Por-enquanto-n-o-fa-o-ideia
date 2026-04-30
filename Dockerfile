@@ -21,7 +21,13 @@ COPY package.json package-lock.json ./
 COPY frontend ./frontend
 COPY backend ./backend
 COPY packages ./packages
-# Monorepo: o binário `next` fica hoisted na raiz; `npm run -w frontend` nem sempre mete .bin no PATH.
+# O COPY do código apaga os `node_modules` dos workspaces criados no estágio `deps` (o lockfile
+# coloca `next` em `frontend/node_modules`, não só na raiz).
+COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
+COPY --from=deps /app/backend/node_modules ./backend/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/scheduling/node_modules ./packages/scheduling/node_modules
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 RUN cd frontend && npx next build
 
 FROM base AS runner
