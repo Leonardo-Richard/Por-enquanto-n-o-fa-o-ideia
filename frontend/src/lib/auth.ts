@@ -12,6 +12,40 @@ function getBaseUrl(): string {
   );
 }
 
+/** Origem normalizada (scheme + host + port) para `trustedOrigins` do Better Auth. */
+function toTrustedOrigin(raw: string): string | null {
+  const t = raw.trim().replace(/\/+$/, "");
+  if (!t) return null;
+  try {
+    return new URL(t).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Better Auth exige que o header `Origin` do browser esteja nesta lista.
+ * Usa `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL` e opcionalmente `BETTER_AUTH_TRUSTED_ORIGINS`
+ * (URLs ou origens separadas por vírgula) — evita 403 «Invalid origin» quando só uma env
+ * coincide com o domínio real (ex.: EasyPanel vs URL antiga).
+ */
+function getTrustedOrigins(): string[] {
+  const extra = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.trim() ?? "";
+  const pieces: string[] = [
+    process.env.BETTER_AUTH_URL?.trim() ?? "",
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "",
+    ...(extra ? extra.split(",").map((s) => s.trim()) : []),
+  ];
+  const origins = new Set<string>();
+  for (const p of pieces) {
+    const o = toTrustedOrigin(p);
+    if (o) origins.add(o);
+  }
+  const fallback = toTrustedOrigin(getBaseUrl());
+  if (fallback) origins.add(fallback);
+  return origins.size > 0 ? [...origins] : ["http://localhost:3000"];
+}
+
 function getSecret(): string {
   const s = process.env.BETTER_AUTH_SECRET;
   if (process.env.NODE_ENV === "production") {
@@ -36,7 +70,7 @@ function buildAuth() {
     }),
     baseURL: getBaseUrl(),
     secret: getSecret(),
-    trustedOrigins: [getBaseUrl()],
+    trustedOrigins: getTrustedOrigins(),
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
