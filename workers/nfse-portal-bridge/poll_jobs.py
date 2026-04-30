@@ -392,6 +392,8 @@ def fail_job(
 
 
 def main() -> None:
+    # Marca de versão visível nos logs — se não aparecer no Easypanel, a imagem ainda é antiga (rebuild sem o último Git).
+    print("[nfse-portal-bridge] worker_build=dsn-resolver-v2", flush=True)
     dsn = _resolve_database_url()
     portal_url = (
         os.environ.get("API_INTERNAL_URL", "").strip()
