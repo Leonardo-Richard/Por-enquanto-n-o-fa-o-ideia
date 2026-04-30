@@ -10,9 +10,17 @@ Variáveis de ambiente:
   NFSE_DIST_ROOT        — Opcional; default: <repo>/third_party/NFSE_dist
   NFSE_DIST_CLIENTS_LOCAL_PATH — Opcional; copia para clients.local.json antes da recolha
   POLL_INTERVAL_SEC     — Opcional; default 15
-  NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre run_download_workflow (smoke: fila + PATCH + uploads vazios).
+  ADN_DOWNLOAD_ENGINE   — Opcional; default nfse_dist. Valores: nfse_dist | playwright_extension
+  ADN_PLAYWRIGHT_MOTOR_NODE — Opcional; default node.exe (Windows) / node
+  ADN_PLAYWRIGHT_MOTOR_SCRIPT — Opcional; default <repo>/workers/adn-playwright-motor/cli.js
+  ADN_BROWSER_PHASE_TIMEOUT_SEC — Opcional; timeout do subprocesso motor B (default 3600)
+  ADN_BROWSER_LOCK_PATH — Opcional; ficheiro de lock entre processos do motor B (default <repo>/.adn_browser_worker.lock)
+  NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre descarga NFSE_dist nem motor Playwright (smoke).
+      Recomendação (FR-ADN-B-07): skip ambos os motores de descarga; ver runbook adn-motor-cenario-b.
   NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia XML/PDF para organizations.local_download_root (LM-02A).
   Argumentos: --once — processa no máximo um job (ou sai se a fila estiver vazia).
+
+Runbook motor cenário B: docs/runbooks/adn-motor-cenario-b.md
 """
 
 from __future__ import annotations
@@ -37,6 +45,15 @@ from portal_artifacts import patch_job, sync_data_directory
 from job_logging import job_log
 from job_summary import summary_as_dict
 from remirror_job import process_remirror_job
+from download_engine import (
+    MotorExecutionError,
+    get_download_engine,
+    infer_failure_category_from_exception,
+    playwright_browser_file_lock,
+    run_playwright_motor_subprocess,
+    sanitize_user_safe_detail,
+    VALID_FAILURE_CATEGORIES,
+)
 
 
 class NoCompanyArtifactsError(RuntimeError):
@@ -176,14 +193,21 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
                 f"[nfse-portal-bridge] Aviso: {cleanup['failed']} ficheiro(s) antigos não puderam ser removidos para {cnpj}.",
                 flush=True,
             )
+    engine = get_download_engine()
     skip_nfse_dist = os.environ.get("NFSE_BRIDGE_SKIP_NFSE_DIST", "").strip() == "1"
+
+    if engine not in ("nfse_dist", "playwright_extension"):
+        raise RuntimeError(
+            f"ADN_DOWNLOAD_ENGINE inválido: {engine!r} (use nfse_dist ou playwright_extension)."
+        )
+
     if skip_nfse_dist:
         print(
-            "[nfse-portal-bridge] NFSE_BRIDGE_SKIP_NFSE_DIST=1 — a saltar run_download_workflow (smoke).",
+            "[nfse-portal-bridge] NFSE_BRIDGE_SKIP_NFSE_DIST=1 — a saltar ambos os motores de descarga (smoke).",
             flush=True,
         )
-        job_log(jid, "NFSE_dist", "saltado (smoke)")
-    else:
+        job_log(jid, "descarga", "NFSE_dist + motor B saltados (smoke)")
+    elif engine == "nfse_dist":
         job_log(
             jid,
             "NFSE_dist",
@@ -191,6 +215,26 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         )
         run_download_workflow_once(nfse)
         job_log(jid, "NFSE_dist", "recolha local terminou; a preparar upload para o portal.")
+    else:
+        # playwright_extension — subprocesso Node; lock em disco serializa vários poll_jobs na mesma VM.
+        data_out = nfse / "data" / cnpj
+        data_out.mkdir(parents=True, exist_ok=True)
+        with playwright_browser_file_lock(_repo_root()):
+            job_log(jid, "motor_B", "a iniciar subprocesso Playwright (motor cenário B).")
+            code, err_tail, cat = run_playwright_motor_subprocess(
+                repo_root=_repo_root(),
+                output_dir=data_out,
+                cnpj=cnpj,
+                job_id=jid,
+            )
+            if code != 0:
+                job_log(jid, "motor_B", f"falha exit={code} category={cat}")
+                raise MotorExecutionError(
+                    f"Motor Playwright terminou com código {code}.",
+                    category=cat,
+                    stderr_tail=err_tail,
+                )
+            job_log(jid, "motor_B", "subprocesso terminou com sucesso; a preparar upload para o portal.")
 
     n_xml_cand = _count_xml_for_upload(nfse, cnpj, run_started_epoch)
     job_log(
@@ -258,6 +302,9 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             "materialização de certificado a partir do cofre. O job foi marcado como failed."
         )
 
+    download_engine_label = "nfse_dist" if engine == "nfse_dist" else "playwright_extension"
+    engine_legacy = "NFSE_dist" if engine == "nfse_dist" else "playwright_extension"
+
     job_log(jid, "portal", "PATCH job=completed (a aplicar resumo no portal…)")
     patch_job(
         base_url=portal_url,
@@ -267,7 +314,8 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         status="completed",
         summary={
             "phase": "completed",
-            "engine": "NFSE_dist",
+            "engine": engine_legacy,
+            "downloadEngine": download_engine_label,
             "fetchMode": fetch_mode,
             "artifactsXml": counts["xml"],
             "artifactsPdf": counts["pdf"],
@@ -282,15 +330,31 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     job_log(jid, "portal", "PATCH job=completed aplicado no portal.")
 
 
-def fail_job(portal_url: str, secret: str, oid: str, jid: str, msg: str) -> None:
+def fail_job(
+    portal_url: str,
+    secret: str,
+    oid: str,
+    jid: str,
+    msg: str,
+    *,
+    failure_category: str | None = None,
+    user_safe_detail: str | None = None,
+) -> None:
     job_log(jid, "portal", "PATCH job=failed (a aplicar no portal…)")
+    safe_msg = sanitize_user_safe_detail(msg, max_len=2000)
+    summary: dict = {"phase": "error", "message": safe_msg}
+    cat = (failure_category or "").strip().lower()
+    if cat in VALID_FAILURE_CATEGORIES:
+        summary["failureCategory"] = cat
+    if user_safe_detail:
+        summary["userSafeDetail"] = sanitize_user_safe_detail(user_safe_detail, max_len=500)
     patch_job(
         base_url=portal_url,
         secret=secret,
         job_id=jid,
         organization_id=oid,
         status="failed",
-        summary={"phase": "error", "message": msg[:2000]},
+        summary=summary,
     )
     job_log(jid, "portal", "PATCH job=failed gravado no portal (pode actualizar a UI).")
 
@@ -331,10 +395,32 @@ def main() -> None:
                 print(f"[nfse-portal-bridge] Job {jid} concluído.", flush=True)
                 if poll_once:
                     return
+            except MotorExecutionError as me:
+                try:
+                    fail_job(
+                        portal_url,
+                        secret,
+                        oid,
+                        jid,
+                        str(me),
+                        failure_category=me.category,
+                        user_safe_detail=me.stderr_tail[:500] if me.stderr_tail else None,
+                    )
+                except Exception as e2:  # noqa: BLE001
+                    print(f"[nfse-portal-bridge] Falha ao marcar job como failed: {e2}", file=sys.stderr, flush=True)
+                if poll_once:
+                    return
             except KeyboardInterrupt:
                 # Evita job preso em "running" quando o worker é interrompido manualmente.
                 try:
-                    fail_job(portal_url, secret, oid, jid, "Execução interrompida manualmente (KeyboardInterrupt).")
+                    fail_job(
+                        portal_url,
+                        secret,
+                        oid,
+                        jid,
+                        "Execução interrompida manualmente.",
+                        failure_category="unknown",
+                    )
                 except Exception as e2:  # noqa: BLE001
                     print(
                         f"[nfse-portal-bridge] Falha ao marcar job interrompido como failed: {e2}",
@@ -347,8 +433,18 @@ def main() -> None:
                 tb = traceback.format_exc()
                 job_log(jid, "ERRO", f"{type(e).__name__}: {e!s}"[:500])
                 print(tb, file=sys.stderr, flush=True)
+                cat = infer_failure_category_from_exception(e)
+                if isinstance(e, NoCompanyArtifactsError):
+                    cat = "unknown"
                 try:
-                    fail_job(portal_url, secret, oid, jid, f"{e!s}\n{tb}")
+                    fail_job(
+                        portal_url,
+                        secret,
+                        oid,
+                        jid,
+                        str(e),
+                        failure_category=cat,
+                    )
                 except Exception as e2:  # noqa: BLE001
                     print(f"[nfse-portal-bridge] Falha ao marcar job como failed: {e2}", file=sys.stderr, flush=True)
                 if poll_once:

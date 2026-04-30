@@ -1,0 +1,17 @@
+{
+  "name": "adn-playwright-motor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Subprocesso motor ADN cenário B (Playwright) invocado pelo nfse-portal-bridge",
+  "type": "module",
+  "main": "cli.js",
+  "scripts": {
+    "start": "node cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

@@ -288,6 +288,7 @@ sequenceDiagram
 | `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md` | `organizations`, `companies`, jobs |
 | `docs/architecture-importacao-certificado-empresa-monitorada-adn.md` | Guia ADN no portal, env `NEXT_PUBLIC_ADN_CERT_RUNBOOK_URL`, worker + `clients.local.json`, `error_code` certificado (**CE-FR10**) |
 | `docs/front-end-spec-integracao-nfse-dist-adn.md` | Polling, modais, query keys |
+| `docs/architecture-cenario-b-adn-playwright-extensao-chrome.md` | Motor opcional de descarga (Playwright + extensão no worker); `summary_json` estendido; contrato HMAC inalterado |
 
 ---
 
@@ -295,6 +296,7 @@ sequenceDiagram
 
 | Data       | Versão | Descrição |
 | ---------- | ------ | ---------- |
+| 2026-04-30 | 1.1    | Referência à arquitectura **motor cenário B** (`architecture-cenario-b-adn-playwright-extensao-chrome.md`). |
 | 2026-04-22 | 1.0    | Arquitetura inicial: sistema, dados, API, Storage, segurança worker, testes. |
 
 — **Aria (Architect) / AIOS**

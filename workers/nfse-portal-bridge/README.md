@@ -41,12 +41,19 @@ pip install -r requirements.txt
 | `NFSE_DIST_CLIENTS_LOCAL_PATH` | `C:\secrets\clients.local.json` | Opcional: ficheiro com thumbprint / `senha_cert` / PFX (não versionar). |
 | `NFSE_CLEAN_BEFORE_RUN` | `1` | Opcional: limpa XML/PDF antigos do CNPJ antes da recolha (por defeito **não** limpa, melhor para fluxos grandes). |
 | `POLL_INTERVAL_SEC` | `15` | Intervalo quando não há jobs. |
-| `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Só smoke/testes:** não chama `run_download_workflow` (valida fila + `PATCH` + uploads vazios). |
+| `ADN_DOWNLOAD_ENGINE` | `nfse_dist` | `nfse_dist` (padrão) ou `playwright_extension` (motor B / subprocesso em `workers/adn-playwright-motor`). |
+| `ADN_PLAYWRIGHT_MOTOR_NODE` | `node` | Comando Node para o motor B (defeito: `node.exe` no Windows). |
+| `ADN_PLAYWRIGHT_MOTOR_SCRIPT` | *(caminho)* | Script de entrada; por defeito `<repo>/workers/adn-playwright-motor/cli.js`. |
+| `ADN_BROWSER_PHASE_TIMEOUT_SEC` | `3600` | Tempo máximo de espera do subprocesso motor B. |
+| `ADN_BROWSER_LOCK_PATH` | *(opcional)* | Ficheiro de lock entre processos `poll_jobs` durante motor B (default: `.adn_browser_worker.lock` na raiz do repo). |
+| `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Smoke/testes:** não executa **nenhum** motor de descarga (nem NFSE_dist nem Playwright); valida fila + `PATCH` + uploads vazios. |
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia XML/PDF para `organizations.local_download_root` (o job continua `completed` se o Storage tiver sucesso). |
 | `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
 | `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `npm run fix:adn-stale-jobs`. |
 
 **Importante (monorepo):** o Next lê `frontend/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
+
+**Motor cenário B (Playwright / extensão):** rollback, env e versões — [`docs/runbooks/adn-motor-cenario-b.md`](../../docs/runbooks/adn-motor-cenario-b.md).
 
 ## 3. Arranque
 
@@ -78,6 +85,8 @@ node scripts/run-adn-bridge-smoke-once.mjs
 ```
 
 Equivale a `NFSE_BRIDGE_SKIP_NFSE_DIST=1` e `python poll_jobs.py --once` (um job ou sair se a fila estiver vazia).
+
+**Regressão motor `nfse_dist` (checklist):** com `ADN_DOWNLOAD_ENGINE` ausente ou `nfse_dist`, `NFSE_BRIDGE_SKIP_NFSE_DIST` **não** definido, mesmo `DATABASE_URL` / `ADN_WORKER_HMAC_SECRET` e portal a responder, `python poll_jobs.py --once` deve percorrer claim → `run_download_workflow` (ou ambiente de teste documentado) → `PATCH` completed **sem** erros de import. Testes unitários do bridge: `cd workers/nfse-portal-bridge && python -m pytest tests/ -q`.
 
 Fluxo por job:
 

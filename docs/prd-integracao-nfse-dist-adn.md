@@ -114,6 +114,7 @@ Novos identificadores **FR41–FR48** (integração futura no `docs/prd.md` reco
 | Documento | Relação |
 | --------- | ------- |
 | `docs/briefing-integracao-nfse-dist-adn.md` | Fonte de briefing; âmbito e critérios de sucesso alinhados. |
+| `docs/prd-cenario-b-adn-playwright-extensao-chrome.md` | Motor **opcional** de descarga (Playwright + extensão no worker); **não** altera FR41–FR48 do portal; especializa o worker. |
 | `docs/prd.md` | **FR9**, **FR10**, **FR36** — jobs de coleta e vínculo à empresa monitorada; este PRD **especializa** a origem ADN e o worker. |
 | `docs/prd-atualizacao-dois-niveis-organizacao-vs-empresas-fiscais.md` | **FR33–FR40** — todo artefacto ADN pertence à cadeia **organização → empresa monitorada**. |
 | `docs/architecture.md` | Actualizar após desenho de Storage/RLS e rotas internas. |

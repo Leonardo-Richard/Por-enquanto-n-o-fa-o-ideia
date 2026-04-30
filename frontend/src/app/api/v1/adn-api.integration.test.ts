@@ -37,6 +37,7 @@ import {
   POST as postCompanyCertificate,
 } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/certificate/route";
 import { GET as getAutomationExportJson } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/automation-export.json/route";
+import { GET as getAdnRecentJobs } from "@/app/api/v1/organizations/[organizationId]/adn/recent-jobs/route";
 import { clearCertUploadVaultMockForTests } from "@/server/cert-upload/cert-upload-vault";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
@@ -1335,6 +1336,190 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
         if (prev === undefined) delete process.env.CERT_UPLOAD_API_ENABLED;
         else process.env.CERT_UPLOAD_API_ENABLED = prev;
       }
+    });
+  });
+
+  describe("GET /organizations/:id/adn/recent-jobs", () => {
+    it("organização com ADN desactivado → 404", async () => {
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOff,
+          email: "x@y",
+          name: "Admin Off",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-rj-off",
+          userId: ids.adminOff,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOff,
+          activeOrganizationId: ids.orgOff,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getAdnRecentJobs(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOff }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it("sem membership na org do URL → 403", async () => {
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.stranger,
+          email: "s@b",
+          name: "Stranger",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-rj-str",
+          userId: ids.stranger,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOff,
+          activeOrganizationId: ids.orgOff,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getAdnRecentJobs(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOn }),
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it("lista jobs com summary e paginação por limit", async () => {
+      const db = getDb();
+      const j1 = randomUUID();
+      const j2 = randomUUID();
+      const j3 = randomUUID();
+      await db.insert(adnSyncJobs).values([
+        {
+          id: j1,
+          organizationId: ids.orgOn,
+          companyId: ids.companyOn,
+          status: "completed",
+          trigger: "manual",
+          summaryJson: { downloadEngine: "nfse_dist", phase: "completed" },
+          createdAt: new Date("2026-02-01T10:00:00.000Z"),
+        },
+        {
+          id: j2,
+          organizationId: ids.orgOn,
+          companyId: ids.companyOn,
+          status: "failed",
+          trigger: "manual",
+          summaryJson: { failureCategory: "session", phase: "error" },
+          createdAt: new Date("2026-02-02T10:00:00.000Z"),
+        },
+        {
+          id: j3,
+          organizationId: ids.orgOn,
+          companyId: ids.companyOn,
+          status: "queued",
+          trigger: "manual",
+          createdAt: new Date("2026-02-03T10:00:00.000Z"),
+        },
+      ]);
+
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOn,
+          email: "a@b",
+          name: "Admin On",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-rj-ok",
+          userId: ids.adminOn,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getAdnRecentJobs(
+        new Request("http://test/?limit=2"),
+        { params: Promise.resolve({ organizationId: ids.orgOn }) },
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        jobs: Array<{ id: string; summary: Record<string, unknown> | null }>;
+        nextCursor: string | null;
+      };
+      expect(body.jobs.length).toBe(2);
+      expect(body.jobs[0]?.id).toBe(j3);
+      expect(body.jobs[1]?.id).toBe(j2);
+      expect(body.nextCursor).toBeTruthy();
+      expect(body.jobs[0]?.summary?.downloadEngine ?? body.jobs[1]?.summary?.failureCategory).toBeTruthy();
+
+      await db.delete(adnSyncJobs).where(
+        inArray(adnSyncJobs.id, [j1, j2, j3]),
+      );
+    });
+
+    it("second request exceeds GET rate limit → 429", async () => {
+      const prev = process.env.ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN;
+      process.env.ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN = "1";
+      clearAdnRateLimitBucketsForTests();
+
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.orgUser,
+          email: "ou@b",
+          name: "Org User",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-rj-rl",
+          userId: ids.orgUser,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const first = await getAdnRecentJobs(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOn }),
+      });
+      expect(first.status).toBe(200);
+
+      const second = await getAdnRecentJobs(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOn }),
+      });
+      expect(second.status).toBe(429);
+      expect(second.headers.get("Retry-After")).toBeTruthy();
+      const j429 = (await second.json()) as { error_code?: string };
+      expect(j429.error_code).toBe("ADN_RATE_LIMIT");
+
+      process.env.ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN = prev;
+      clearAdnRateLimitBucketsForTests();
     });
   });
 

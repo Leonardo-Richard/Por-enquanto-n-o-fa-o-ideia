@@ -20,6 +20,9 @@ certificates/*.pfx
 # Logs do worker NFSE portal bridge (scripts/windows/start-nfse-portal-bridge.ps1)
 workers/nfse-portal-bridge/logs/
 
+# Lock do motor ADN browser (filelock) — runtime local
+.adn_browser_worker.lock
+
 # Dependencies (AIOS)
 node_modules/
 node_modules

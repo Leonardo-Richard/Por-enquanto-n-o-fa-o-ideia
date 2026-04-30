@@ -52,6 +52,10 @@ Conclusão: a integração “no site” é, na prática, **orquestração + per
 
 - **Serviço em container Linux** com mTLS e PFX a partir de secret manager, reduzindo dependência de Windows/Schannel — **projecto separado** com paridade de comportamento e testes de regressão.
 
+### 4.5 Alternativa exploratória (cenário B)
+
+- Motor de recolha via **Playwright + extensão Chrome** no mesmo Windows que o worker, reutilizando o upload `prepare`/`commit` existente — ver briefing dedicado: [`briefing-cenario-b-adn-playwright-extensao-chrome.md`](briefing-cenario-b-adn-playwright-extensao-chrome.md).
+
 ---
 
 ## 5. Contrato conceptual API / worker (para detalhar numa story)
@@ -119,5 +123,6 @@ Campos mínimos sugeridos (nome exacto fica para OpenAPI / story):
 
 - Repositório de referência: [github.com/RafaelOliveiraCf/NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist) (README: requisitos Windows, `curl`, certificados, variáveis de ambiente, dead-letter).
 - Produto local: `README.md` (portal, Supabase, multi-tenant).
+- Cenário B (exploratório): [`briefing-cenario-b-adn-playwright-extensao-chrome.md`](briefing-cenario-b-adn-playwright-extensao-chrome.md) — automação browser + extensão no worker Windows.
 
 — Documento derivado do brainstorm Atlas (analyst) / AIOS.

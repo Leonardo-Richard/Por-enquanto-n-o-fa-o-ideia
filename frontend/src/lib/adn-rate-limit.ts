@@ -84,3 +84,15 @@ export function getAdnCertVerifyLimit(): { max: number; windowMs: number } {
 export function adnCertVerifyRateKey(userId: string, organizationId: string, companyId: string): string {
   return `adn:cert-verify:${userId}:${organizationId}:${companyId}`;
 }
+
+/** Bucket GET `…/adn/recent-jobs` — NFR21 (família ADN pública). Default: 60 pedidos/min por utilizador+org. */
+export function getAdnPublicRecentJobsLimit(): { max: number; windowMs: number } {
+  const raw = process.env.ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : 60;
+  const max = Number.isFinite(n) && n > 0 ? n : 60;
+  return { max, windowMs: 60_000 };
+}
+
+export function adnRecentJobsRateKey(userId: string, organizationId: string): string {
+  return `adn:get-recent-jobs:${userId}:${organizationId}`;
+}

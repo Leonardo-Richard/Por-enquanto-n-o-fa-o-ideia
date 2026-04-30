@@ -24,6 +24,15 @@ export type AdnAccessContext = {
   orgRole: "user" | "admin" | null;
 };
 
+/** Contexto ADN ao nível da organização (sem empresa no path). */
+export type AdnOrganizationAccessContext = {
+  session: AuthedSession;
+  db: Db;
+  organizationId: string;
+  superadmin: boolean;
+  orgRole: "user" | "admin" | null;
+};
+
 export type ResolveAdnPublicAccessOptions = {
   /**
    * Quando `false`, não exige `organizations.adnSyncEnabled` (ex.: registo de certificado
@@ -95,6 +104,61 @@ export async function resolveAdnPublicAccess(
   return {
     ok: true,
     ctx: { session: s, db, organizationId, companyId, superadmin, orgRole },
+  };
+}
+
+/**
+ * Mesmo gate FR45 que rotas ADN públicas, sem validar empresa — para listagens ao nível da org (execuções).
+ */
+export async function resolveAdnOrganizationPublicAccess(
+  request: Request,
+  organizationId: string,
+  options?: ResolveAdnPublicAccessOptions,
+): Promise<
+  { ok: true; ctx: AdnOrganizationAccessContext } | { ok: false; response: NextResponse }
+> {
+  const requireOrgAdnSyncEnabled = options?.requireOrgAdnSyncEnabled !== false;
+  const s = await getAuthedSession(request);
+  if (!s) {
+    return { ok: false, response: jsonError(401, "Sessão expirada. Inicie sessão novamente.") };
+  }
+
+  const db = getDb();
+  const superadmin = isSuperadmin(s.user);
+
+  if (!superadmin) {
+    const eff = await getEffectiveOrganizationId(db, s);
+    if (!eff || eff !== organizationId) {
+      return { ok: false, response: jsonError(403, "Não tem permissão para esta operação.") };
+    }
+    const okOrg = await canAccessOrganization(db, s.user.id, organizationId, false);
+    if (!okOrg) {
+      return { ok: false, response: jsonError(403, "Não tem permissão para esta operação.") };
+    }
+  } else {
+    const okOrg = await canAccessOrganization(db, s.user.id, organizationId, true);
+    if (!okOrg) {
+      return { ok: false, response: jsonError(404, "Recurso não encontrado.") };
+    }
+  }
+
+  const [org] = await db
+    .select({ id: organizations.id, adnSyncEnabled: organizations.adnSyncEnabled })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  if (!org) {
+    return { ok: false, response: jsonError(404, "Recurso não encontrado.") };
+  }
+  if (requireOrgAdnSyncEnabled && !org.adnSyncEnabled) {
+    return { ok: false, response: jsonError(404, "Recurso não encontrado.") };
+  }
+
+  const orgRole = await callerRoleInOrganization(db, s.user.id, organizationId);
+
+  return {
+    ok: true,
+    ctx: { session: s, db, organizationId, superadmin, orgRole },
   };
 }
 
