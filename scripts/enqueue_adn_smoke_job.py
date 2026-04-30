@@ -47,6 +47,10 @@ def main() -> None:
     """
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE organizations SET adn_sync_enabled = true WHERE id = %s::uuid;",
+                (org,),
+            )
             cur.execute(reset_sql, (org,))
             reset_n = cur.rowcount
             cur.execute(sql, (org, company, summary))

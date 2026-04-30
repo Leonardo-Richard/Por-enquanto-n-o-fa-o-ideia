@@ -1,3 +1,6 @@
 # Worker Python: Postgres + HTTP ao portal (HMAC).
 # Python 3.11+ recomendado (paridade com NFSE_dist).
 psycopg[binary]>=3.2
+pytest>=8.0
+filelock>=3.16
+python-dotenv>=1.0

@@ -10,11 +10,13 @@
 2. **Nunca** solicitar ou mostrar **certificado e-CNPJ**, PFX, thumbprint ou segredos de worker na UI — **FR45** / **NFR19**; qualquer configuração de infraestrutura fica **fora deste spec** ou em ferramenta interna acordada com `@architect`.  
 3. Terminologia **organização** vs **empresa monitorada** mantém-se canónica (**spec dois níveis**); a secção ADN vive **no detalhe da empresa monitorada**.  
 4. Em conflito visual, prevalecem tokens e padrões em `docs/front-end-spec.md`.
+5. **Transparência do motor de recolha (opcional, cenário B):** quando a API expuser `downloadEngine` e categorias de falha em `summary_json`, a copy e a colocação na lista **Execuções** (e secundariamente no detalhe da empresa) seguem `docs/front-end-spec-cenario-b-adn-playwright-extensao-chrome.md` — **não** duplicar aqui tabelas de glossário; manter coerência de estados e **FR45**.
 
 ### Change log (este incremento)
 
 | Data       | Versão | Descrição |
 | ---------- | ------ | ---------- |
+| 2026-04-30 | 1.1    | Referência cruzada ao delta **motor cenário B** (`front-end-spec-cenario-b-adn-playwright-extensao-chrome.md`); hierarquia §1 ponto 5. |
 | 2026-04-22 | 1.0    | Spec inicial: glossário ADN, IA, fluxos, ecrãs, matriz de estados, copy segura, a11y, mapeamento FR. |
 
 ---
