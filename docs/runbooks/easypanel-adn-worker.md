@@ -38,8 +38,9 @@ Este runbook descreve um **segundo serviço** no Easypanel que corre `poll_jobs.
 
 | Variável | Obrigatório | Exemplo / notas |
 | -------- | ----------- | ---------------- |
-| `DATABASE_URL` | Sim | **Igual** ao do portal (mesmo Postgres/Supabase). |
-| `PORTAL_INTERNAL_URL` | Sim* | URL **HTTPS pública** do portal, **sem** barra final. Ex.: `https://auto-automacaonf.….easypanel.host`. |
+| `DATABASE_URL` | Sim† | **Igual** ao do portal (mesmo Postgres/Supabase). |
+| `ADN_WORKER_DATABASE_URL` | Sim† | **Mesma** connection string se o painel **não** passar `DATABASE_URL` ao contentor (caso frequente no Easypanel). |
+| `PORTAL_INTERNAL_URL` | Sim‡ | URL **HTTPS pública** do portal, **sem** barra final. Ex.: `https://auto-automacaonf.….easypanel.host`. |
 | `API_INTERNAL_URL` | Não | Se preenchido, **prevalece** sobre `PORTAL_INTERNAL_URL`. Use só se tiver backend interno real nessa URL. |
 | `ADN_WORKER_HMAC_SECRET` | Sim | **Mesmo** valor que no portal. |
 | `NEXT_PUBLIC_SUPABASE_URL` ou `SUPABASE_URL` | Sim | URL do projecto Supabase (materialização do certificado). |
@@ -48,7 +49,8 @@ Este runbook descreve um **segundo serviço** no Easypanel que corre `poll_jobs.
 | `ADN_DOWNLOAD_ENGINE` | Não | `nfse_dist` (default) ou `playwright_extension` (nesta imagem Linux o cenário B **não** está garantido). |
 | `NFSE_LOCAL_MIRROR_ENABLED` | Não | `1` só se quiser cópia em disco **dentro do contentor** (pasta raiz da org — raro em cloud). |
 
-\*Na prática `PORTAL_INTERNAL_URL` é obrigatório se `API_INTERNAL_URL` estiver vazio.
+† Pelo menos uma das duas (`DATABASE_URL` ou `ADN_WORKER_DATABASE_URL`) com valor não vazio.  
+‡ Obrigatório se `API_INTERNAL_URL` estiver vazio.
 
 **Não** defina `API_INTERNAL_URL=http://localhost:3000` dentro do contentor do worker a menos que o portal esteja na **mesma rede Docker** com esse hostname — em Easypanel típico use sempre a URL **pública** HTTPS.
 

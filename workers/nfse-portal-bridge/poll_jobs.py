@@ -3,7 +3,7 @@ Consome jobs ADN (`adn_sync_jobs` = queued), corre o código do NFSE_dist na mes
 e envia XML/PDF de volta ao portal (rotas internas HMAC).
 
 Variáveis de ambiente:
-  DATABASE_URL          — Postgres (igual ao portal)
+  DATABASE_URL          — Postgres (igual ao portal). Alternativa: ADN_WORKER_DATABASE_URL (Easypanel por vezes não injecta DATABASE_URL).
   API_INTERNAL_URL      — Ex.: http://localhost:3001 (preferido)
   PORTAL_INTERNAL_URL   — Fallback legado quando API_INTERNAL_URL não definido
   ADN_WORKER_HMAC_SECRET — Mesmo segredo que o portal (NFR20)
@@ -44,7 +44,7 @@ try:
     from dotenv import load_dotenv
 
     _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-    load_dotenv(_REPO_ROOT / ".env", override=False)
+    load_dotenv(_REPO_ROOT / ".env", override=False, encoding="utf-8-sig")
 except ImportError:
     pass
 
@@ -93,6 +93,22 @@ def _require_env(name: str) -> str:
     if not v:
         raise RuntimeError(f"Variável obrigatória em falta: {name}")
     return v
+
+
+def _resolve_database_url() -> str:
+    """
+    DSN Postgres. Ordem: DATABASE_URL, ADN_WORKER_DATABASE_URL, POSTGRES_URL, POSTGRESQL_URL.
+    Alguns painéis (ex.: Easypanel) não passam DATABASE_URL ao contentor; use ADN_WORKER_DATABASE_URL com o mesmo valor.
+    """
+    for key in ("DATABASE_URL", "ADN_WORKER_DATABASE_URL", "POSTGRES_URL", "POSTGRESQL_URL"):
+        v = os.environ.get(key, "").strip()
+        if v:
+            return v
+    raise RuntimeError(
+        "Variável obrigatória em falta: defina DATABASE_URL ou ADN_WORKER_DATABASE_URL "
+        "(connection string postgresql://… igual ao portal). "
+        "Em alguns hosts DATABASE_URL é reservado ou ignorado — duplique a URI em ADN_WORKER_DATABASE_URL."
+    )
 
 
 def claim_next_job(conn: psycopg.Connection) -> dict | None:
@@ -376,7 +392,7 @@ def fail_job(
 
 
 def main() -> None:
-    dsn = _require_env("DATABASE_URL")
+    dsn = _resolve_database_url()
     portal_url = (
         os.environ.get("API_INTERNAL_URL", "").strip()
         or _require_env("PORTAL_INTERNAL_URL").strip()

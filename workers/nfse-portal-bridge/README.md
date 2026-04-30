@@ -35,6 +35,7 @@ pip install -r requirements.txt
 | Variável | Exemplo | Notas |
 | -------- | ------- | ----- |
 | `DATABASE_URL` | `postgresql://…` | Igual ao portal. |
+| `ADN_WORKER_DATABASE_URL` | *(opcional)* | Mesmo valor que `DATABASE_URL` se o host não injectar `DATABASE_URL` (ex.: alguns deploys Easypanel). |
 | `PORTAL_INTERNAL_URL` | `http://localhost:3000` | URL base onde o Next responde. |
 | `ADN_WORKER_HMAC_SECRET` | *(hex forte)* | **O mesmo** valor no `.env` do portal. |
 | `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | `https://<ref>.supabase.co` | Necessário para o worker descarregar o certificado do cofre (vault_ref `supabase-storage:`). |
