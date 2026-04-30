@@ -5,7 +5,10 @@
 .vercel
 .local
 third_party
-workers
+# `workers` incluído no contexto para `Dockerfile.adn-worker` (Easypanel). Excluir artefactos pesados:
+workers/**/node_modules
+workers/**/.venv
+workers/**/__pycache__
 .aios-core
 *.md
 docs

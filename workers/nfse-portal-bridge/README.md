@@ -61,6 +61,8 @@ pip install -r requirements.txt
 
 **Motor cenário B (Playwright / extensão):** rollback, env e versões — [`docs/runbooks/adn-motor-cenario-b.md`](../../docs/runbooks/adn-motor-cenario-b.md).
 
+**Worker em Docker / Easypanel:** [`docs/runbooks/easypanel-adn-worker.md`](../../docs/runbooks/easypanel-adn-worker.md) e `Dockerfile.adn-worker` na raiz do monorepo.
+
 O `poll_jobs.py` carrega automaticamente o ficheiro **`.env` na raiz do repositório** (via `python-dotenv` em `requirements.txt`), sem sobrescrever variáveis que já estiverem definidas no processo.
 
 ## 3. Arranque

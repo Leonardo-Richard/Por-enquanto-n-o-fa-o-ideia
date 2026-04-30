@@ -16,6 +16,7 @@
     "force:adn-bridge": "node scripts/run-adn-bridge-force-once.mjs",
     "smoke:adn-bridge": "node scripts/run-adn-bridge-smoke-once.mjs",
     "worker:adn-bridge": "node scripts/run-adn-bridge-watch.mjs",
+    "docker:build-adn-worker": "docker build -f Dockerfile.adn-worker -t nfse-adn-worker .",
     "fix:adn-stale-jobs": "node scripts/release-stale-adn-jobs.mjs",
     "fix:adn-all-running": "node scripts/fix-adn-all-running-now.mjs",
     "status:adn-jobs": "node scripts/adn-jobs-status.mjs",

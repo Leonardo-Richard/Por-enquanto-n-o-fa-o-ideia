@@ -1,0 +1,20 @@
+# Contexto reduzido para `docker build -f Dockerfile.adn-worker --ignorefile .dockerignore.adn-worker .`
+# Mantém `workers/nfse-portal-bridge` e `scripts/vendor-nfse-dist.mjs`; exclui o grosso do monorepo.
+.git
+.github
+**/.next
+**/node_modules
+.vercel
+.local
+frontend
+backend
+packages
+third_party
+.aios-core
+docs
+assets
+**/*.spec.ts
+**/e2e
+**/.env
+**/.env.*
+!**/.env.example
