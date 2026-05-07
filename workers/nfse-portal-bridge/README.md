@@ -57,6 +57,7 @@ pip install -r requirements.txt
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** não copia mesmo com `ENABLED=1` (cloud / sem disco). |
 | `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
 | `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `npm run fix:adn-stale-jobs`. |
+| `ADN_WORKER_INSECURE_SSL` | `1` | **Só diagnóstico:** desliga verificação TLS para pedidos HTTPS do worker (Supabase Storage + API interna). Não usar em produção. Preferir `certifi` (já em `requirements.txt`) e rede sem inspecção SSL quebrada. |
 
 **Importante (monorepo):** o Next lê `frontend/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 
@@ -65,6 +66,12 @@ pip install -r requirements.txt
 **Worker em Docker / Easypanel:** [`docs/runbooks/easypanel-adn-worker.md`](../../docs/runbooks/easypanel-adn-worker.md) e `Dockerfile.adn-worker` na raiz do monorepo.
 
 O `poll_jobs.py` carrega automaticamente o ficheiro **`.env` na raiz do repositório** (via `python-dotenv` em `requirements.txt`), sem sobrescrever variáveis que já estiverem definidas no processo.
+
+**Erro SSL no Windows** (`CERTIFICATE_VERIFY_FAILED`, *Missing Authority Key Identifier*, etc. ao falar com Supabase ou com o portal):
+
+1. `pip install -U certifi` (ou reinstalar `requirements.txt`) — o worker usa o bundle Mozilla do `certifi` para HTTPS.
+2. Se estiver atrás de **proxy corporativo** que substitui certificados, instale a **CA raiz** da empresa na loja do Windows ou peça excepção para `*.supabase.co` e o host do portal.
+3. Último recurso (só teste): `ADN_WORKER_INSECURE_SSL=1`.
 
 ## 3. Arranque
 

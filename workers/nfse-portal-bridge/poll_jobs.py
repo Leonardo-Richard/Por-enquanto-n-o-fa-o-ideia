@@ -25,6 +25,13 @@ Variáveis de ambiente:
       Recomendação (FR-ADN-B-07): skip ambos os motores de descarga; ver runbook adn-motor-cenario-b.
   NFSE_LOCAL_MIRROR_ENABLED — Se "1", copia XML/PDF para organizations.local_download_root quando definida (opt-in).
   NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia mesmo com ENABLED (prevalece; LM-02A).
+  ADN_WORKER_INSECURE_SSL — Se "1", desactiva verificação TLS nos pedidos HTTPS do worker (só diagnóstico).
+  ADN_CLEAN_STALE_ON_WORKER_START — Se "0", não recupera jobs «running» órfãos ao arrancar. Por omissão "1":
+      jobs em running com started_at há mais de ADN_STALE_JOB_HOURS são REPOSTOS para queued (reclaim) para nova tentativa.
+      Apenas após esgotar ADN_STALE_MAX_RECLAIMS é que ficam definitivamente em failed.
+  ADN_STALE_JOB_HOURS — Idade mínima (horas) para considerar running órfão; default 24 (mínimo 1).
+  ADN_STALE_RECHECK_SEC — Período (segundos) entre verificações de running órfãos durante o ciclo (default 1800 = 30 min). 0 desactiva.
+  ADN_STALE_MAX_RECLAIMS — Máximo de reclaims antes de marcar failed definitivamente (default 3, mínimo 1).
   Argumentos: --once — processa no máximo um job (ou sai se a fila estiver vazia).
 
 Runbook motor cenário B: docs/runbooks/adn-motor-cenario-b.md
@@ -37,6 +44,7 @@ import sys
 import time
 import traceback
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Carrega `.env` na raiz do repo (override=False: variáveis já definidas no shell ganham).
@@ -109,6 +117,100 @@ def _resolve_database_url() -> str:
         "(connection string postgresql://… igual ao portal). "
         "Em alguns hosts DATABASE_URL é reservado ou ignorado — duplique a URI em ADN_WORKER_DATABASE_URL."
     )
+
+
+def _reclaim_stale_running_jobs_if_configured(
+    conn: psycopg.Connection,
+) -> tuple[int, int, int]:
+    """
+    Recupera jobs em «running» órfãos (started_at anterior ao corte):
+
+    - Se ainda restam tentativas (ADN_STALE_MAX_RECLAIMS), repõe para queued (incrementando
+      summary_json.reclaimAttempts) para o worker tentar a recolha de novo.
+    - Se já atingiu o máximo, marca failed com motivo claro (evita loop infinito).
+
+    Retorna (n_requeued, n_failed, hours).
+    """
+    if os.environ.get("ADN_CLEAN_STALE_ON_WORKER_START", "1").strip() == "0":
+        return (0, 0, 24)
+    try:
+        hours = max(1, int(os.environ.get("ADN_STALE_JOB_HOURS", "24") or "24"))
+    except ValueError:
+        hours = 24
+    try:
+        max_reclaims = max(1, int(os.environ.get("ADN_STALE_MAX_RECLAIMS", "3") or "3"))
+    except ValueError:
+        max_reclaims = 3
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    n_requeued = 0
+    n_failed = 0
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT id::text AS id,
+                   COALESCE((summary_json->>'reclaimAttempts')::int, 0) AS attempts
+            FROM adn_sync_jobs
+            WHERE status = 'running'
+              AND completed_at IS NULL
+              AND started_at IS NOT NULL
+              AND started_at < %s::timestamptz
+            FOR UPDATE SKIP LOCKED
+            """,
+            (cutoff,),
+        )
+        rows = cur.fetchall() or []
+        for row in rows:
+            jid = str(row["id"])
+            attempts = int(row.get("attempts") or 0)
+            if attempts >= max_reclaims:
+                payload = {
+                    "phase": "error",
+                    "message": (
+                        f"Job permaneceu em running sem conclusão após {max_reclaims} "
+                        "tentativas — marcado como failed para evitar loop."
+                    ),
+                    "reclaimAttempts": attempts,
+                    "reclaimExhausted": True,
+                }
+                cur.execute(
+                    """
+                    UPDATE adn_sync_jobs
+                    SET status = 'failed',
+                        completed_at = NOW(),
+                        updated_at = NOW(),
+                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
+                    WHERE id = %s::uuid
+                    """,
+                    (json.dumps(payload, ensure_ascii=False), jid),
+                )
+                n_failed += 1
+            else:
+                next_attempt = attempts + 1
+                payload = {
+                    "phase": "queued",
+                    "reclaimAttempts": next_attempt,
+                    "reclaimMaxAttempts": max_reclaims,
+                    "reclaimMessage": (
+                        f"Worker repôs job em queued (tentativa {next_attempt}/{max_reclaims}) "
+                        f"após {hours}h em running sem conclusão — vai tentar nova recolha."
+                    ),
+                }
+                cur.execute(
+                    """
+                    UPDATE adn_sync_jobs
+                    SET status = 'queued',
+                        started_at = NULL,
+                        completed_at = NULL,
+                        updated_at = NOW(),
+                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
+                    WHERE id = %s::uuid
+                    """,
+                    (json.dumps(payload, ensure_ascii=False), jid),
+                )
+                n_requeued += 1
+    conn.commit()
+    return (n_requeued, n_failed, hours)
 
 
 def claim_next_job(conn: psycopg.Connection) -> dict | None:
@@ -391,6 +493,80 @@ def fail_job(
     job_log(jid, "portal", "PATCH job=failed gravado no portal (pode actualizar a UI).")
 
 
+def _force_fail_job_in_db(dsn: str, jid: str, message: str, *, reason: str = "patch_failed") -> bool:
+    """
+    Fallback de último recurso: se o PATCH ao portal falhar (rede, 503, etc.) e o job ficar
+    em «running», marca-o como failed directamente na BD para não ficar preso.
+    """
+    if not jid:
+        return False
+    safe = sanitize_user_safe_detail(message or "", max_len=2000)
+    summary = {
+        "phase": "error",
+        "message": safe or "Job marcado como failed pelo worker (fallback BD após falha de PATCH).",
+        "fallback": reason,
+    }
+    try:
+        with psycopg.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE adn_sync_jobs
+                    SET status = 'failed',
+                        completed_at = NOW(),
+                        updated_at = NOW(),
+                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
+                    WHERE id = %s::uuid AND status = 'running'
+                    """,
+                    (json.dumps(summary, ensure_ascii=False), jid),
+                )
+            conn.commit()
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"[nfse-portal-bridge] Fallback BD para failed também falhou: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
+
+
+def _try_fail_job(
+    dsn: str,
+    portal_url: str,
+    secret: str,
+    oid: str,
+    jid: str,
+    msg: str,
+    *,
+    failure_category: str | None = None,
+    user_safe_detail: str | None = None,
+) -> None:
+    """Tenta `PATCH` no portal; se falhar, garante que o job sai de «running» via SQL directo."""
+    try:
+        fail_job(
+            portal_url,
+            secret,
+            oid,
+            jid,
+            msg,
+            failure_category=failure_category,
+            user_safe_detail=user_safe_detail,
+        )
+        return
+    except Exception as e2:  # noqa: BLE001
+        print(
+            f"[nfse-portal-bridge] PATCH job=failed falhou ({e2}); a aplicar fallback directo na BD…",
+            file=sys.stderr,
+            flush=True,
+        )
+    if _force_fail_job_in_db(dsn, jid, msg, reason="patch_failed"):
+        print(
+            f"[nfse-portal-bridge] Job {jid} marcado como failed via fallback BD.",
+            flush=True,
+        )
+
+
 def main() -> None:
     # Marca de versão visível nos logs — se não aparecer no Easypanel, a imagem ainda é antiga (rebuild sem o último Git).
     print("[nfse-portal-bridge] worker_build=dsn-resolver-v2", flush=True)
@@ -409,8 +585,42 @@ def main() -> None:
     if poll_once:
         print("[nfse-portal-bridge] Modo --once (um ciclo ou um job).", flush=True)
 
+    with psycopg.connect(dsn) as _stale_conn:
+        n_requeued, n_failed_stale, stale_hours = _reclaim_stale_running_jobs_if_configured(_stale_conn)
+    if n_requeued > 0 or n_failed_stale > 0:
+        print(
+            f"[nfse-portal-bridge] Reclaim de running órfãos (>{stale_hours}h): "
+            f"requeued={n_requeued} failed_após_máximo={n_failed_stale}. "
+            "(ADN_STALE_JOB_HOURS, ADN_STALE_MAX_RECLAIMS)",
+            flush=True,
+        )
+
+    try:
+        recheck_sec = int(os.environ.get("ADN_STALE_RECHECK_SEC", "1800") or "1800")
+    except ValueError:
+        recheck_sec = 1800
+    last_stale_check = time.time()
+
     while True:
         try:
+            if recheck_sec > 0 and (time.time() - last_stale_check) >= recheck_sec:
+                last_stale_check = time.time()
+                try:
+                    with psycopg.connect(dsn) as _rc:
+                        n2_rq, n2_fl, h2 = _reclaim_stale_running_jobs_if_configured(_rc)
+                    if n2_rq > 0 or n2_fl > 0:
+                        print(
+                            f"[nfse-portal-bridge] Verificação periódica (>{h2}h): "
+                            f"requeued={n2_rq} failed_após_máximo={n2_fl}.",
+                            flush=True,
+                        )
+                except Exception as e_rc:  # noqa: BLE001
+                    print(
+                        f"[nfse-portal-bridge] Aviso: verificação periódica de órfãos falhou: {e_rc}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+
             with psycopg.connect(dsn) as conn:
                 job = claim_next_job(conn)
             if not job:
@@ -430,37 +640,29 @@ def main() -> None:
                 if poll_once:
                     return
             except MotorExecutionError as me:
-                try:
-                    fail_job(
-                        portal_url,
-                        secret,
-                        oid,
-                        jid,
-                        str(me),
-                        failure_category=me.category,
-                        user_safe_detail=me.stderr_tail[:500] if me.stderr_tail else None,
-                    )
-                except Exception as e2:  # noqa: BLE001
-                    print(f"[nfse-portal-bridge] Falha ao marcar job como failed: {e2}", file=sys.stderr, flush=True)
+                _try_fail_job(
+                    dsn,
+                    portal_url,
+                    secret,
+                    oid,
+                    jid,
+                    str(me),
+                    failure_category=me.category,
+                    user_safe_detail=me.stderr_tail[:500] if me.stderr_tail else None,
+                )
                 if poll_once:
                     return
             except KeyboardInterrupt:
                 # Evita job preso em "running" quando o worker é interrompido manualmente.
-                try:
-                    fail_job(
-                        portal_url,
-                        secret,
-                        oid,
-                        jid,
-                        "Execução interrompida manualmente.",
-                        failure_category="unknown",
-                    )
-                except Exception as e2:  # noqa: BLE001
-                    print(
-                        f"[nfse-portal-bridge] Falha ao marcar job interrompido como failed: {e2}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
+                _try_fail_job(
+                    dsn,
+                    portal_url,
+                    secret,
+                    oid,
+                    jid,
+                    "Execução interrompida manualmente.",
+                    failure_category="unknown",
+                )
                 print("[nfse-portal-bridge] Interrompido durante processamento do job.", flush=True)
                 return
             except Exception as e:  # noqa: BLE001
@@ -470,17 +672,15 @@ def main() -> None:
                 cat = infer_failure_category_from_exception(e)
                 if isinstance(e, NoCompanyArtifactsError):
                     cat = "unknown"
-                try:
-                    fail_job(
-                        portal_url,
-                        secret,
-                        oid,
-                        jid,
-                        str(e),
-                        failure_category=cat,
-                    )
-                except Exception as e2:  # noqa: BLE001
-                    print(f"[nfse-portal-bridge] Falha ao marcar job como failed: {e2}", file=sys.stderr, flush=True)
+                _try_fail_job(
+                    dsn,
+                    portal_url,
+                    secret,
+                    oid,
+                    jid,
+                    str(e),
+                    failure_category=cat,
+                )
                 if poll_once:
                     return
         except KeyboardInterrupt:

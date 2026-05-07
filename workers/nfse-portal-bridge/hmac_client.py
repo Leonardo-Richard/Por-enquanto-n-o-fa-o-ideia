@@ -7,8 +7,12 @@ import hmac
 import json
 import time
 from typing import Any, Mapping
+import ssl
+
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from ssl_context import worker_ssl_context
 
 
 def _json_bytes(payload: Mapping[str, Any] | list[Any]) -> bytes:
@@ -38,8 +42,9 @@ def internal_json_request(
     hdrs = signed_headers(secret, body)
     url = base_url.rstrip("/") + path
     req = Request(url, data=body, method=method.upper(), headers=hdrs)
+    ctx: ssl.SSLContext = worker_ssl_context()
     try:
-        with urlopen(req, timeout=timeout) as resp:
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
             raw = resp.read().decode("utf-8")
             return json.loads(raw) if raw else {}
     except HTTPError as e:
@@ -74,5 +79,6 @@ def http_put_bytes(url: str, data: bytes, content_type: str, timeout: int = 300)
         method="PUT",
         headers={"Content-Type": content_type},
     )
-    with urlopen(req, timeout=timeout) as resp:
+    ctx: ssl.SSLContext = worker_ssl_context()
+    with urlopen(req, timeout=timeout, context=ctx) as resp:
         return int(resp.status)

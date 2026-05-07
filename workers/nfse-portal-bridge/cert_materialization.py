@@ -19,12 +19,15 @@ import base64
 import binascii
 import json
 import os
+import ssl
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 from psycopg.rows import dict_row
+
+from ssl_context import worker_ssl_context
 
 
 def _supabase_base_url() -> str:
@@ -70,7 +73,8 @@ def _download_supabase_object(bucket: str, object_path: str) -> bytes:
         method="GET",
     )
     try:
-        with urllib.request.urlopen(req, timeout=20) as res:
+        ctx: ssl.SSLContext = worker_ssl_context()
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as res:
             return res.read()
     except urllib.error.HTTPError as e:  # type: ignore[attr-defined]
         detail = (e.read() or b"")[:300].decode("utf-8", errors="replace")
