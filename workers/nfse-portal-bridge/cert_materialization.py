@@ -241,6 +241,106 @@ def _import_pfx_into_windows_store(cert_path: Path, password: str) -> dict[str, 
     return {"imported": False, "reason": f"certutil_rc_{proc.returncode}"}
 
 
+def _extract_pfx_subject_cn(cert_path: Path, password: str) -> str | None:
+    """Lê o CN (Subject) do .pfx via PowerShell. Devolve None se falhar."""
+    if platform.system() != "Windows" or not cert_path.is_file() or not password:
+        return None
+    ps_script = (
+        "$ErrorActionPreference='Stop';"
+        "$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2;"
+        "$secure = ConvertTo-SecureString -String $env:ADN_PFX_PWD -AsPlainText -Force;"
+        "$flags = [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::DefaultKeySet;"
+        "$cert.Import($env:ADN_PFX_PATH, $secure, $flags);"
+        "$cn = ($cert.Subject -split ',') | Where-Object { $_.Trim().StartsWith('CN=') } | "
+        "ForEach-Object { $_.Trim().Substring(3) } | Select-Object -First 1;"
+        "if ($cn) { [Console]::Out.Write($cn) }"
+    )
+    env = os.environ.copy()
+    env["ADN_PFX_PATH"] = str(cert_path)
+    env["ADN_PFX_PWD"] = password
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    cn = (proc.stdout or "").strip()
+    return cn or None
+
+
+def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
+    """
+    Configura a Chrome policy `AutoSelectCertificateForUrls` para escolher AUTOMATICAMENTE
+    o certificado da empresa actual (filtro SUBJECT.CN exacto) ao falar com `nfse.gov.br`.
+
+    Controlado por:
+      ADN_AUTO_SELECT_CERT_CHROME — "0" desactiva (default ligado).
+      ADN_AUTO_SELECT_URL_PATTERN — pattern Chrome (default https://[*.]nfse.gov.br).
+    """
+    if platform.system() != "Windows":
+        return {"set": False, "reason": "not_windows"}
+    if os.environ.get("ADN_AUTO_SELECT_CERT_CHROME", "1").strip() == "0":
+        return {"set": False, "reason": "disabled_by_env"}
+    if not subject_cn:
+        return {"set": False, "reason": "no_subject_cn"}
+
+    pattern = (
+        os.environ.get("ADN_AUTO_SELECT_URL_PATTERN", "").strip()
+        or "https://[*.]nfse.gov.br"
+    )
+    rule = json.dumps(
+        {"pattern": pattern, "filter": {"SUBJECT": {"CN": subject_cn}}},
+        ensure_ascii=False,
+    )
+
+    ps_script = (
+        "$key='HKCU:\\SOFTWARE\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls';"
+        "New-Item -Path $key -Force | Out-Null;"
+        "Set-ItemProperty -Path $key -Name '1' -Value $env:ADN_RULE -Type String"
+    )
+    env = os.environ.copy()
+    env["ADN_RULE"] = rule
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
+    if proc.returncode == 0:
+        return {"set": True, "reason": "ok", "subjectCn": subject_cn, "pattern": pattern}
+    return {
+        "set": False,
+        "reason": f"ps_rc_{proc.returncode}",
+        "stderr": (proc.stderr or "")[:200],
+    }
+
+
 def materialize_company_certificate_from_vault(
     *,
     organization_id: str,
@@ -268,10 +368,17 @@ def materialize_company_certificate_from_vault(
 
     win_import = _import_pfx_into_windows_store(cert_path, password)
 
+    chrome_autoselect: dict[str, Any] = {"set": False, "reason": "not_attempted"}
+    subject_cn = _extract_pfx_subject_cn(cert_path, password)
+    if subject_cn:
+        chrome_autoselect = _set_chrome_autoselect_policy(subject_cn)
+
     return {
         "materialized": True,
         "reason": "ok",
         "vaultRefKind": "supabase-storage",
         "targetCertPath": str(cert_path),
         "windowsStoreImport": win_import,
+        "chromeAutoSelect": chrome_autoselect,
+        "subjectCn": subject_cn,
     }

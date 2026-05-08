@@ -332,6 +332,19 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
                 "O motor cenário B precisa do certificado na loja; se o Chrome devolver 403, instale o .pfx manualmente.",
                 flush=True,
             )
+        cas = cert_sync.get("chromeAutoSelect") or {}
+        if cas.get("set"):
+            print(
+                f"[nfse-portal-bridge] Chrome AutoSelect activo para {cas.get('pattern')} -> "
+                f"CN={cas.get('subjectCn')!s} (sem pop-up de certificado).",
+                flush=True,
+            )
+        elif cas.get("reason") not in (None, "not_windows", "disabled_by_env", "not_attempted"):
+            print(
+                f"[nfse-portal-bridge] Aviso: AutoSelect do Chrome não pôde ser configurado "
+                f"({cas.get('reason')}); pode aparecer pop-up de selecção de certificado.",
+                flush=True,
+            )
     cleanup_enabled = os.environ.get("NFSE_CLEAN_BEFORE_RUN", "").strip() == "1"
     if cleanup_enabled:
         cleanup = clear_company_data_directory(nfse, cnpj)
