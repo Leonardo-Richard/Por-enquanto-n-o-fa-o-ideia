@@ -307,23 +307,48 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
         ensure_ascii=False,
     )
 
-    """
-    Usa `reg.exe` em vez de Set-ItemProperty: nunca pede UAC e falha silenciosamente
-    se a hive não for escrevível (pelo que tentamos HKLM e HKCU em sequência sem
-    bloquear o worker).
-    """
-    scopes = _write_chrome_policy_value(
-        "AutoSelectCertificateForUrls", "1", rule
+    # Escreve em HKLM e HKCU, em AMBAS as hives `Google\Chrome` e `Chromium`.
+    # Chrome estável lê de Google\Chrome; Chromium for Testing (bundled do
+    # Playwright) lê de Chromium. Em qualquer cenário a policy aplica.
+    ps_script = (
+        "$rule=$env:ADN_RULE;"
+        "foreach ($root in 'HKLM:','HKCU:') {"
+        "  foreach ($brand in 'Google\\Chrome','Chromium') {"
+        "    $key=\"$root\\SOFTWARE\\Policies\\$brand\\AutoSelectCertificateForUrls\";"
+        "    try {"
+        "      New-Item -Path $key -Force | Out-Null;"
+        "      Set-ItemProperty -Path $key -Name '1' -Value $rule -Type String"
+        "    } catch { }"
+        "  }"
+        "}"
     )
-    if scopes:
-        return {
-            "set": True,
-            "reason": "ok",
-            "subjectCn": subject_cn,
-            "pattern": pattern,
-            "scope": "+".join(scopes),
-        }
-    return {"set": False, "reason": "reg_write_failed_all_scopes"}
+    env = os.environ.copy()
+    env["ADN_RULE"] = rule
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
+    if proc.returncode == 0:
+        return {"set": True, "reason": "ok", "subjectCn": subject_cn, "pattern": pattern}
+    return {
+        "set": False,
+        "reason": f"ps_rc_{proc.returncode}",
+        "stderr": (proc.stderr or "")[:200],
+    }
 
 
 """
@@ -358,60 +383,69 @@ def _set_chrome_extension_force_install_policy() -> dict[str, Any]:
         or ADN_BROWSER_EXTENSION_ID_DEFAULT
     )
     value = f"{ext_id};{ADN_BROWSER_EXTENSION_UPDATE_URL}"
-    scopes = _write_chrome_policy_value(
-        "ExtensionInstallForcelist", "1", value
+    """
+    Escreve a policy em HKLM (máquina-wide) E HKCU (utilizador), em AMBAS as hives
+    `Google\\Chrome` e `Chromium` — Chrome estável lê de Google\\Chrome; Chromium
+    for Testing (bundled do Playwright, recomendado) lê de Chromium.
+    """
+    ps_script = (
+        "$value=$env:ADN_FORCE_VALUE;"
+        "$reasons=@();"
+        "foreach ($root in 'HKLM:','HKCU:') {"
+        "  foreach ($brand in 'Google\\Chrome','Chromium') {"
+        "    $key=\"$root\\SOFTWARE\\Policies\\$brand\\ExtensionInstallForcelist\";"
+        "    try {"
+        "      New-Item -Path $key -Force | Out-Null;"
+        "      Set-ItemProperty -Path $key -Name '1' -Value $value -Type String;"
+        "      $reasons += \"$root\\$brand ok\""
+        "    } catch {"
+        "      $reasons += \"$root\\$brand fail:$($_.Exception.Message)\""
+        "    }"
+        "  }"
+        "};"
+        "Write-Output ($reasons -join '; ')"
     )
-    if scopes:
-        return {
-            "set": True,
-            "reason": "ok",
-            "extensionId": ext_id,
-            "scope": "+".join(scopes),
-        }
-    return {"set": False, "reason": "reg_write_failed_all_scopes"}
-
-
-def _write_chrome_policy_value(
-    policy_key: str, value_name: str, value_data: str
-) -> list[str]:
-    """
-    Escreve uma policy do Chrome em ambas as raízes (HKLM, HKCU) usando `reg.exe`.
-
-    `reg.exe`:
-      - Não pede UAC. Falha com exit ≠ 0 se sem permissão na hive (HKLM).
-      - Cria a chave automaticamente com `add /f`.
-      - É muito mais rápido que PowerShell.
-
-    Devolve lista de scopes onde a escrita teve sucesso (ex.: ["HKLM", "HKCU"]).
-    """
-    base = f"SOFTWARE\\Policies\\Google\\Chrome\\{policy_key}"
-    succeeded: list[str] = []
-    for root in ("HKLM", "HKCU"):
-        full_key = f"{root}\\{base}"
-        try:
-            proc = subprocess.run(
-                [
-                    "reg.exe",
-                    "add",
-                    full_key,
-                    "/v",
-                    value_name,
-                    "/t",
-                    "REG_SZ",
-                    "/d",
-                    value_data,
-                    "/f",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            if proc.returncode == 0:
-                succeeded.append(root)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-    return succeeded
+    env = os.environ.copy()
+    env["ADN_FORCE_VALUE"] = value
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
+    out = (proc.stdout or "").strip()
+    # Pelo menos uma das raízes tem que ter sucesso.
+    if proc.returncode == 0 and " ok" in out:
+        has_hklm = "HKLM:" in out and "HKLM: fail" not in out and " ok" in out and any(
+            tok.startswith("HKLM:") and tok.endswith("ok") for tok in out.split("; ")
+        )
+        has_hkcu = "HKCU:" in out and any(
+            tok.startswith("HKCU:") and tok.endswith("ok") for tok in out.split("; ")
+        )
+        scope = (
+            "machine+user"
+            if has_hklm and has_hkcu
+            else ("machine_only" if has_hklm else "user_only")
+        )
+        return {"set": True, "reason": "ok", "extensionId": ext_id, "scope": scope, "details": out}
+    return {
+        "set": False,
+        "reason": f"ps_rc_{proc.returncode}",
+        "details": out,
+        "stderr": (proc.stderr or "")[:200],
+    }
 
 
 def materialize_company_certificate_from_vault(
@@ -429,7 +463,6 @@ def materialize_company_certificate_from_vault(
     if not parsed:
         return {"materialized": False, "reason": "unsupported_vault_ref"}
 
-    print(f"[cert] {cnpj_digits}: a descarregar do cofre Supabase...", flush=True)
     bucket, object_path = parsed
     raw = _download_supabase_object(bucket, object_path)
     cert_bytes, password = _extract_pkcs12_and_password(raw, nfse_root, cnpj_digits)
@@ -439,24 +472,15 @@ def materialize_company_certificate_from_vault(
     cert_path = cert_dir / f"{cnpj_digits}.pfx"
     cert_path.write_bytes(cert_bytes)
     _upsert_clients_local_with_password(nfse_root, cnpj_digits, password)
-    print(f"[cert] {cnpj_digits}: PFX gravado em {cert_path}.", flush=True)
 
-    print(f"[cert] {cnpj_digits}: a importar PFX para a loja do Windows (certutil)...", flush=True)
     win_import = _import_pfx_into_windows_store(cert_path, password)
-    print(f"[cert] {cnpj_digits}: certutil -> {win_import}.", flush=True)
 
-    print(f"[cert] {cnpj_digits}: a extrair Subject CN do PFX (PowerShell)...", flush=True)
     chrome_autoselect: dict[str, Any] = {"set": False, "reason": "not_attempted"}
     subject_cn = _extract_pfx_subject_cn(cert_path, password)
-    print(f"[cert] {cnpj_digits}: subjectCn={subject_cn!r}.", flush=True)
     if subject_cn:
-        print(f"[cert] {cnpj_digits}: a aplicar AutoSelect policy via reg.exe...", flush=True)
         chrome_autoselect = _set_chrome_autoselect_policy(subject_cn)
-        print(f"[cert] {cnpj_digits}: AutoSelect policy -> {chrome_autoselect}.", flush=True)
 
-    print(f"[cert] {cnpj_digits}: a aplicar ExtensionInstallForcelist via reg.exe...", flush=True)
     chrome_force_install = _set_chrome_extension_force_install_policy()
-    print(f"[cert] {cnpj_digits}: ExtensionInstallForcelist policy -> {chrome_force_install}.", flush=True)
 
     return {
         "materialized": True,

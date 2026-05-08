@@ -157,12 +157,22 @@ export async function runBrowserFlow(opts) {
 
   const launchArgs = ["--no-first-run", "--no-default-browser-check"];
   /**
-   * Se o operador insistir em unpacked + Chromium for Testing/Chromium build, deixamos
-   * passar --load-extension. No caminho default (Chrome estável + force-install policy)
-   * estas flags são ignoradas pelo Chrome e portanto seguras de omitir.
+   * Em Chromium for Testing (bundled do Playwright; channel vazio) o `--load-extension`
+   * funciona normalmente. Em Chrome estável (channel='chrome') Google removeu a flag
+   * em 137+, e o caminho recomendado é `ExtensionInstallForcelist` via Group Policy
+   * (configurada pelo worker Python). Aqui passamos a flag sempre que houver pasta —
+   * o Chrome estável ignora-a, o Chromium aceita-a.
    */
-  if (extDir && fs.existsSync(extDir) && !useForceInstall) {
+  if (extDir && fs.existsSync(extDir)) {
     launchArgs.push(`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`);
+  }
+  if (channel === "chrome" && extDir && !useForceInstall) {
+    process.stderr.write(
+      "[adn-playwright-motor] AVISO: ADN_PLAYWRIGHT_CHANNEL=chrome com unpacked extension. " +
+        "Chrome estável 137+ não carrega extensões via --load-extension. " +
+        "Recomenda-se omitir ADN_PLAYWRIGHT_CHANNEL (default: Chromium for Testing) " +
+        "ou manter ADN_BROWSER_USE_FORCE_INSTALL=1 (force-install via policy).\n",
+    );
   }
 
   const tipoNota = resolveTipoNota();
