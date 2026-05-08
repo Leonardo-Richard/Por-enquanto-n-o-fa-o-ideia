@@ -262,17 +262,25 @@ export async function runBrowserFlow(opts) {
     Number.parseInt(process.env.ADN_BROWSER_EXTENSION_WAIT_MS || "180000", 10) || 180_000,
   );
   try {
-    const detected = await detectLoadedExtensionId(context, extDetectTimeoutMs);
+    /**
+     * Procura especificamente o ID da extensão «Baixar NFSe». O Chrome carrega várias
+     * component-extensions internas (com IDs diferentes) que apareceriam em
+     * `serviceWorkers()`/`backgroundPages()` antes da nossa, fazendo o motor abrir o
+     * popup errado.
+     */
+    const detected = await waitForExtensionId(context, ADN_EXT_ID_FALLBACK, extDetectTimeoutMs);
     if (detected) {
       extId = detected;
-      dlog(`extensão detectada: id=${extId}`);
+      dlog(`extensão alvo detectada: id=${extId}`);
     } else {
+      const others = listKnownExtensionIds(context);
       dlog(
-        `nenhum service-worker de extensão detectado em ${extDetectTimeoutMs}ms; a tentar ID fallback ${ADN_EXT_ID_FALLBACK}`,
+        `extensão alvo (${ADN_EXT_ID_FALLBACK}) não apareceu em ${extDetectTimeoutMs}ms ` +
+          `(IDs vistos: ${others.join(", ") || "nenhum"}). Vai tentar mesmo assim.`,
       );
     }
   } catch (e) {
-    dlog(`detectLoadedExtensionId erro ignorado: ${e?.message || e}`);
+    dlog(`waitForExtensionId erro ignorado: ${e?.message || e}`);
   }
 
   /** Abre o popup da extensão como aba normal. */
@@ -490,34 +498,41 @@ async function popupSaysSemNotas(popupPage) {
 }
 
 /**
- * Detecta o ID da extensão carregada via `--load-extension`. Manifest v3 expõe um
- * service worker em `chrome-extension://<ID>/...`. Faz polling até `timeoutMs`.
- *
- * @param {import('playwright').BrowserContext} context
- * @param {number} timeoutMs
- * @returns {Promise<string | null>}
+ * Devolve a lista de IDs de extensões com service worker / background page activos.
  */
-async function detectLoadedExtensionId(context, timeoutMs) {
+function listKnownExtensionIds(context) {
+  const ids = new Set();
+  try {
+    const swList = typeof context.serviceWorkers === "function" ? context.serviceWorkers() : [];
+    for (const sw of swList) {
+      const url = (sw.url && sw.url()) || "";
+      const m = /^chrome-extension:\/\/([a-p]{32})\//.exec(url);
+      if (m) ids.add(m[1]);
+    }
+    const bgList = typeof context.backgroundPages === "function" ? context.backgroundPages() : [];
+    for (const bg of bgList) {
+      const url = (bg.url && bg.url()) || "";
+      const m = /^chrome-extension:\/\/([a-p]{32})\//.exec(url);
+      if (m) ids.add(m[1]);
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...ids];
+}
+
+/**
+ * Espera pela extensão com o ID `expectedId` (ex.: «Baixar NFSe») a ficar activa.
+ * Em manifest v3 isso significa um service worker em `chrome-extension://<expectedId>/`.
+ * Devolve o próprio `expectedId` se aparecer; `null` ao fim de `timeoutMs`.
+ */
+async function waitForExtensionId(context, expectedId, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    try {
-      const swList = typeof context.serviceWorkers === "function" ? context.serviceWorkers() : [];
-      for (const sw of swList) {
-        const url = (sw.url && sw.url()) || "";
-        const m = /^chrome-extension:\/\/([a-p]{32})\//.exec(url);
-        if (m) return m[1];
-      }
-      const bgList =
-        typeof context.backgroundPages === "function" ? context.backgroundPages() : [];
-      for (const bg of bgList) {
-        const url = (bg.url && bg.url()) || "";
-        const m = /^chrome-extension:\/\/([a-p]{32})\//.exec(url);
-        if (m) return m[1];
-      }
-    } catch {
-      /* ignore e tenta de novo */
+    if (listKnownExtensionIds(context).includes(expectedId)) {
+      return expectedId;
     }
-    await new Promise((r) => setTimeout(r, 750));
+    await new Promise((r) => setTimeout(r, 1000));
   }
   return null;
 }
