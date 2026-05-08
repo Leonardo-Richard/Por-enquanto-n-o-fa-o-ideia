@@ -19,6 +19,10 @@
 | `ADN_PLAYWRIGHT_FATIA_ZERO` | Motor Node | `1` — só XML de teste (sem abrir browser). |
 | `ADN_CHROME_USER_DATA_DIR` | Motor (Node) | Perfil reutilizável; **nunca** exposto em `summary_json` do portal. |
 | `ADN_BROWSER_DEBUG` | Motor | `1` = logs adicionais no host (redigidos). |
+| `ADN_BROWSER_FETCH_FROM` | Motor Node | `YYYY-MM-DD` ou **`year-start`** (1 Jan do ano corrente). Se ausente, usa `today − ADN_BROWSER_FETCH_DAYS`. |
+| `ADN_BROWSER_FETCH_TO` | Motor Node | `YYYY-MM-DD` ou hoje (default). |
+| `ADN_BROWSER_FETCH_DAYS` | Motor Node | Janela em dias a partir de hoje quando `FETCH_FROM` não está definido (default **366**, max 730). |
+| `ADN_BROWSER_TIPO_NOTA` | Motor Node | `Emitidas` (default) ou `Recebidas`. |
 | `ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN` | Portal (Next) | Limite GET execuções org (default 60/min). |
 
 ## 2. Rollback instantâneo
@@ -50,9 +54,9 @@ A serialização garantida pelo `playwright_browser_file_lock` (§3) torna a pur
 | `ADN_CERT_DIALOG_MAX_CLICKS` | `50` | Limite global de cliques (PostMessage + keybd_event). |
 | `ADN_CERT_DIALOG_DIAG_SEC` | `8` | Intervalo (s) de dump diagnóstico de janelas Chrome/NFS-e no log. |
 | `ADN_CERT_DIALOG_GLOBAL_ENTER` | `1` | `0` desliga camada 3 (foreground fallback) — necessária quando o Chromium não expõe o título do diálogo. |
-| `ADN_CERT_DIALOG_GLOBAL_DELAY` | `6` | Segundos a aguardar antes do primeiro ENTER global (evita disparar antes do diálogo aparecer). |
-| `ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC` | `3` | Intervalo mínimo entre ENTERs globais. |
-| `ADN_CERT_DIALOG_GLOBAL_MAX` | `4` | Limite de ENTERs globais (camada 3) para não interferir com navegação pós-login. |
+| `ADN_CERT_DIALOG_GLOBAL_DELAY` | `10` | Segundos a aguardar antes do primeiro ENTER global (evita disparar antes do diálogo aparecer). |
+| `ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC` | `5` | Intervalo mínimo entre ENTERs globais. |
+| `ADN_CERT_DIALOG_GLOBAL_MAX` | `2` | Limite de ENTERs globais (camada 3): 1 confirma o cert, 1 retry. Mais que isso interfere com a extensão pós-login. |
 
 Verificação rápida no Windows após um job:
 

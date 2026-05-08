@@ -41,16 +41,35 @@ function fmtIsoDate(d) {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Resolve a janela de busca usada pela extensão. Ordem de preferência para `from`:
+ *   1. `ADN_BROWSER_FETCH_FROM=YYYY-MM-DD` (data explícita).
+ *   2. `ADN_BROWSER_FETCH_FROM=year-start` → 1 Jan do ano corrente (caso comum:
+ *      «desde o início do ano até hoje»).
+ *   3. `ADN_BROWSER_FETCH_DAYS=N` (default 366) → today − N dias.
+ *
+ * `to` é `ADN_BROWSER_FETCH_TO=YYYY-MM-DD` ou hoje.
+ */
 function resolveDateWindow() {
   const envFrom = (process.env.ADN_BROWSER_FETCH_FROM || "").trim();
   const envTo = (process.env.ADN_BROWSER_FETCH_TO || "").trim();
   const today = new Date();
   const to = envTo && /^\d{4}-\d{2}-\d{2}$/.test(envTo) ? envTo : fmtIsoDate(today);
   let from = envFrom;
-  if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+  if (envFrom.toLowerCase() === "year-start") {
+    from = `${today.getFullYear()}-01-01`;
+  } else if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    /**
+     * Default 366 dias: cobre desde o início do ano civil mesmo em Dezembro.
+     * Anteriormente eram 31 dias — janela curta deixava notas Jan-Mar fora
+     * em jobs disparados em Maio. Ajuste agressivo para não perder histórico.
+     */
     const days = Math.max(
       1,
-      Math.min(365, Number.parseInt(process.env.ADN_BROWSER_FETCH_DAYS || "31", 10) || 31),
+      Math.min(
+        730,
+        Number.parseInt(process.env.ADN_BROWSER_FETCH_DAYS || "366", 10) || 366,
+      ),
     );
     const start = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
     from = fmtIsoDate(start);
@@ -179,13 +198,26 @@ export async function runBrowserFlow(opts) {
 
   const tipoNota = resolveTipoNota();
   const { from: dateFrom, to: dateTo } = resolveDateWindow();
+  const windowDays = Math.round(
+    (new Date(`${dateTo}T00:00:00Z`).getTime() -
+      new Date(`${dateFrom}T00:00:00Z`).getTime()) /
+      (24 * 60 * 60 * 1000),
+  );
+
+  /**
+   * Janela é sempre logada (sem ADN_BROWSER_DEBUG): imprescindível para o utilizador
+   * perceber «porque é que a extensão não baixou nada» (default cobre 366 dias).
+   */
+  process.stderr.write(
+    `[adn-playwright-motor] janela busca tipoNota=${tipoNota} ` +
+      `dateFrom=${dateFrom} dateTo=${dateTo} dias=${windowDays}\n`,
+  );
 
   dlog(`jobId=${opts.jobId} cnpj=${opts.cnpjDigits}`);
   dlog(`loginUrl=${loginUrl}`);
   dlog(`profileDir=(definido)`);
   dlog(`extensionDir=(definido)`);
   dlog(`headless=${headless} channel=${channel || "bundled-chromium"}`);
-  dlog(`tipoNota=${tipoNota} dateFrom=${dateFrom} dateTo=${dateTo}`);
   dlog(`waitArtifactsSec=${waitArtifactsSec}`);
 
   /**

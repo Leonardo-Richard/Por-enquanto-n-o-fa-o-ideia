@@ -184,15 +184,20 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
     global_enter_enabled = (
         os.environ.get("ADN_CERT_DIALOG_GLOBAL_ENTER", "1").strip() != "0"
     )
+    # Delay maior (10s) para deixar o Chrome carregar a página de login antes de
+    # disparar ENTER global (evita ENTER em campos vazios pré-pop-up).
     global_enter_delay = max(
-        0.0, float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_DELAY", "6") or "6")
+        0.0, float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_DELAY", "10") or "10")
     )
+    # Limite reduzido (2): 1 confirma o cert, 1 retry em caso de cert pop-up
+    # demorar a aparecer. Mais cliques disparam acções no portal/extensão pós
+    # login (campos com foco, submits) e podem quebrar o fluxo.
     global_enter_max = max(
-        1, int(os.environ.get("ADN_CERT_DIALOG_GLOBAL_MAX", "4") or "4")
+        1, int(os.environ.get("ADN_CERT_DIALOG_GLOBAL_MAX", "2") or "2")
     )
     global_enter_interval = max(
         0.5,
-        float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC", "3") or "3"),
+        float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC", "5") or "5"),
     )
 
     started_at = time.time()
