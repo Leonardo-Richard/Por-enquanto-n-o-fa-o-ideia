@@ -307,10 +307,17 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
         ensure_ascii=False,
     )
 
+    # Escreve em HKLM e HKCU (mesmo motivo do force-install: Chrome do Playwright
+    # nem sempre vê HKCU consoante o contexto de lançamento).
     ps_script = (
-        "$key='HKCU:\\SOFTWARE\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls';"
-        "New-Item -Path $key -Force | Out-Null;"
-        "Set-ItemProperty -Path $key -Name '1' -Value $env:ADN_RULE -Type String"
+        "$rule=$env:ADN_RULE;"
+        "foreach ($root in 'HKLM:','HKCU:') {"
+        "  $key=\"$root\\SOFTWARE\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls\";"
+        "  try {"
+        "    New-Item -Path $key -Force | Out-Null;"
+        "    Set-ItemProperty -Path $key -Name '1' -Value $rule -Type String"
+        "  } catch { }"
+        "}"
     )
     env = os.environ.copy()
     env["ADN_RULE"] = rule
@@ -373,10 +380,26 @@ def _set_chrome_extension_force_install_policy() -> dict[str, Any]:
         or ADN_BROWSER_EXTENSION_ID_DEFAULT
     )
     value = f"{ext_id};{ADN_BROWSER_EXTENSION_UPDATE_URL}"
+    """
+    Escreve a policy em HKLM (máquina-wide) E HKCU (utilizador) — Chrome lê de ambas
+    raízes e a HKLM aplica-se mesmo quando o processo é lançado por outro contexto
+    (caso típico do Playwright). Se o operador não for administrador, HKLM falha mas
+    HKCU é tentado como fallback.
+    """
     ps_script = (
-        "$key='HKCU:\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist';"
-        "New-Item -Path $key -Force | Out-Null;"
-        "Set-ItemProperty -Path $key -Name '1' -Value $env:ADN_FORCE_VALUE -Type String"
+        "$value=$env:ADN_FORCE_VALUE;"
+        "$reasons=@();"
+        "foreach ($root in 'HKLM:','HKCU:') {"
+        "  $key=\"$root\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist\";"
+        "  try {"
+        "    New-Item -Path $key -Force | Out-Null;"
+        "    Set-ItemProperty -Path $key -Name '1' -Value $value -Type String;"
+        "    $reasons += \"$root ok\""
+        "  } catch {"
+        "    $reasons += \"$root fail:$($_.Exception.Message)\""
+        "  }"
+        "};"
+        "Write-Output ($reasons -join '; ')"
     )
     env = os.environ.copy()
     env["ADN_FORCE_VALUE"] = value
@@ -392,17 +415,23 @@ def _set_chrome_extension_force_install_policy() -> dict[str, Any]:
             ],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=20,
             check=False,
             env=env,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
-    if proc.returncode == 0:
-        return {"set": True, "reason": "ok", "extensionId": ext_id}
+    out = (proc.stdout or "").strip()
+    # Pelo menos uma das raízes tem que ter sucesso.
+    if proc.returncode == 0 and "ok" in out:
+        scope = "machine+user" if "HKLM: ok" in out and "HKCU: ok" in out else (
+            "machine_only" if "HKLM: ok" in out else "user_only"
+        )
+        return {"set": True, "reason": "ok", "extensionId": ext_id, "scope": scope, "details": out}
     return {
         "set": False,
         "reason": f"ps_rc_{proc.returncode}",
+        "details": out,
         "stderr": (proc.stderr or "")[:200],
     }
 

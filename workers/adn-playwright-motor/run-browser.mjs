@@ -259,11 +259,16 @@ export async function runBrowserFlow(opts) {
     popupPage = await context.newPage();
     await popupPage.goto(popupUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
   } catch (e) {
+    /** Captura screenshots de diagnóstico antes de fechar o contexto. */
+    const diagInfo = await captureDiagnostics(context, opts.outputDir).catch(
+      (de) => `(diag falhou: ${de?.message || de})`,
+    );
     await context.close().catch(() => {});
     const hint = manifestHintFromExtDir(extDir);
     process.stderr.write(
       `STDERR_CAT_EXTENSION falha ao abrir popup da extensao (${popupUrl}): ${e?.message || e}\n` +
-        `${hint}\n`,
+        `${hint}\n` +
+        `${diagInfo}\n`,
     );
     process.exit(12);
   }
@@ -492,6 +497,42 @@ async function detectLoadedExtensionId(context, timeoutMs) {
     await new Promise((r) => setTimeout(r, 750));
   }
   return null;
+}
+
+/**
+ * Captura `chrome://policy` e `chrome://extensions` para um ficheiro de log e screenshots
+ * em `outputDir/_diag/`, devolvendo um pequeno resumo textual para incluir no stderr.
+ */
+async function captureDiagnostics(context, outputDir) {
+  const diagDir = path.join(outputDir, "_diag");
+  fs.mkdirSync(diagDir, { recursive: true });
+  const lines = [];
+  for (const url of ["chrome://policy", "chrome://extensions"]) {
+    let page;
+    try {
+      page = await context.newPage();
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+      await new Promise((r) => setTimeout(r, 1500));
+      const safeName = url.replace(/[^a-z]/gi, "_");
+      const shotPath = path.join(diagDir, `${safeName}.png`);
+      await page.screenshot({ path: shotPath, fullPage: true });
+      const bodyText = (
+        await page.evaluate(() => document.body && document.body.innerText)
+      ).slice(0, 4000);
+      const txtPath = path.join(diagDir, `${safeName}.txt`);
+      fs.writeFileSync(txtPath, bodyText, "utf8");
+      lines.push(`[diag] ${url} -> ${shotPath}`);
+    } catch (e) {
+      lines.push(`[diag] ${url} falhou: ${e?.message || e}`);
+    } finally {
+      try {
+        if (page) await page.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return lines.join("\n");
 }
 
 /**
