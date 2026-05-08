@@ -158,9 +158,14 @@ export async function runBrowserFlow(opts) {
 
   const headless = process.env.ADN_BROWSER_HEADLESS === "1";
   const channel = (process.env.ADN_PLAYWRIGHT_CHANNEL || "").trim() || undefined;
+  /**
+   * Default 900s (15 min). Janelas grandes (`year-start`, ~366 dias) requerem
+   * paginação interna na extensão e podem ser mais lentas que a janela de 31
+   * dias original. O `idle settle` interrompe cedo se já houver ZIPs estáveis.
+   */
   const waitArtifactsSec = Math.max(
     30,
-    Number.parseInt(process.env.ADN_BROWSER_WAIT_ARTIFACTS_SEC || "600", 10) || 600,
+    Number.parseInt(process.env.ADN_BROWSER_WAIT_ARTIFACTS_SEC || "900", 10) || 900,
   );
   const idleSettleSec = Math.max(
     8,
@@ -381,6 +386,10 @@ export async function runBrowserFlow(opts) {
   let found = 0;
   let totalZipsIngested = 0;
   let totalZipsFromDownloads = 0;
+  let lastStatusLog = 0;
+  let lastStatusText = "";
+  const statusLogInterval = 15_000;
+
   while (Date.now() < deadline) {
     const movedFromDl = ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
     if (movedFromDl > 0) {
@@ -397,12 +406,35 @@ export async function runBrowserFlow(opts) {
     if (xmls.length !== lastCount) {
       lastCount = xmls.length;
       lastChange = Date.now();
-      dlog(
-        `artefactos XML novos (parcial): ${xmls.length} ` +
-          `(zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads})`,
+      process.stderr.write(
+        `[adn-playwright-motor] artefactos XML novos (parcial): ${xmls.length} ` +
+          `(zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads})\n`,
       );
     }
     found = xmls.length;
+
+    /** Periodicamente, loga o estado do popup (#status + botão disabled). */
+    const now = Date.now();
+    if (now - lastStatusLog >= statusLogInterval) {
+      lastStatusLog = now;
+      const st = await readPopupStatus(popupPage);
+      const elapsedSec = Math.round((now - artifactSince) / 1000);
+      if (st.statusText !== lastStatusText) {
+        lastStatusText = st.statusText;
+        process.stderr.write(
+          `[adn-playwright-motor] popup status @${elapsedSec}s: ` +
+            `disabled=${st.buttonDisabled} text=${JSON.stringify(st.statusText)} ` +
+            `xmls=${found} zips=${totalZipsIngested}+${totalZipsFromDownloads}\n`,
+        );
+      } else {
+        process.stderr.write(
+          `[adn-playwright-motor] heartbeat @${elapsedSec}s: ` +
+            `xmls=${found} zips_extraidos=${totalZipsIngested} ` +
+            `zips_downloads=${totalZipsFromDownloads}\n`,
+        );
+      }
+    }
+
     /** Se já há ficheiros e nada novo durante `idleSettleSec`, considera concluído. */
     if (found > 0 && Date.now() - lastChange >= idleSettleSec * 1000) {
       break;
@@ -411,7 +443,9 @@ export async function runBrowserFlow(opts) {
     try {
       const semNotas = await popupSaysSemNotas(popupPage);
       if (semNotas) {
-        dlog("popup sinalizou ausência de notas no período; saindo sem erro.");
+        process.stderr.write(
+          "[adn-playwright-motor] popup sinalizou ausência de notas no período; saindo sem erro.\n",
+        );
         await context.close().catch(() => {});
         process.exit(0);
       }
@@ -426,9 +460,22 @@ export async function runBrowserFlow(opts) {
   totalZipsIngested += ingestZipDownloads(opts.outputDir, artifactSince);
   found = listNewXmlFilesRecursive(opts.outputDir, artifactSince).length;
 
-  await context.close().catch(() => {});
-
   if (found === 0) {
+    /**
+     * Capturamos screenshot + HTML do popup ANTES de fechar o contexto para
+     * podermos ver visualmente o que a extensão estava a mostrar (mensagem de
+     * erro, bloqueio de janela, etc.). Salvo em `outputDir/_diag/`.
+     */
+    const finalStatus = await readPopupStatus(popupPage).catch(() => ({
+      buttonDisabled: null,
+      statusText: "",
+    }));
+    const popupDiagInfo = await capturePopupDiagnostics(popupPage, opts.outputDir).catch(
+      (e) => `(popup diag falhou: ${e?.message || e})`,
+    );
+
+    await context.close().catch(() => {});
+
     /**
      * Snapshot de diagnóstico: listamos qualquer ficheiro recente em outputDir
      * + Downloads para o `stderr_tail` (consumido pelo worker), facilitando
@@ -441,7 +488,10 @@ export async function runBrowserFlow(opts) {
       "STDERR_CAT_EXTENSION Nenhum XML novo na pasta de saida dentro do tempo. " +
         "Verifique extensao, sessao e ADN_BROWSER_WAIT_ARTIFACTS_SEC.\n" +
         `[diag] outputDir=${opts.outputDir} ficheiros_recentes=${recentOut.length} ` +
-        `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
+        `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n` +
+        `[diag] popup status final: disabled=${finalStatus.buttonDisabled} ` +
+        `text=${JSON.stringify(finalStatus.statusText)}\n` +
+        `[diag] popup ${popupDiagInfo}\n`,
     );
     for (const f of recentOut.slice(0, 10)) {
       process.stderr.write(`[diag] outputDir > ${f.path} (${f.size}B)\n`);
@@ -456,6 +506,8 @@ export async function runBrowserFlow(opts) {
     }
     process.exit(12);
   }
+
+  await context.close().catch(() => {});
 
   dlog(
     `concluído: ${found} XML novos detectados ` +
@@ -725,6 +777,15 @@ async function waitForAuthenticatedPortal(page, timeoutMs) {
 
 /**
  * Pilota o popup: marca tipoNota, preenche datas, garante XML, dispara download.
+ *
+ * Notas críticas:
+ *   - O click no `#startDownloadBtn` é feito com `.click({ force: true })` em vez
+ *     de `dispatchEvent("click")` — alguns handlers `addEventListener` registados
+ *     pela extensão ignoram `dispatchEvent` (event order / `isTrusted` checks).
+ *   - Após preencher as datas, dispara `input` + `change` + `blur` — alguns
+ *     scripts da extensão só validam em `blur`.
+ *   - Capturamos o estado inicial do `#status` da extensão para sabermos se ela
+ *     pediu ao utilizador algum input ou bloqueou (ex.: janela demasiado grande).
  */
 async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
   await popupPage
@@ -749,11 +810,14 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
     }
   }, tipoNota);
 
-  /** Preenche datas (input type=date aceita YYYY-MM-DD). */
-  await popupPage.locator("#dateStart").fill(dateFrom);
-  await popupPage.locator("#dateStart").dispatchEvent("change");
-  await popupPage.locator("#dateEnd").fill(dateTo);
-  await popupPage.locator("#dateEnd").dispatchEvent("change");
+  /** Preenche datas (input type=date aceita YYYY-MM-DD) com input + change + blur. */
+  for (const [sel, val] of [["#dateStart", dateFrom], ["#dateEnd", dateTo]]) {
+    const loc = popupPage.locator(sel);
+    await loc.fill(val);
+    await loc.dispatchEvent("input");
+    await loc.dispatchEvent("change");
+    await loc.evaluate((el) => el.blur && el.blur());
+  }
 
   /** Garante radio XML (default já é XML, mas reforçamos). */
   await popupPage.evaluate(() => {
@@ -764,8 +828,79 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
     }
   });
 
-  /** Click no «Iniciar Download». dispatchEvent para não trazer o popup à frente. */
-  await popupPage.locator("#startDownloadBtn").dispatchEvent("click");
+  /** Snapshot inicial do estado do popup (#status, disabled state do botão). */
+  const initial = await popupPage.evaluate(() => {
+    const btn = document.querySelector("#startDownloadBtn");
+    const st = document.querySelector("#status");
+    return {
+      buttonDisabled: btn ? !!btn.disabled : null,
+      buttonText: btn ? (btn.textContent || "").trim().slice(0, 80) : "",
+      statusText: st ? (st.textContent || "").trim().slice(0, 200) : "",
+      dateStartValue: (document.querySelector("#dateStart") || {}).value || "",
+      dateEndValue: (document.querySelector("#dateEnd") || {}).value || "",
+    };
+  });
+  process.stderr.write(
+    `[adn-playwright-motor] popup pré-click: btn_disabled=${initial.buttonDisabled} ` +
+      `btn_text=${JSON.stringify(initial.buttonText)} ` +
+      `status=${JSON.stringify(initial.statusText)} ` +
+      `date_start=${initial.dateStartValue} date_end=${initial.dateEndValue}\n`,
+  );
+
+  /**
+   * Click real (force=true salta verificações de visibilidade/overlay; o popup foi
+   * aberto numa aba normal, sem bringToFront, mas o handler precisa que o evento
+   * tenha `isTrusted=true` — só `click()` do Playwright dá isso).
+   */
+  await popupPage.locator("#startDownloadBtn").click({ force: true, timeout: 10_000 });
+  process.stderr.write("[adn-playwright-motor] click em #startDownloadBtn enviado.\n");
+}
+
+/**
+ * Lê o `#status` actual do popup (texto curto + se o botão ficou disabled — sinal
+ * que a extensão começou a processar). Tolerante a popup fechado.
+ */
+async function readPopupStatus(popupPage) {
+  try {
+    return await popupPage.evaluate(() => {
+      const btn = document.querySelector("#startDownloadBtn");
+      const st = document.querySelector("#status");
+      return {
+        buttonDisabled: btn ? !!btn.disabled : null,
+        statusText: st ? (st.textContent || "").trim().slice(0, 200) : "",
+      };
+    });
+  } catch {
+    return { buttonDisabled: null, statusText: "" };
+  }
+}
+
+/**
+ * Captura screenshot + HTML do popup quando o motor termina sem artefactos.
+ * Útil para descobrir se a extensão mostrou um erro («Sessão expirada»,
+ * «Janela máxima 31 dias», etc.) que não capturámos no `#status`.
+ */
+async function capturePopupDiagnostics(popupPage, outputDir) {
+  if (!popupPage) return null;
+  const diagDir = path.join(outputDir, "_diag");
+  fs.mkdirSync(diagDir, { recursive: true });
+  const ts = Date.now();
+  const shot = path.join(diagDir, `popup-${ts}.png`);
+  const html = path.join(diagDir, `popup-${ts}.html`);
+  let info = `screenshot=${shot}`;
+  try {
+    await popupPage.screenshot({ path: shot, fullPage: true });
+  } catch (e) {
+    info += ` (screenshot falhou: ${e?.message || e})`;
+  }
+  try {
+    const body = await popupPage.evaluate(() => document.documentElement.outerHTML);
+    fs.writeFileSync(html, body, "utf8");
+    info += ` html=${html}`;
+  } catch (e) {
+    info += ` (html falhou: ${e?.message || e})`;
+  }
+  return info;
 }
 
 async function popupSaysSemNotas(popupPage) {
