@@ -307,45 +307,23 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
         ensure_ascii=False,
     )
 
-    # Escreve em HKLM e HKCU (mesmo motivo do force-install: Chrome do Playwright
-    # nem sempre vê HKCU consoante o contexto de lançamento).
-    ps_script = (
-        "$rule=$env:ADN_RULE;"
-        "foreach ($root in 'HKLM:','HKCU:') {"
-        "  $key=\"$root\\SOFTWARE\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls\";"
-        "  try {"
-        "    New-Item -Path $key -Force | Out-Null;"
-        "    Set-ItemProperty -Path $key -Name '1' -Value $rule -Type String"
-        "  } catch { }"
-        "}"
+    """
+    Usa `reg.exe` em vez de Set-ItemProperty: nunca pede UAC e falha silenciosamente
+    se a hive não for escrevível (pelo que tentamos HKLM e HKCU em sequência sem
+    bloquear o worker).
+    """
+    scopes = _write_chrome_policy_value(
+        "AutoSelectCertificateForUrls", "1", rule
     )
-    env = os.environ.copy()
-    env["ADN_RULE"] = rule
-    try:
-        proc = subprocess.run(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                ps_script,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-            env=env,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-        return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
-    if proc.returncode == 0:
-        return {"set": True, "reason": "ok", "subjectCn": subject_cn, "pattern": pattern}
-    return {
-        "set": False,
-        "reason": f"ps_rc_{proc.returncode}",
-        "stderr": (proc.stderr or "")[:200],
-    }
+    if scopes:
+        return {
+            "set": True,
+            "reason": "ok",
+            "subjectCn": subject_cn,
+            "pattern": pattern,
+            "scope": "+".join(scopes),
+        }
+    return {"set": False, "reason": "reg_write_failed_all_scopes"}
 
 
 """
@@ -380,60 +358,60 @@ def _set_chrome_extension_force_install_policy() -> dict[str, Any]:
         or ADN_BROWSER_EXTENSION_ID_DEFAULT
     )
     value = f"{ext_id};{ADN_BROWSER_EXTENSION_UPDATE_URL}"
-    """
-    Escreve a policy em HKLM (máquina-wide) E HKCU (utilizador) — Chrome lê de ambas
-    raízes e a HKLM aplica-se mesmo quando o processo é lançado por outro contexto
-    (caso típico do Playwright). Se o operador não for administrador, HKLM falha mas
-    HKCU é tentado como fallback.
-    """
-    ps_script = (
-        "$value=$env:ADN_FORCE_VALUE;"
-        "$reasons=@();"
-        "foreach ($root in 'HKLM:','HKCU:') {"
-        "  $key=\"$root\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist\";"
-        "  try {"
-        "    New-Item -Path $key -Force | Out-Null;"
-        "    Set-ItemProperty -Path $key -Name '1' -Value $value -Type String;"
-        "    $reasons += \"$root ok\""
-        "  } catch {"
-        "    $reasons += \"$root fail:$($_.Exception.Message)\""
-        "  }"
-        "};"
-        "Write-Output ($reasons -join '; ')"
+    scopes = _write_chrome_policy_value(
+        "ExtensionInstallForcelist", "1", value
     )
-    env = os.environ.copy()
-    env["ADN_FORCE_VALUE"] = value
-    try:
-        proc = subprocess.run(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                ps_script,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=False,
-            env=env,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-        return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
-    out = (proc.stdout or "").strip()
-    # Pelo menos uma das raízes tem que ter sucesso.
-    if proc.returncode == 0 and "ok" in out:
-        scope = "machine+user" if "HKLM: ok" in out and "HKCU: ok" in out else (
-            "machine_only" if "HKLM: ok" in out else "user_only"
-        )
-        return {"set": True, "reason": "ok", "extensionId": ext_id, "scope": scope, "details": out}
-    return {
-        "set": False,
-        "reason": f"ps_rc_{proc.returncode}",
-        "details": out,
-        "stderr": (proc.stderr or "")[:200],
-    }
+    if scopes:
+        return {
+            "set": True,
+            "reason": "ok",
+            "extensionId": ext_id,
+            "scope": "+".join(scopes),
+        }
+    return {"set": False, "reason": "reg_write_failed_all_scopes"}
+
+
+def _write_chrome_policy_value(
+    policy_key: str, value_name: str, value_data: str
+) -> list[str]:
+    """
+    Escreve uma policy do Chrome em ambas as raízes (HKLM, HKCU) usando `reg.exe`.
+
+    `reg.exe`:
+      - Não pede UAC. Falha com exit ≠ 0 se sem permissão na hive (HKLM).
+      - Cria a chave automaticamente com `add /f`.
+      - É muito mais rápido que PowerShell.
+
+    Devolve lista de scopes onde a escrita teve sucesso (ex.: ["HKLM", "HKCU"]).
+    """
+    base = f"SOFTWARE\\Policies\\Google\\Chrome\\{policy_key}"
+    succeeded: list[str] = []
+    for root in ("HKLM", "HKCU"):
+        full_key = f"{root}\\{base}"
+        try:
+            proc = subprocess.run(
+                [
+                    "reg.exe",
+                    "add",
+                    full_key,
+                    "/v",
+                    value_name,
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    value_data,
+                    "/f",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if proc.returncode == 0:
+                succeeded.append(root)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    return succeeded
 
 
 def materialize_company_certificate_from_vault(
@@ -451,6 +429,7 @@ def materialize_company_certificate_from_vault(
     if not parsed:
         return {"materialized": False, "reason": "unsupported_vault_ref"}
 
+    print(f"[cert] {cnpj_digits}: a descarregar do cofre Supabase...", flush=True)
     bucket, object_path = parsed
     raw = _download_supabase_object(bucket, object_path)
     cert_bytes, password = _extract_pkcs12_and_password(raw, nfse_root, cnpj_digits)
@@ -460,15 +439,24 @@ def materialize_company_certificate_from_vault(
     cert_path = cert_dir / f"{cnpj_digits}.pfx"
     cert_path.write_bytes(cert_bytes)
     _upsert_clients_local_with_password(nfse_root, cnpj_digits, password)
+    print(f"[cert] {cnpj_digits}: PFX gravado em {cert_path}.", flush=True)
 
+    print(f"[cert] {cnpj_digits}: a importar PFX para a loja do Windows (certutil)...", flush=True)
     win_import = _import_pfx_into_windows_store(cert_path, password)
+    print(f"[cert] {cnpj_digits}: certutil -> {win_import}.", flush=True)
 
+    print(f"[cert] {cnpj_digits}: a extrair Subject CN do PFX (PowerShell)...", flush=True)
     chrome_autoselect: dict[str, Any] = {"set": False, "reason": "not_attempted"}
     subject_cn = _extract_pfx_subject_cn(cert_path, password)
+    print(f"[cert] {cnpj_digits}: subjectCn={subject_cn!r}.", flush=True)
     if subject_cn:
+        print(f"[cert] {cnpj_digits}: a aplicar AutoSelect policy via reg.exe...", flush=True)
         chrome_autoselect = _set_chrome_autoselect_policy(subject_cn)
+        print(f"[cert] {cnpj_digits}: AutoSelect policy -> {chrome_autoselect}.", flush=True)
 
+    print(f"[cert] {cnpj_digits}: a aplicar ExtensionInstallForcelist via reg.exe...", flush=True)
     chrome_force_install = _set_chrome_extension_force_install_policy()
+    print(f"[cert] {cnpj_digits}: ExtensionInstallForcelist policy -> {chrome_force_install}.", flush=True)
 
     return {
         "materialized": True,
