@@ -19,9 +19,9 @@
 | `ADN_PLAYWRIGHT_FATIA_ZERO` | Motor Node | `1` — só XML de teste (sem abrir browser). |
 | `ADN_CHROME_USER_DATA_DIR` | Motor (Node) | Perfil reutilizável; **nunca** exposto em `summary_json` do portal. |
 | `ADN_BROWSER_DEBUG` | Motor | `1` = logs adicionais no host (redigidos). |
-| `ADN_BROWSER_FETCH_FROM` | Motor Node | `YYYY-MM-DD` ou **`year-start`** (1 Jan do ano corrente). Se ausente, usa `today − ADN_BROWSER_FETCH_DAYS`. |
+| `ADN_BROWSER_FETCH_FROM` | Motor Node | `YYYY-MM-DD` ou **`year-start`** (1 Jan do ano corrente). Se ausente, usa **`today − 12 meses + 1 dia`** (janela máxima segura). |
 | `ADN_BROWSER_FETCH_TO` | Motor Node | `YYYY-MM-DD` ou hoje (default). |
-| `ADN_BROWSER_FETCH_DAYS` | Motor Node | Janela em dias a partir de hoje quando `FETCH_FROM` não está definido (default **366**, max 730). |
+| `ADN_BROWSER_FETCH_DAYS` | Motor Node | Janela em dias a partir de hoje quando `FETCH_FROM` não está definido. Sem default — quando ausente o motor usa `today − 12 meses + 1 dia`. **Limite forçado**: a extensão recusa janelas > 12 meses ("Período máximo permitido: 12 meses"); o motor faz clamp e avisa via stderr. |
 | `ADN_BROWSER_TIPO_NOTA` | Motor Node | `Emitidas` (default) ou `Recebidas`. |
 | `ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN` | Portal (Next) | Limite GET execuções org (default 60/min). |
 
@@ -65,6 +65,23 @@ Get-ChildItem -Path 'Cert:\CurrentUser\My' | Where-Object { $_.Subject -match ':
 ```
 
 Deve mostrar **um único** cert ICP-Brasil de e-CNPJ — o do CNPJ que acabou de processar. No log do worker, procurar `[nfse-portal-bridge] Loja Pessoal do Windows: N certificado(s) ICP-Brasil de outras empresas removidos` e `[cert-dialog-clicker] ENTER enviado ao diálogo nativo`.
+
+## 4.1. Limite de 12 meses da extensão
+
+A extensão «Baixar NFSe» recusa qualquer janela superior a **12 meses** com:
+
+> Período máximo permitido: 12 meses. Reduza o período e tente novamente.
+
+O motor calcula automaticamente uma janela segura de **`today − 12 meses + 1 dia`** (≈364 dias). Em 8/5/2026 → de 9/5/2025 a 8/5/2026.
+
+Para histórico mais antigo, dispare **jobs separados** com janelas explícitas (e.g., `ADN_BROWSER_FETCH_FROM=2024-01-01` / `ADN_BROWSER_FETCH_TO=2024-12-31`). Em pipeline:
+
+```
+job 1: ADN_BROWSER_FETCH_FROM=2025-01-01 ADN_BROWSER_FETCH_TO=2025-12-31
+job 2: ADN_BROWSER_FETCH_FROM=2024-01-01 ADN_BROWSER_FETCH_TO=2024-12-31
+```
+
+Quando o motor detecta a mensagem do popup ("Período máximo permitido: 12 meses"), sai cedo com `STDERR_CAT_EXTENSION extensão recusou o pedido (period_over_12_months)` em vez de esperar pelo timeout.
 
 ## 5. Ingestão de downloads da extensão (ZIP)
 

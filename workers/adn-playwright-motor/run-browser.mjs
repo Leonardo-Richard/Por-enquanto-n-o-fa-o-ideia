@@ -42,39 +42,79 @@ function fmtIsoDate(d) {
 }
 
 /**
+ * Parseia `YYYY-MM-DD` para um `Date` local à meia-noite. Evita armadilhas de
+ * timezone do construtor `new Date("YYYY-MM-DD")` (UTC) misturado com o
+ * formatter local.
+ */
+function parseLocalIsoDate(s) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Calcula `to − 12 meses + 1 dia` — o `from` mais antigo que a extensão
+ * «Baixar NFSe» aceita ("Período máximo permitido: 12 meses"). Adicionar 1 dia
+ * dá margem para casos de borda (e.g., 8/5/2026 − 1 ano = 8/5/2025 pode ser
+ * interpretado pela extensão como "12 meses e 1 dia" e rejeitado).
+ */
+function dateMinus12MonthsSafe(to) {
+  const d = new Date(to.getTime());
+  d.setFullYear(d.getFullYear() - 1);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/**
  * Resolve a janela de busca usada pela extensão. Ordem de preferência para `from`:
  *   1. `ADN_BROWSER_FETCH_FROM=YYYY-MM-DD` (data explícita).
  *   2. `ADN_BROWSER_FETCH_FROM=year-start` → 1 Jan do ano corrente (caso comum:
  *      «desde o início do ano até hoje»).
- *   3. `ADN_BROWSER_FETCH_DAYS=N` (default 366) → today − N dias.
+ *   3. `ADN_BROWSER_FETCH_DAYS=N` → today − N dias (clamp para 12 meses).
+ *   4. **Default**: today − 12 meses + 1 dia (janela máxima segura).
  *
  * `to` é `ADN_BROWSER_FETCH_TO=YYYY-MM-DD` ou hoje.
+ *
+ * Limite forçado: a extensão recusa janelas > 12 meses com a mensagem
+ * "Período máximo permitido: 12 meses". Quando `FETCH_FROM` ou `FETCH_DAYS`
+ * resultarem numa janela maior, fazemos clamp silenciosamente para a janela
+ * máxima segura, avisando via stderr.
  */
 function resolveDateWindow() {
   const envFrom = (process.env.ADN_BROWSER_FETCH_FROM || "").trim();
   const envTo = (process.env.ADN_BROWSER_FETCH_TO || "").trim();
   const today = new Date();
-  const to = envTo && /^\d{4}-\d{2}-\d{2}$/.test(envTo) ? envTo : fmtIsoDate(today);
-  let from = envFrom;
+  const toDate =
+    envTo && /^\d{4}-\d{2}-\d{2}$/.test(envTo) ? parseLocalIsoDate(envTo) : today;
+  const minSafeFrom = dateMinus12MonthsSafe(toDate);
+
+  let fromDate;
   if (envFrom.toLowerCase() === "year-start") {
-    from = `${today.getFullYear()}-01-01`;
-  } else if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-    /**
-     * Default 366 dias: cobre desde o início do ano civil mesmo em Dezembro.
-     * Anteriormente eram 31 dias — janela curta deixava notas Jan-Mar fora
-     * em jobs disparados em Maio. Ajuste agressivo para não perder histórico.
-     */
+    fromDate = new Date(today.getFullYear(), 0, 1);
+  } else if (envFrom && /^\d{4}-\d{2}-\d{2}$/.test(envFrom)) {
+    fromDate = parseLocalIsoDate(envFrom);
+  } else if (process.env.ADN_BROWSER_FETCH_DAYS) {
     const days = Math.max(
       1,
       Math.min(
         730,
-        Number.parseInt(process.env.ADN_BROWSER_FETCH_DAYS || "366", 10) || 366,
+        Number.parseInt(process.env.ADN_BROWSER_FETCH_DAYS, 10) || 365,
       ),
     );
-    const start = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
-    from = fmtIsoDate(start);
+    fromDate = new Date(toDate.getTime() - days * 24 * 60 * 60 * 1000);
+  } else {
+    fromDate = minSafeFrom;
   }
-  return { from, to };
+
+  if (fromDate.getTime() < minSafeFrom.getTime()) {
+    process.stderr.write(
+      `[adn-playwright-motor] AVISO: janela pedida (${fmtIsoDate(fromDate)}) excede ` +
+        `o limite de 12 meses da extensão. A ajustar para ${fmtIsoDate(minSafeFrom)}. ` +
+        `Para histórico maior, dispare jobs com janelas separadas (e.g., ano a ano).\n`,
+    );
+    fromDate = minSafeFrom;
+  }
+
+  return { from: fmtIsoDate(fromDate), to: fmtIsoDate(toDate) };
 }
 
 function resolveTipoNota() {
@@ -452,6 +492,32 @@ export async function runBrowserFlow(opts) {
     } catch {
       /* ignore */
     }
+
+    /** Atalho: erro bloqueante (período > 12 meses, sessão expirada). */
+    try {
+      const blockingErr = await popupBlockingError(popupPage);
+      if (blockingErr) {
+        process.stderr.write(
+          `[adn-playwright-motor] popup bloqueado: ${blockingErr}; a capturar diagnostics.\n`,
+        );
+        const popupDiagInfo = await capturePopupDiagnostics(
+          popupPage,
+          opts.outputDir,
+        ).catch(() => "(popup diag falhou)");
+        await context.close().catch(() => {});
+        const stderrCat = blockingErr === "session_expired"
+          ? "STDERR_CAT_SESSION"
+          : "STDERR_CAT_EXTENSION";
+        process.stderr.write(
+          `${stderrCat} extensão recusou o pedido (${blockingErr}). ` +
+            `${popupDiagInfo}\n`,
+        );
+        process.exit(blockingErr === "session_expired" ? 10 : 12);
+      }
+    } catch {
+      /* ignore */
+    }
+
     await new Promise((r) => setTimeout(r, 2000));
   }
 
@@ -912,6 +978,26 @@ async function popupSaysSemNotas(popupPage) {
     return /sem\s+notas|nenhuma\s+nfs|0\s+notas\s+encontradas/i.test(text);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Detecta erros bloqueantes no popup que tornam inútil esperar mais (período
+ * inválido, sessão expirada, etc.). Lê o texto **completo** do popup (não só
+ * `#status`) porque a extensão coloca este aviso num elemento separado.
+ */
+async function popupBlockingError(popupPage) {
+  try {
+    const text = await popupPage.evaluate(() => document.body.innerText || "");
+    if (/per[íi]odo\s+m[áa]ximo\s+permitido[:\s]*12\s+meses/i.test(text)) {
+      return "period_over_12_months";
+    }
+    if (/sess[ãa]o\s+expirou|fa[çc]a\s+login\s+novamente/i.test(text)) {
+      return "session_expired";
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
