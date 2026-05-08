@@ -320,6 +320,21 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             f"[nfse-portal-bridge] Certificado materializado do cofre para {cnpj}.",
             flush=True,
         )
+        win_purge = cert_sync.get("windowsStorePurge") or {}
+        purged_n = int(win_purge.get("purged") or 0)
+        if purged_n > 0:
+            print(
+                f"[nfse-portal-bridge] Loja Pessoal do Windows: {purged_n} certificado(s) "
+                f"ICP-Brasil de outras empresas removidos (deixa apenas o do CNPJ activo {cnpj}). "
+                f"Detalhe: {win_purge.get('details') or ''}",
+                flush=True,
+            )
+        elif win_purge.get("reason") not in (None, "not_windows", "disabled_by_env", "ok"):
+            print(
+                f"[nfse-portal-bridge] Aviso: limpeza de certificados de outras empresas falhou "
+                f"({win_purge.get('reason')}); o auto-confirm do diálogo pode escolher o cert errado.",
+                flush=True,
+            )
         win_import = cert_sync.get("windowsStoreImport") or {}
         if win_import.get("imported"):
             print(

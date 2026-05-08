@@ -20,6 +20,7 @@ import binascii
 import json
 import os
 import platform
+import re
 import ssl
 import subprocess
 import sys
@@ -184,6 +185,106 @@ def load_active_company_certificate_ref(conn: Any, organization_id: str, company
         return None
     ref = str(row.get("vault_ref") or "").strip()
     return ref or None
+
+
+def _purge_other_company_certs_in_windows_store(active_cnpj: str) -> dict[str, Any]:
+    """
+    Remove de `CurrentUser\\My` todos os certificados ICP-Brasil de OUTRAS empresas
+    (Subject.CN termina em `:<14 dígitos>` distinto de `active_cnpj`).
+
+    Razão de ser:
+        O Chromium for Testing (binário bundled do Playwright) IGNORA a policy
+        `AutoSelectCertificateForUrls`. Quando o portal NFS-e exige um certificado
+        client, o Windows mostra um diálogo nativo a listar TODOS os certificados
+        compatíveis. Se houver vários (uma máquina que processa N empresas), o
+        watcher `cert_dialog_clicker` pode confirmar o certificado errado.
+
+        Esta função garante invariante: imediatamente antes de importar o PFX da
+        empresa actual, a loja `CurrentUser\\My` fica com EXATAMENTE 1 certificado
+        ICP-Brasil de empresa — o do CNPJ que vai ser processado.
+
+    Segurança:
+        - Apenas remove certificados cujo Subject CN tem o padrão `:<14 dígitos>`
+          (formato canónico de e-CNPJ ICP-Brasil). Certificados pessoais (e-CPF),
+          do Code Signing, ou outros certs do utilizador NÃO são tocados.
+        - O `playwright_browser_file_lock` serializa os jobs do worker, pelo que
+          esta purga é segura (não corre concorrente com outro job).
+        - Se o user quiser preservar certificados de outras empresas (e.g., uso
+          paralelo manual), pode desligar com `ADN_PURGE_OTHER_CERTS_BEFORE_IMPORT=0`.
+    """
+    if platform.system() != "Windows":
+        return {"purged": 0, "reason": "not_windows"}
+    if os.environ.get("ADN_PURGE_OTHER_CERTS_BEFORE_IMPORT", "1").strip() == "0":
+        return {"purged": 0, "reason": "disabled_by_env"}
+    if not re.fullmatch(r"\d{14}", active_cnpj or ""):
+        return {"purged": 0, "reason": "invalid_active_cnpj"}
+
+    ps_script = (
+        "$active=$env:ADN_ACTIVE_CNPJ;"
+        "$count=0;"
+        "$details=@();"
+        "Get-ChildItem -Path 'Cert:\\CurrentUser\\My' -ErrorAction SilentlyContinue | ForEach-Object {"
+        "  $subject=$_.Subject;"
+        # Padrão ICP-Brasil de e-CNPJ: CN contém ':14digitos' (no fim do CN, antes da vírgula).
+        "  if ($subject -match 'CN=[^,]*:(\\d{14})') {"
+        "    $cnpj=$matches[1];"
+        "    if ($cnpj -ne $active) {"
+        "      try {"
+        "        Remove-Item -Path \"Cert:\\CurrentUser\\My\\$($_.Thumbprint)\" -DeleteKey -Force -ErrorAction Stop;"
+        "        $count++;"
+        "        $details += \"$cnpj/$($_.Thumbprint.Substring(0,8))\""
+        "      } catch {"
+        "        $details += \"fail:$cnpj/$($_.Exception.Message)\""
+        "      }"
+        "    }"
+        "  }"
+        "};"
+        "Write-Output \"$count|$($details -join ',')\""
+    )
+    env = os.environ.copy()
+    env["ADN_ACTIVE_CNPJ"] = active_cnpj
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return {"purged": 0, "reason": f"powershell_error:{type(e).__name__}"}
+
+    out = (proc.stdout or "").strip()
+    purged = 0
+    details = ""
+    if "|" in out:
+        head, _, details = out.partition("|")
+        try:
+            purged = int(head)
+        except ValueError:
+            purged = 0
+
+    if proc.returncode != 0:
+        return {
+            "purged": purged,
+            "reason": f"ps_rc_{proc.returncode}",
+            "stderr": (proc.stderr or "")[:200],
+            "details": details,
+        }
+    return {
+        "purged": purged,
+        "reason": "ok",
+        "activeCnpj": active_cnpj,
+        "details": details,
+    }
 
 
 def _import_pfx_into_windows_store(cert_path: Path, password: str) -> dict[str, Any]:
@@ -475,6 +576,10 @@ def materialize_company_certificate_from_vault(
     cert_path.write_bytes(cert_bytes)
     _upsert_clients_local_with_password(nfse_root, cnpj_digits, password)
 
+    # Purga certificados ICP-Brasil de OUTRAS empresas ANTES de importar — garante que
+    # o diálogo nativo do Windows fica com 1 só certificado e o watcher (ENTER) não
+    # consegue confirmar o certificado errado.
+    win_purge = _purge_other_company_certs_in_windows_store(cnpj_digits)
     win_import = _import_pfx_into_windows_store(cert_path, password)
 
     chrome_autoselect: dict[str, Any] = {"set": False, "reason": "not_attempted"}
@@ -489,6 +594,7 @@ def materialize_company_certificate_from_vault(
         "reason": "ok",
         "vaultRefKind": "supabase-storage",
         "targetCertPath": str(cert_path),
+        "windowsStorePurge": win_purge,
         "windowsStoreImport": win_import,
         "chromeAutoSelect": chrome_autoselect,
         "chromeExtensionForceInstall": chrome_force_install,
