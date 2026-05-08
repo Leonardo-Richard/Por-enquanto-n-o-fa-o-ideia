@@ -62,14 +62,34 @@ Get-ChildItem -Path 'Cert:\CurrentUser\My' | Where-Object { $_.Subject -match ':
 
 Deve mostrar **um único** cert ICP-Brasil de e-CNPJ — o do CNPJ que acabou de processar. No log do worker, procurar `[nfse-portal-bridge] Loja Pessoal do Windows: N certificado(s) ICP-Brasil de outras empresas removidos` e `[cert-dialog-clicker] ENTER enviado ao diálogo nativo`.
 
-## 5. Versões Playwright / Chromium
+## 5. Ingestão de downloads da extensão (ZIP)
+
+A extensão «Baixar NFSe» entrega os XML dentro de **um ZIP** (raramente, XMLs soltos). O motor (`run-browser.mjs`) faz, em cada iteração do loop de espera:
+
+1. Move ZIPs novos do `~/Downloads` do utilizador para `--output-dir` quando o nome bate em `/nfs[-_]?e|notas|emitidas|recebidas/i` (fallback caso a extensão ignore o `download.default_directory`).
+2. Descomprime cada ZIP novo em `--output-dir/<zipBaseName>/` (Windows: `Expand-Archive`; com fallback `tar -xf`. Linux: `unzip`).
+3. Renomeia o ZIP processado para `<orig>.processed` (idempotência inter-iterações).
+4. Procura `.xml` novos recursivamente (apenas mtime ≥ início do job).
+
+Se ao fim do timer (`ADN_BROWSER_WAIT_ARTIFACTS_SEC`) ainda não houver `.xml`, o motor faz um snapshot diagnóstico para o `stderr_tail`:
+
+```
+[diag] outputDir=... ficheiros_recentes=N zips_extraidos=N zips_de_downloads=N
+[diag] outputDir > <path> (<size>B)   # até 10 entradas mais recentes
+[diag] downloadsDir=... ficheiros_recentes=N
+[diag] downloads > <path> (<size>B)
+```
+
+Esse snapshot é incluído no `summaryJson.stderr_tail` do PATCH `failed` no portal, permitindo descobrir se o ZIP caiu fora da pasta esperada ou ficou em `.crdownload` (download interrompido por TLS, popup bloqueado, etc.).
+
+## 6. Versões Playwright / Chromium
 
 Após `npm install` em `workers/adn-playwright-motor`, registar no controlo de mudanças:
 
 - Versão `playwright` em `package.json`.
 - Resultado de `npx playwright install chromium` no ambiente de staging (build ID Chromium).
 
-## 6. Ligações
+## 7. Ligações
 
 - Motor Node: [`workers/adn-playwright-motor/README.md`](../../workers/adn-playwright-motor/README.md)
 - Template evidência O5: [`docs/templates/adn-o5-evidence-template.md`](../templates/adn-o5-evidence-template.md)

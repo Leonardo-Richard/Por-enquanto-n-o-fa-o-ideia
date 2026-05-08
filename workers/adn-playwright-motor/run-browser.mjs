@@ -13,7 +13,9 @@
  *   6. Aguarda os XML caírem em --output-dir (verificação recursiva).
  */
 
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const DEFAULT_LOGIN_URL =
@@ -331,17 +333,42 @@ export async function runBrowserFlow(opts) {
     process.exit(12);
   }
 
-  /** Aguarda XML novos no outputDir (recursivo) com janela de estabilização. */
+  /**
+   * Aguarda XML novos no outputDir (recursivo) com janela de estabilização.
+   *
+   * A extensão «Baixar NFSe» entrega os XML dentro de **um ZIP** por padrão. O
+   * loop também:
+   *   - Detecta ZIPs novos no `outputDir` (e em `~/Downloads` como fallback) e
+   *     descomprime-os para subpastas, gerando os XML que `listNewXmlFiles…`
+   *     procura.
+   *   - Marca ZIPs já processados com sufixo `.processed` para idempotência.
+   */
   const deadline = Date.now() + waitArtifactsSec * 1000;
   let lastCount = 0;
   let lastChange = Date.now();
   let found = 0;
+  let totalZipsIngested = 0;
+  let totalZipsFromDownloads = 0;
   while (Date.now() < deadline) {
+    const movedFromDl = ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
+    if (movedFromDl > 0) {
+      totalZipsFromDownloads += movedFromDl;
+      lastChange = Date.now();
+    }
+    const ingested = ingestZipDownloads(opts.outputDir, artifactSince);
+    if (ingested > 0) {
+      totalZipsIngested += ingested;
+      lastChange = Date.now();
+    }
+
     const xmls = listNewXmlFilesRecursive(opts.outputDir, artifactSince);
     if (xmls.length !== lastCount) {
       lastCount = xmls.length;
       lastChange = Date.now();
-      dlog(`artefactos XML novos (parcial): ${xmls.length}`);
+      dlog(
+        `artefactos XML novos (parcial): ${xmls.length} ` +
+          `(zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads})`,
+      );
     }
     found = xmls.length;
     /** Se já há ficheiros e nada novo durante `idleSettleSec`, considera concluído. */
@@ -362,16 +389,46 @@ export async function runBrowserFlow(opts) {
     await new Promise((r) => setTimeout(r, 2000));
   }
 
+  // Última passagem para apanhar ZIPs que cheguem no fim do timer.
+  totalZipsFromDownloads += ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
+  totalZipsIngested += ingestZipDownloads(opts.outputDir, artifactSince);
+  found = listNewXmlFilesRecursive(opts.outputDir, artifactSince).length;
+
   await context.close().catch(() => {});
 
   if (found === 0) {
+    /**
+     * Snapshot de diagnóstico: listamos qualquer ficheiro recente em outputDir
+     * + Downloads para o `stderr_tail` (consumido pelo worker), facilitando
+     * descobrir se o ZIP caiu fora da pasta esperada ou ficou em `.crdownload`.
+     */
+    const recentOut = snapshotRecentFiles(opts.outputDir, artifactSince);
+    const dlPath = userDownloadsDir();
+    const recentDl = dlPath ? snapshotRecentFiles(dlPath, artifactSince) : [];
     process.stderr.write(
-      "STDERR_CAT_EXTENSION Nenhum XML novo na pasta de saida dentro do tempo. Verifique extensao, sessao e ADN_BROWSER_WAIT_ARTIFACTS_SEC.\n",
+      "STDERR_CAT_EXTENSION Nenhum XML novo na pasta de saida dentro do tempo. " +
+        "Verifique extensao, sessao e ADN_BROWSER_WAIT_ARTIFACTS_SEC.\n" +
+        `[diag] outputDir=${opts.outputDir} ficheiros_recentes=${recentOut.length} ` +
+        `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
     );
+    for (const f of recentOut.slice(0, 10)) {
+      process.stderr.write(`[diag] outputDir > ${f.path} (${f.size}B)\n`);
+    }
+    if (dlPath) {
+      process.stderr.write(
+        `[diag] downloadsDir=${dlPath} ficheiros_recentes=${recentDl.length}\n`,
+      );
+      for (const f of recentDl.slice(0, 10)) {
+        process.stderr.write(`[diag] downloads > ${f.path} (${f.size}B)\n`);
+      }
+    }
     process.exit(12);
   }
 
-  dlog(`concluído: ${found} XML novos detectados.`);
+  dlog(
+    `concluído: ${found} XML novos detectados ` +
+      `(zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}).`,
+  );
   process.exit(0);
 }
 
@@ -379,9 +436,14 @@ export async function runBrowserFlow(opts) {
  * Lê recursivamente .xml em outputDir, filtrando pela mtime (apenas novos nesta execução).
  */
 function listNewXmlFilesRecursive(dir, sinceMs) {
+  return listFilesByExt(dir, sinceMs, [".xml"]);
+}
+
+function listFilesByExt(dir, sinceMs, extensions) {
   const out = [];
   if (!fs.existsSync(dir)) return out;
   const stack = [dir];
+  const exts = extensions.map((e) => e.toLowerCase());
   while (stack.length > 0) {
     const cur = stack.pop();
     let entries = [];
@@ -396,7 +458,8 @@ function listNewXmlFilesRecursive(dir, sinceMs) {
         stack.push(full);
         continue;
       }
-      if (!ent.name.toLowerCase().endsWith(".xml")) continue;
+      const lower = ent.name.toLowerCase();
+      if (!exts.some((e) => lower.endsWith(e))) continue;
       try {
         if (fs.statSync(full).mtimeMs >= sinceMs) {
           out.push(full);
@@ -407,6 +470,184 @@ function listNewXmlFilesRecursive(dir, sinceMs) {
     }
   }
   return out;
+}
+
+/**
+ * Snapshot diagnóstico: lista TODOS os ficheiros recentes (mtime >= sinceMs) em
+ * `dir` (recursivo) — útil para saber porque é que `found = 0` (extensão baixou
+ * ZIP, ficheiro `.crdownload` em curso, etc.).
+ *
+ * Limitado a 30 entradas para não inundar stderr.
+ */
+function snapshotRecentFiles(dir, sinceMs, limit = 30) {
+  if (!fs.existsSync(dir)) return [];
+  const out = [];
+  const stack = [dir];
+  while (stack.length > 0 && out.length < limit) {
+    const cur = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of entries) {
+      if (out.length >= limit) break;
+      const full = path.join(cur, ent.name);
+      if (ent.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      try {
+        const st = fs.statSync(full);
+        if (st.mtimeMs >= sinceMs) {
+          out.push({ path: full, size: st.size, mtimeMs: st.mtimeMs });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return out;
+}
+
+/**
+ * Caminho da pasta «Downloads» do utilizador actual. A extensão pode ignorar o
+ * `download.default_directory` quando passa um filename absoluto, e cair aqui.
+ */
+function userDownloadsDir() {
+  const candidates = [
+    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "Downloads") : null,
+    process.env.HOME ? path.join(process.env.HOME, "Downloads") : null,
+    path.join(os.homedir(), "Downloads"),
+  ].filter(Boolean);
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+/**
+ * Descomprime `zipPath` para `targetDir` (cria se necessário). Em Windows usa
+ * `Expand-Archive` (PowerShell), em outras plataformas tenta `unzip`. Devolve
+ * `true` em caso de sucesso, `false` se nenhum método estiver disponível ou
+ * falhar.
+ */
+function unzipFile(zipPath, targetDir) {
+  fs.mkdirSync(targetDir, { recursive: true });
+  if (process.platform === "win32") {
+    try {
+      const ps = [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${targetDir.replace(/'/g, "''")}' -Force`,
+      ];
+      execFileSync("powershell.exe", ps, { stdio: "ignore", timeout: 120_000 });
+      return true;
+    } catch (e) {
+      dlog(`Expand-Archive falhou em ${zipPath}: ${e?.message || e}`);
+      // Tenta `tar -xf` (Win10+ inclui bsdtar e suporta zip).
+      try {
+        const r = spawnSync("tar", ["-xf", zipPath, "-C", targetDir], {
+          stdio: "ignore",
+          timeout: 120_000,
+        });
+        if (r.status === 0) return true;
+      } catch (e2) {
+        dlog(`tar -xf falhou em ${zipPath}: ${e2?.message || e2}`);
+      }
+      return false;
+    }
+  }
+  try {
+    const r = spawnSync("unzip", ["-o", zipPath, "-d", targetDir], {
+      stdio: "ignore",
+      timeout: 120_000,
+    });
+    return r.status === 0;
+  } catch (e) {
+    dlog(`unzip falhou em ${zipPath}: ${e?.message || e}`);
+    return false;
+  }
+}
+
+/**
+ * Descomprime todos os ZIPs novos em `outputDir` para subpastas do mesmo
+ * `outputDir` (`<zipBaseName>/`). Devolve número de ZIPs processados com
+ * sucesso. Cada ZIP descomprimido é renomeado para `<orig>.processed` para
+ * não ser re-processado em iterações seguintes.
+ */
+function ingestZipDownloads(outputDir, sinceMs) {
+  const zips = listFilesByExt(outputDir, sinceMs, [".zip"]);
+  let ok = 0;
+  for (const zip of zips) {
+    const targetSub = path.join(outputDir, path.basename(zip, path.extname(zip)));
+    if (unzipFile(zip, targetSub)) {
+      try {
+        fs.renameSync(zip, `${zip}.processed`);
+      } catch {
+        /* ignore */
+      }
+      ok += 1;
+      dlog(`zip descomprimido: ${path.basename(zip)} -> ${targetSub}`);
+    }
+  }
+  return ok;
+}
+
+/**
+ * Procura ZIPs novos em `Downloads/` do utilizador (fallback caso a extensão
+ * tenha ignorado `download.default_directory`). Move-os para `outputDir` e
+ * descomprime. Devolve número de ZIPs movidos.
+ */
+function ingestZipsFromUserDownloads(outputDir, sinceMs) {
+  const dl = userDownloadsDir();
+  if (!dl) return 0;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dl, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let moved = 0;
+  for (const ent of entries) {
+    if (!ent.isFile()) continue;
+    const lower = ent.name.toLowerCase();
+    if (!lower.endsWith(".zip")) continue;
+    const src = path.join(dl, ent.name);
+    let st;
+    try {
+      st = fs.statSync(src);
+    } catch {
+      continue;
+    }
+    if (st.mtimeMs < sinceMs) continue;
+    // Heurística: nomes típicos da extensão começam por «NFSe-» / «NFS-e» / contêm CNPJ.
+    const looksLikeNfse = /nfs[-_]?e|nfse|notas|emitidas|recebidas/i.test(ent.name);
+    if (!looksLikeNfse) continue;
+    const dest = path.join(outputDir, ent.name);
+    try {
+      fs.copyFileSync(src, dest);
+      // Tenta apagar o original para não re-processar; se falhar, marca-o.
+      try {
+        fs.unlinkSync(src);
+      } catch {
+        try {
+          fs.renameSync(src, `${src}.adn-imported`);
+        } catch {
+          /* ignore */
+        }
+      }
+      moved += 1;
+      dlog(`zip movido de Downloads para outputDir: ${ent.name}`);
+    } catch (e) {
+      dlog(`falha ao mover ${ent.name} de Downloads: ${e?.message || e}`);
+    }
+  }
+  return moved;
 }
 
 async function clickCertificadoDigitalIfPresent(page) {
