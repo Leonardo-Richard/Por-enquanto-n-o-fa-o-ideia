@@ -320,6 +320,18 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             f"[nfse-portal-bridge] Certificado materializado do cofre para {cnpj}.",
             flush=True,
         )
+        win_import = cert_sync.get("windowsStoreImport") or {}
+        if win_import.get("imported"):
+            print(
+                f"[nfse-portal-bridge] Certificado importado para a loja Pessoal do Windows (CurrentUser\\My) — {cnpj}.",
+                flush=True,
+            )
+        elif win_import.get("reason") not in (None, "not_windows", "disabled_by_env"):
+            print(
+                f"[nfse-portal-bridge] Aviso: importação automática para a loja do Windows falhou ({win_import.get('reason')}). "
+                "O motor cenário B precisa do certificado na loja; se o Chrome devolver 403, instale o .pfx manualmente.",
+                flush=True,
+            )
     cleanup_enabled = os.environ.get("NFSE_CLEAN_BEFORE_RUN", "").strip() == "1"
     if cleanup_enabled:
         cleanup = clear_company_data_directory(nfse, cnpj)

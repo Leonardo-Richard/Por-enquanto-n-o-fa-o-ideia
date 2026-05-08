@@ -19,7 +19,10 @@ import base64
 import binascii
 import json
 import os
+import platform
 import ssl
+import subprocess
+import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -183,6 +186,61 @@ def load_active_company_certificate_ref(conn: Any, organization_id: str, company
     return ref or None
 
 
+def _import_pfx_into_windows_store(cert_path: Path, password: str) -> dict[str, Any]:
+    """
+    Importa o .pfx para a loja Pessoal (CurrentUser\\My) do Windows usando `certutil`.
+
+    Necessário para o motor cenário B (Chrome controlado por Playwright):
+    o Chrome só consegue apresentar o certificado client TLS se ele estiver na
+    loja do Windows do utilizador que corre o worker — ter só o .pfx no disco
+    não é suficiente.
+
+    Controlado por `ADN_AUTO_IMPORT_PFX_WINDOWS` (default "1" no Windows).
+    """
+    if platform.system() != "Windows":
+        return {"imported": False, "reason": "not_windows"}
+    if os.environ.get("ADN_AUTO_IMPORT_PFX_WINDOWS", "1").strip() == "0":
+        return {"imported": False, "reason": "disabled_by_env"}
+    if not password:
+        return {"imported": False, "reason": "no_password"}
+    if not cert_path.is_file():
+        return {"imported": False, "reason": "pfx_not_found"}
+
+    cmd = [
+        "certutil",
+        "-user",
+        "-p",
+        password,
+        "-importPFX",
+        "-f",
+        "My",
+        str(cert_path),
+        "NoExport,NoRoot",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except FileNotFoundError:
+        return {"imported": False, "reason": "certutil_not_found"}
+    except subprocess.TimeoutExpired:
+        return {"imported": False, "reason": "certutil_timeout"}
+
+    if proc.returncode == 0:
+        return {"imported": True, "reason": "ok"}
+    out = (proc.stderr or proc.stdout or "")[:300]
+    print(
+        f"[cert-import] certutil rc={proc.returncode}: {out!s}",
+        file=sys.stderr,
+        flush=True,
+    )
+    return {"imported": False, "reason": f"certutil_rc_{proc.returncode}"}
+
+
 def materialize_company_certificate_from_vault(
     *,
     organization_id: str,
@@ -208,9 +266,12 @@ def materialize_company_certificate_from_vault(
     cert_path.write_bytes(cert_bytes)
     _upsert_clients_local_with_password(nfse_root, cnpj_digits, password)
 
+    win_import = _import_pfx_into_windows_store(cert_path, password)
+
     return {
         "materialized": True,
         "reason": "ok",
         "vaultRefKind": "supabase-storage",
         "targetCertPath": str(cert_path),
+        "windowsStoreImport": win_import,
     }
