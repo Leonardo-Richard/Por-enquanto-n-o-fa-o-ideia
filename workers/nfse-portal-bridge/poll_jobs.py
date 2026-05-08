@@ -345,6 +345,20 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
                 f"({cas.get('reason')}); pode aparecer pop-up de selecção de certificado.",
                 flush=True,
             )
+        cef = cert_sync.get("chromeExtensionForceInstall") or {}
+        if cef.get("set"):
+            print(
+                f"[nfse-portal-bridge] Chrome force-install activo para extensão "
+                f"{cef.get('extensionId')} (Web Store). O Chrome vai instalar/actualizar "
+                "automaticamente a extensão «Baixar NFSe» ao arrancar o perfil.",
+                flush=True,
+            )
+        elif cef.get("reason") not in (None, "not_windows", "disabled_by_env"):
+            print(
+                f"[nfse-portal-bridge] Aviso: força-instalação da extensão NÃO pôde ser configurada "
+                f"({cef.get('reason')}); o Chrome 137+ não carrega extensões via --load-extension.",
+                flush=True,
+            )
     cleanup_enabled = os.environ.get("NFSE_CLEAN_BEFORE_RUN", "").strip() == "1"
     if cleanup_enabled:
         cleanup = clear_company_data_directory(nfse, cnpj)

@@ -114,6 +114,7 @@ export async function runBrowserFlow(opts) {
   const loginUrl = (process.env.ADN_NFSE_LOGIN_URL || "").trim() || DEFAULT_LOGIN_URL;
   const userDataDir = (process.env.ADN_CHROME_USER_DATA_DIR || "").trim();
   const extDir = (process.env.ADN_BROWSER_EXTENSION_DIR || "").trim();
+  const useForceInstall = (process.env.ADN_BROWSER_USE_FORCE_INSTALL || "1").trim() !== "0";
 
   if (!userDataDir) {
     process.stderr.write(
@@ -121,9 +122,15 @@ export async function runBrowserFlow(opts) {
     );
     process.exit(10);
   }
-  if (!extDir || !fs.existsSync(extDir)) {
+  /**
+   * Em Chrome 137+, --load-extension foi removido em builds branded; o caminho oficial
+   * agora é Group Policy (ExtensionInstallForcelist), aplicada por
+   * `cert_materialization._set_chrome_extension_force_install_policy`. Quando essa
+   * policy está activa (default), a pasta unpacked é opcional.
+   */
+  if (!useForceInstall && (!extDir || !fs.existsSync(extDir))) {
     process.stderr.write(
-      "STDERR_CAT_EXTENSION Defina ADN_BROWSER_EXTENSION_DIR com caminho valido da extensao descompactada.\n",
+      "STDERR_CAT_EXTENSION Defina ADN_BROWSER_EXTENSION_DIR (extensão unpacked) ou deixe ADN_BROWSER_USE_FORCE_INSTALL=1 (default) para usar a policy do Chrome.\n",
     );
     process.exit(12);
   }
@@ -148,13 +155,15 @@ export async function runBrowserFlow(opts) {
 
   configureChromeDownloadPreferences(profileDir, opts.outputDir);
 
-  const launchArgs = [
-    `--disable-extensions-except=${extDir}`,
-    `--load-extension=${extDir}`,
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-features=DisableLoadExtensionCommandLineSwitch",
-  ];
+  const launchArgs = ["--no-first-run", "--no-default-browser-check"];
+  /**
+   * Se o operador insistir em unpacked + Chromium for Testing/Chromium build, deixamos
+   * passar --load-extension. No caminho default (Chrome estável + force-install policy)
+   * estas flags são ignoradas pelo Chrome e portanto seguras de omitir.
+   */
+  if (extDir && fs.existsSync(extDir) && !useForceInstall) {
+    launchArgs.push(`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`);
+  }
 
   const tipoNota = resolveTipoNota();
   const { from: dateFrom, to: dateTo } = resolveDateWindow();
@@ -219,16 +228,24 @@ export async function runBrowserFlow(opts) {
     process.exit(11);
   }
 
-  /** Detecta o ID real da extensão carregada (preferível ao ID hard-coded). */
+  /**
+   * Detecta o ID real da extensão carregada. Quando usamos `ExtensionInstallForcelist`,
+   * o Chrome precisa baixar a extensão da Web Store na primeira execução do perfil —
+   * pode demorar até ~60s consoante a ligação de rede.
+   */
   let extId = ADN_EXT_ID_FALLBACK;
+  const extDetectTimeoutMs = Math.max(
+    25_000,
+    Number.parseInt(process.env.ADN_BROWSER_EXTENSION_WAIT_MS || "60000", 10) || 60_000,
+  );
   try {
-    const detected = await detectLoadedExtensionId(context, 25_000);
+    const detected = await detectLoadedExtensionId(context, extDetectTimeoutMs);
     if (detected) {
       extId = detected;
       dlog(`extensão detectada: id=${extId}`);
     } else {
       dlog(
-        `nenhum service-worker de extensão detectado a tempo; a tentar ID fallback ${ADN_EXT_ID_FALLBACK}`,
+        `nenhum service-worker de extensão detectado em ${extDetectTimeoutMs}ms; a tentar ID fallback ${ADN_EXT_ID_FALLBACK}`,
       );
     }
   } catch (e) {
@@ -478,25 +495,27 @@ async function detectLoadedExtensionId(context, timeoutMs) {
 }
 
 /**
- * Mensagem de diagnóstico quando o popup falha — verifica se manifest.json e popup.html
- * existem na pasta da extensão e avisa se há `_metadata/` (que pode bloquear unpacked).
+ * Mensagem de diagnóstico quando o popup falha — em Chrome 137+ a única via fiável é
+ * a policy `ExtensionInstallForcelist` (configurada pelo worker Python). A pasta unpacked
+ * é só fallback para Chromium for Testing.
  */
 function manifestHintFromExtDir(extDir) {
+  const policyHint =
+    "[hint] Verifique a policy HKCU\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist " +
+    "(executar `gpupdate /force` ou reiniciar Chrome). Em chrome://policy a entrada deve estar " +
+    "marcada como aplicada. Sem a policy, Chrome 137+ não carrega extensões via --load-extension.";
   try {
+    if (!extDir) return policyHint;
     const manifestPath = path.join(extDir, "manifest.json");
     if (!fs.existsSync(manifestPath)) {
-      return `[hint] ${manifestPath} NÃO EXISTE — copie a extensão descompactada para esta pasta.`;
-    }
-    const popupPath = path.join(extDir, "popup.html");
-    if (!fs.existsSync(popupPath)) {
-      return `[hint] ${popupPath} NÃO EXISTE — a pasta da extensão está incompleta.`;
+      return `[hint] ${manifestPath} NÃO EXISTE; ${policyHint}`;
     }
     const meta = path.join(extDir, "_metadata");
     if (fs.existsSync(meta)) {
-      return `[hint] Pasta ${meta} existe — Chrome pode rejeitar como unpacked. Apague essa pasta.`;
+      return `[hint] Pasta ${meta} existe — Chrome rejeita como unpacked. Apague essa pasta. ${policyHint}`;
     }
-    return `[hint] manifest.json e popup.html existem em ${extDir}; verifique chrome://extensions e ADN_BROWSER_EXTENSION_DIR.`;
+    return policyHint;
   } catch (e) {
-    return `[hint] não consegui inspeccionar ${extDir}: ${e?.message || e}`;
+    return `[hint] não consegui inspeccionar ${extDir}: ${e?.message || e}; ${policyHint}`;
   }
 }

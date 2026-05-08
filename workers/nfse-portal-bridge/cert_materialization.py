@@ -341,6 +341,72 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
     }
 
 
+"""
+ID estável da extensão "Baixar NFSe Nota Fiscal de Serviço Eletrônica" na Chrome Web Store.
+Usado para forçar a instalação via política `ExtensionInstallForcelist` (necessário desde
+Chrome 137+, que removeu a flag `--load-extension` em builds oficiais).
+"""
+ADN_BROWSER_EXTENSION_ID_DEFAULT = "enehmclajcndmgefbmjhecccoegbdgea"
+ADN_BROWSER_EXTENSION_UPDATE_URL = "https://clients2.google.com/service/update2/crx"
+
+
+def _set_chrome_extension_force_install_policy() -> dict[str, Any]:
+    """
+    Configura a Chrome policy `ExtensionInstallForcelist` (HKCU) para forçar a instalação
+    da extensão «Baixar NFSe» da Chrome Web Store no perfil que o motor Playwright lança.
+
+    Necessário porque o Chrome 137+ removeu o suporte a `--load-extension` em builds
+    branded (Chrome estável). Com a policy, o Chrome instala automaticamente a extensão
+    a partir da Web Store assim que o perfil arranca, com o ID original.
+
+    Variáveis:
+      ADN_FORCE_INSTALL_EXTENSION — "0" desactiva (default ligado).
+      ADN_BROWSER_EXTENSION_ID    — sobrepõe o ID (raramente necessário).
+    """
+    if platform.system() != "Windows":
+        return {"set": False, "reason": "not_windows"}
+    if os.environ.get("ADN_FORCE_INSTALL_EXTENSION", "1").strip() == "0":
+        return {"set": False, "reason": "disabled_by_env"}
+
+    ext_id = (
+        os.environ.get("ADN_BROWSER_EXTENSION_ID", "").strip()
+        or ADN_BROWSER_EXTENSION_ID_DEFAULT
+    )
+    value = f"{ext_id};{ADN_BROWSER_EXTENSION_UPDATE_URL}"
+    ps_script = (
+        "$key='HKCU:\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist';"
+        "New-Item -Path $key -Force | Out-Null;"
+        "Set-ItemProperty -Path $key -Name '1' -Value $env:ADN_FORCE_VALUE -Type String"
+    )
+    env = os.environ.copy()
+    env["ADN_FORCE_VALUE"] = value
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
+    if proc.returncode == 0:
+        return {"set": True, "reason": "ok", "extensionId": ext_id}
+    return {
+        "set": False,
+        "reason": f"ps_rc_{proc.returncode}",
+        "stderr": (proc.stderr or "")[:200],
+    }
+
+
 def materialize_company_certificate_from_vault(
     *,
     organization_id: str,
@@ -373,6 +439,8 @@ def materialize_company_certificate_from_vault(
     if subject_cn:
         chrome_autoselect = _set_chrome_autoselect_policy(subject_cn)
 
+    chrome_force_install = _set_chrome_extension_force_install_policy()
+
     return {
         "materialized": True,
         "reason": "ok",
@@ -380,5 +448,6 @@ def materialize_company_certificate_from_vault(
         "targetCertPath": str(cert_path),
         "windowsStoreImport": win_import,
         "chromeAutoSelect": chrome_autoselect,
+        "chromeExtensionForceInstall": chrome_force_install,
         "subjectCn": subject_cn,
     }
