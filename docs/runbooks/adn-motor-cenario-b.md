@@ -47,7 +47,12 @@ A serialização garantida pelo `playwright_browser_file_lock` (§3) torna a pur
 | -------- | ------- | ----- |
 | `ADN_PURGE_OTHER_CERTS_BEFORE_IMPORT` | `1` | `0` desliga a purga (uso paralelo manual fora do worker). |
 | `ADN_CERT_DIALOG_AUTOCLICK` | `1` | `0` desliga o watcher (debugging visual). |
-| `ADN_CERT_DIALOG_MAX_CLICKS` | `50` | Limite de cliques de segurança (evita loop infinito). |
+| `ADN_CERT_DIALOG_MAX_CLICKS` | `50` | Limite global de cliques (PostMessage + keybd_event). |
+| `ADN_CERT_DIALOG_DIAG_SEC` | `8` | Intervalo (s) de dump diagnóstico de janelas Chrome/NFS-e no log. |
+| `ADN_CERT_DIALOG_GLOBAL_ENTER` | `1` | `0` desliga camada 3 (foreground fallback) — necessária quando o Chromium não expõe o título do diálogo. |
+| `ADN_CERT_DIALOG_GLOBAL_DELAY` | `6` | Segundos a aguardar antes do primeiro ENTER global (evita disparar antes do diálogo aparecer). |
+| `ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC` | `3` | Intervalo mínimo entre ENTERs globais. |
+| `ADN_CERT_DIALOG_GLOBAL_MAX` | `4` | Limite de ENTERs globais (camada 3) para não interferir com navegação pós-login. |
 
 Verificação rápida no Windows após um job:
 
