@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -169,4 +170,16 @@ def patch_job(
         "summaryJson": summary,
         "completedAt": datetime.now(timezone.utc).isoformat(),
     }
+    # Log diagnóstico: chaves + tamanho do summary, para identificar 500 do portal.
+    if os.environ.get("ADN_PATCH_DEBUG", "1").strip() != "0":
+        try:
+            keys = sorted(list(summary.keys()))
+            body_size = len(json.dumps(body, ensure_ascii=False, default=str))
+            print(
+                f"[nfse-portal-bridge] PATCH /adn/jobs/{job_id} status={status} "
+                f"body_size={body_size}B keys={keys}",
+                flush=True,
+            )
+        except Exception:  # noqa: BLE001
+            pass
     internal_json_request(base_url, secret, "PATCH", f"/api/internal/v1/adn/jobs/{job_id}", body)

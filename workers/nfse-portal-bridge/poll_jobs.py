@@ -513,29 +513,63 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     download_engine_label = "nfse_dist" if engine == "nfse_dist" else "playwright_extension"
     engine_legacy = "NFSE_dist" if engine == "nfse_dist" else "playwright_extension"
 
+    completed_summary = {
+        "phase": "completed",
+        "engine": engine_legacy,
+        "downloadEngine": download_engine_label,
+        "fetchMode": fetch_mode,
+        "artifactsXml": counts["xml"],
+        "artifactsPdf": counts["pdf"],
+        "skipped": counts["skipped"],
+        "syntheticAccessKeys": counts.get("syntheticKey", 0),
+        "noNewArtifacts": artifacts_total <= 0,
+        "certificateMaterialized": bool(cert_sync.get("materialized")),
+        "certificateMaterializedReason": str(cert_sync.get("reason") or ""),
+        **mirror_summary,
+    }
+
     job_log(jid, "portal", "PATCH job=completed (a aplicar resumo no portal…)")
-    patch_job(
-        base_url=portal_url,
-        secret=secret,
-        job_id=jid,
-        organization_id=oid,
-        status="completed",
-        summary={
-            "phase": "completed",
-            "engine": engine_legacy,
-            "downloadEngine": download_engine_label,
-            "fetchMode": fetch_mode,
-            "artifactsXml": counts["xml"],
-            "artifactsPdf": counts["pdf"],
-            "skipped": counts["skipped"],
-            "syntheticAccessKeys": counts.get("syntheticKey", 0),
-            "noNewArtifacts": artifacts_total <= 0,
-            "certificateMaterialized": bool(cert_sync.get("materialized")),
-            "certificateMaterializedReason": str(cert_sync.get("reason") or ""),
-            **mirror_summary,
-        },
-    )
-    job_log(jid, "portal", "PATCH job=completed aplicado no portal.")
+    try:
+        patch_job(
+            base_url=portal_url,
+            secret=secret,
+            job_id=jid,
+            organization_id=oid,
+            status="completed",
+            summary=completed_summary,
+        )
+        job_log(jid, "portal", "PATCH job=completed aplicado no portal.")
+    except Exception as e_patch:  # noqa: BLE001
+        # **Importante**: o motor SUCEDEU (artefactos subidos, espelho gravado).
+        # Não voltamos a propagar a excepção, senão o catch genérico do main loop
+        # marcaria o job como `failed` indevidamente. Em vez disso, aplicamos o
+        # estado correcto (`completed`) directamente na BD e logamos.
+        print(
+            f"[nfse-portal-bridge] PATCH job=completed falhou ({e_patch}); "
+            "motor já tinha SUCEDIDO — a aplicar fallback directo na BD para completed.",
+            file=sys.stderr,
+            flush=True,
+        )
+        applied = _force_complete_job_in_db(
+            dsn,
+            jid,
+            completed_summary,
+            reason=f"patch_completed_failed:{type(e_patch).__name__}",
+        )
+        if applied:
+            job_log(
+                jid,
+                "portal",
+                "PATCH job=completed falhou no portal; status gravado como completed via fallback BD.",
+            )
+            print(
+                f"[nfse-portal-bridge] Job {jid} marcado como completed via fallback BD "
+                f"(artefactos: xml={counts['xml']}, pdf={counts['pdf']}).",
+                flush=True,
+            )
+        else:
+            # Se nem o fallback BD funcionar, propagar para o catch genérico (job ficaria `failed`).
+            raise
 
 
 def fail_job(
@@ -599,6 +633,51 @@ def _force_fail_job_in_db(dsn: str, jid: str, message: str, *, reason: str = "pa
     except Exception as e:  # noqa: BLE001
         print(
             f"[nfse-portal-bridge] Fallback BD para failed também falhou: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
+
+
+def _force_complete_job_in_db(
+    dsn: str,
+    jid: str,
+    summary: dict,
+    *,
+    reason: str = "patch_completed_failed",
+) -> bool:
+    """
+    Fallback de recuperação quando o motor TERMINOU COM SUCESSO (artefactos subidos,
+    espelho gravado) mas o PATCH «completed» falhou (ex.: 500/503 transitórios do portal).
+
+    Marca directamente na BD `status='completed'` com o resumo já calculado, evitando
+    perder a corrida do motor. Se não fosse este fallback, o catch genérico do main loop
+    chamaria `_try_fail_job` e o utilizador veria FALHA mesmo com as notas baixadas.
+    """
+    if not jid:
+        return False
+    payload = dict(summary or {})
+    payload.setdefault("phase", "completed")
+    payload["fallback"] = reason
+    try:
+        with psycopg.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE adn_sync_jobs
+                    SET status = 'completed',
+                        completed_at = NOW(),
+                        updated_at = NOW(),
+                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
+                    WHERE id = %s::uuid AND status = 'running'
+                    """,
+                    (json.dumps(payload, ensure_ascii=False, default=str), jid),
+                )
+            conn.commit()
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"[nfse-portal-bridge] Fallback BD para completed falhou: {e}",
             file=sys.stderr,
             flush=True,
         )
