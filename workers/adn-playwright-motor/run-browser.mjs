@@ -1,7 +1,16 @@
 /**
- * Fluxo real: Chromium + extensão + URL do Emissor Nacional.
- * Limitação: o diálogo nativo de escolha de certificado (Windows) não é controlável pelo Playwright;
- * use ADN_CHROME_USER_DATA_DIR com perfil onde já autenticou ou com política de certificado, ou operação assistida.
+ * Fluxo real: Chromium + extensão «Baixar NFSe» + Emissor Nacional.
+ *
+ * Etapas:
+ *   1. Configura `Preferences` do perfil para que os downloads do Chrome caiam em --output-dir
+ *      (a extensão usa `chrome.downloads.download` com caminhos relativos).
+ *   2. Lança o Chrome com a extensão pré-carregada (--load-extension) e perfil persistente.
+ *   3. Navega para o portal; o auto-select do Windows escolhe o certificado automaticamente
+ *      (configurado por `cert_materialization.py` no worker Python).
+ *   4. Quando a sessão fica activa, navega para `Notas/Emitidas` (ou `Recebidas`).
+ *   5. Abre o popup da extensão como aba (chrome-extension://<ID>/popup.html), preenche datas,
+ *      escolhe XML e clica em «Iniciar Download».
+ *   6. Aguarda os XML caírem em --output-dir (verificação recursiva).
  */
 
 import fs from "node:fs";
@@ -10,9 +19,88 @@ import path from "node:path";
 const DEFAULT_LOGIN_URL =
   "https://www.nfse.gov.br/EmissorNacional/Login?ReturnUrl=%2fEmissorNacional";
 
+/**
+ * ID estável da extensão «Baixar NFSe» (a extensão tem campo `key` no manifest, logo o
+ * mesmo ID é gerado quando carregada como unpacked via --load-extension).
+ */
+const ADN_EXT_ID = "enehmclajcndmgefbmjhecccoegbdgea";
+
 function dlog(msg) {
   if (process.env.ADN_BROWSER_DEBUG === "1") {
     process.stderr.write(`[adn-playwright-motor] ${msg}\n`);
+  }
+}
+
+function fmtIsoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function resolveDateWindow() {
+  const envFrom = (process.env.ADN_BROWSER_FETCH_FROM || "").trim();
+  const envTo = (process.env.ADN_BROWSER_FETCH_TO || "").trim();
+  const today = new Date();
+  const to = envTo && /^\d{4}-\d{2}-\d{2}$/.test(envTo) ? envTo : fmtIsoDate(today);
+  let from = envFrom;
+  if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    const days = Math.max(
+      1,
+      Math.min(365, Number.parseInt(process.env.ADN_BROWSER_FETCH_DAYS || "31", 10) || 31),
+    );
+    const start = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
+    from = fmtIsoDate(start);
+  }
+  return { from, to };
+}
+
+function resolveTipoNota() {
+  const t = (process.env.ADN_BROWSER_TIPO_NOTA || "Emitidas").trim().toLowerCase();
+  return t.startsWith("receb") ? "Recebidas" : "Emitidas";
+}
+
+/**
+ * Ajusta `<profileDir>/Default/Preferences` para que o Chrome guarde downloads em outputDir
+ * sem prompt. A extensão (`chrome.downloads.download`) usa esta pasta como raiz.
+ *
+ * Estratégia robusta:
+ *   - Se o ficheiro existir: actualiza apenas as chaves relevantes (preserva o resto).
+ *   - Se não existir: cria estrutura mínima; o Chrome completa no primeiro arranque.
+ */
+function configureChromeDownloadPreferences(profileDir, outputDir) {
+  const defaultDir = path.join(profileDir, "Default");
+  const prefsPath = path.join(defaultDir, "Preferences");
+  fs.mkdirSync(defaultDir, { recursive: true });
+
+  let prefs = {};
+  if (fs.existsSync(prefsPath)) {
+    try {
+      prefs = JSON.parse(fs.readFileSync(prefsPath, "utf8"));
+    } catch {
+      prefs = {};
+    }
+  }
+  prefs.download = prefs.download || {};
+  prefs.download.default_directory = outputDir;
+  prefs.download.directory_upgrade = true;
+  prefs.download.prompt_for_download = false;
+  prefs.download.extensions_to_open = "";
+  prefs.profile = prefs.profile || {};
+  prefs.profile.default_content_setting_values =
+    prefs.profile.default_content_setting_values || {};
+  prefs.profile.default_content_setting_values.automatic_downloads = 1;
+  prefs.safebrowsing = prefs.safebrowsing || {};
+  prefs.safebrowsing.enabled = false;
+
+  try {
+    fs.writeFileSync(prefsPath, JSON.stringify(prefs));
+    dlog(`Preferences actualizadas (download.default_directory=${outputDir})`);
+  } catch (e) {
+    process.stderr.write(
+      `STDERR_CAT_DISK falha ao escrever Preferences do Chrome: ${e?.message || e}\n`,
+    );
+    throw e;
   }
 }
 
@@ -43,17 +131,13 @@ export async function runBrowserFlow(opts) {
   const channel = (process.env.ADN_PLAYWRIGHT_CHANNEL || "").trim() || undefined;
   const waitArtifactsSec = Math.max(
     30,
-    Number.parseInt(process.env.ADN_BROWSER_WAIT_ARTIFACTS_SEC || "300", 10) || 300,
+    Number.parseInt(process.env.ADN_BROWSER_WAIT_ARTIFACTS_SEC || "600", 10) || 600,
+  );
+  const idleSettleSec = Math.max(
+    8,
+    Number.parseInt(process.env.ADN_BROWSER_IDLE_SETTLE_SEC || "20", 10) || 20,
   );
 
-  const launchArgs = [
-    `--disable-extensions-except=${extDir}`,
-    `--load-extension=${extDir}`,
-    "--no-first-run",
-    "--no-default-browser-check",
-  ];
-
-  /** Perfil isolado por job se ADN_CHROME_USER_DATA_DIR não for absoluto (não recomendado em prod). */
   const profileDir = path.isAbsolute(userDataDir)
     ? userDataDir
     : path.resolve(process.cwd(), userDataDir);
@@ -61,11 +145,26 @@ export async function runBrowserFlow(opts) {
   fs.mkdirSync(profileDir, { recursive: true });
   fs.mkdirSync(opts.outputDir, { recursive: true });
 
+  configureChromeDownloadPreferences(profileDir, opts.outputDir);
+
+  const launchArgs = [
+    `--disable-extensions-except=${extDir}`,
+    `--load-extension=${extDir}`,
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-features=DisableLoadExtensionCommandLineSwitch",
+  ];
+
+  const tipoNota = resolveTipoNota();
+  const { from: dateFrom, to: dateTo } = resolveDateWindow();
+
   dlog(`jobId=${opts.jobId} cnpj=${opts.cnpjDigits}`);
   dlog(`loginUrl=${loginUrl}`);
   dlog(`profileDir=(definido)`);
   dlog(`extensionDir=(definido)`);
   dlog(`headless=${headless} channel=${channel || "bundled-chromium"}`);
+  dlog(`tipoNota=${tipoNota} dateFrom=${dateFrom} dateTo=${dateTo}`);
+  dlog(`waitArtifactsSec=${waitArtifactsSec}`);
 
   const context = await chromium.launchPersistentContext(profileDir, {
     channel: channel || undefined,
@@ -74,13 +173,14 @@ export async function runBrowserFlow(opts) {
     viewport: { width: 1360, height: 900 },
     locale: "pt-BR",
     ignoreHTTPSErrors: true,
+    acceptDownloads: true,
   });
 
-  const page = await context.newPage();
+  const portalPage = await context.newPage();
   const artifactSince = Date.now() - 10_000;
 
   try {
-    await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await portalPage.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
   } catch (e) {
     await context.close().catch(() => {});
     process.stderr.write(`STDERR_CAT_PORTAL falha ao carregar pagina de login: ${e?.message || e}\n`);
@@ -88,62 +188,145 @@ export async function runBrowserFlow(opts) {
   }
 
   try {
-    const certClicked = await clickCertificadoDigitalIfPresent(page);
+    const certClicked = await clickCertificadoDigitalIfPresent(portalPage);
     dlog(`certificadoDigitalClicked=${certClicked}`);
   } catch (e) {
     dlog(`certificado click ignorado: ${e?.message || e}`);
   }
 
-  /** Aguarda a extensão gravar XML na pasta de saída (só ficheiros novos nesta execução). */
+  try {
+    await waitForAuthenticatedPortal(portalPage, 90_000);
+  } catch (e) {
+    await context.close().catch(() => {});
+    process.stderr.write(
+      `STDERR_CAT_SESSION sessao do portal nao autenticada (cert digital): ${e?.message || e}\n`,
+    );
+    process.exit(10);
+  }
+
+  /** Navega a aba para a listagem (Emitidas/Recebidas) que a extensão usa como activeTab. */
+  const listingUrl = `https://www.nfse.gov.br/EmissorNacional/Notas/${tipoNota}`;
+  try {
+    await portalPage.goto(listingUrl, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    /** Espera estabilizar (a extensão precisa que o portal já tenha sessão + token). */
+    await portalPage
+      .waitForLoadState("networkidle", { timeout: 30_000 })
+      .catch(() => {});
+  } catch (e) {
+    await context.close().catch(() => {});
+    process.stderr.write(`STDERR_CAT_PORTAL falha ao abrir ${listingUrl}: ${e?.message || e}\n`);
+    process.exit(11);
+  }
+
+  /** Abre o popup da extensão como aba normal. ID estável graças ao campo `key` no manifest. */
+  const popupUrl = `chrome-extension://${ADN_EXT_ID}/popup.html`;
+  let popupPage;
+  try {
+    popupPage = await context.newPage();
+    await popupPage.goto(popupUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  } catch (e) {
+    await context.close().catch(() => {});
+    process.stderr.write(
+      `STDERR_CAT_EXTENSION falha ao abrir popup da extensao (${popupUrl}): ${e?.message || e}\n`,
+    );
+    process.exit(12);
+  }
+
+  /**
+   * A aba do portal precisa ficar `active` no Chrome durante o download — o background da
+   * extensão chama `chrome.tabs.query({ active: true })` para identificar a página da listagem
+   * e injectar scripts via `chrome.scripting.executeScript`.
+   */
+  await portalPage.bringToFront();
+
+  try {
+    await driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo });
+  } catch (e) {
+    await context.close().catch(() => {});
+    process.stderr.write(
+      `STDERR_CAT_EXTENSION falha ao pilotar popup da extensao: ${e?.message || e}\n`,
+    );
+    process.exit(12);
+  }
+
+  /** Aguarda XML novos no outputDir (recursivo) com janela de estabilização. */
   const deadline = Date.now() + waitArtifactsSec * 1000;
-  let found = false;
+  let lastCount = 0;
+  let lastChange = Date.now();
+  let found = 0;
   while (Date.now() < deadline) {
-    const xmls = listNewXmlFiles(opts.outputDir, artifactSince);
-    if (xmls.length > 0) {
-      dlog(`artefactos XML novos: ${xmls.length}`);
-      found = true;
+    const xmls = listNewXmlFilesRecursive(opts.outputDir, artifactSince);
+    if (xmls.length !== lastCount) {
+      lastCount = xmls.length;
+      lastChange = Date.now();
+      dlog(`artefactos XML novos (parcial): ${xmls.length}`);
+    }
+    found = xmls.length;
+    /** Se já há ficheiros e nada novo durante `idleSettleSec`, considera concluído. */
+    if (found > 0 && Date.now() - lastChange >= idleSettleSec * 1000) {
       break;
+    }
+    /** Atalho: se popup mostra mensagem clara de «sem notas», sai sem erro. */
+    try {
+      const semNotas = await popupSaysSemNotas(popupPage);
+      if (semNotas) {
+        dlog("popup sinalizou ausência de notas no período; saindo sem erro.");
+        await context.close().catch(() => {});
+        process.exit(0);
+      }
+    } catch {
+      /* ignore */
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
 
   await context.close().catch(() => {});
 
-  if (!found) {
+  if (found === 0) {
     process.stderr.write(
-      "STDERR_CAT_EXTENSION Nenhum XML novo na pasta de saida dentro do tempo. Verifique extensao, sessao no perfil e ADN_BROWSER_WAIT_ARTIFACTS_SEC.\n",
+      "STDERR_CAT_EXTENSION Nenhum XML novo na pasta de saida dentro do tempo. Verifique extensao, sessao e ADN_BROWSER_WAIT_ARTIFACTS_SEC.\n",
     );
     process.exit(12);
   }
 
+  dlog(`concluído: ${found} XML novos detectados.`);
   process.exit(0);
 }
 
-function listNewXmlFiles(dir, sinceMs) {
-  if (!fs.existsSync(dir)) {
-    return [];
-  }
+/**
+ * Lê recursivamente .xml em outputDir, filtrando pela mtime (apenas novos nesta execução).
+ */
+function listNewXmlFilesRecursive(dir, sinceMs) {
   const out = [];
-  for (const name of fs.readdirSync(dir)) {
-    if (!name.toLowerCase().endsWith(".xml")) {
+  if (!fs.existsSync(dir)) return out;
+  const stack = [dir];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true });
+    } catch {
       continue;
     }
-    const full = path.join(dir, name);
-    try {
-      if (fs.statSync(full).mtimeMs >= sinceMs) {
-        out.push(full);
+    for (const ent of entries) {
+      const full = path.join(cur, ent.name);
+      if (ent.isDirectory()) {
+        stack.push(full);
+        continue;
       }
-    } catch {
-      /* ignore */
+      if (!ent.name.toLowerCase().endsWith(".xml")) continue;
+      try {
+        if (fs.statSync(full).mtimeMs >= sinceMs) {
+          out.push(full);
+        }
+      } catch {
+        /* ignore */
+      }
     }
   }
   return out;
 }
 
-/**
- * Clica na entrada de acesso por certificado digital (portal contribuinte NFS-e).
- * Depois disto o SO pode mostrar o selector de certificado — fora do controlo do Playwright.
- */
 async function clickCertificadoDigitalIfPresent(page) {
   const timeout = 15_000;
   const locators = [
@@ -161,8 +344,83 @@ async function clickCertificadoDigitalIfPresent(page) {
       await new Promise((r) => setTimeout(r, 2000));
       return true;
     } catch {
-      // tentar seguinte
+      /* tentar próximo */
     }
   }
   return false;
+}
+
+/**
+ * Aguarda chegar a uma página do Emissor Nacional já autenticada (Dashboard ou listagens).
+ */
+async function waitForAuthenticatedPortal(page, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const url = page.url();
+    if (
+      /\/EmissorNacional(\/?(Dashboard|Notas|Emitidas|Recebidas)?\b)/i.test(url) &&
+      !/\/Login/i.test(url)
+    ) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error("timeout a aguardar autenticação no portal NFS-e.");
+}
+
+/**
+ * Pilota o popup: marca tipoNota, preenche datas, garante XML, dispara download.
+ */
+async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
+  await popupPage
+    .waitForSelector("#startDownloadBtn", { timeout: 30_000 })
+    .catch(() => {
+      throw new Error(
+        "popup.html não expôs #startDownloadBtn (extensão actualizada? rever sync-adn-extension-from-chrome).",
+      );
+    });
+
+  /** Activa o tipo de nota sem disparar `navigateToPortal` (que mudaria a aba activa). */
+  await popupPage.evaluate((tipo) => {
+    document.body.setAttribute("data-nfse-type", tipo);
+    const sel = document.querySelector(
+      `.nfse-type-btn[href*="${tipo === "Recebidas" ? "Recebidas" : "Emitidas"}"]`,
+    );
+    if (sel) {
+      document
+        .querySelectorAll(".nfse-type-btn")
+        .forEach((b) => b.classList.remove("selected"));
+      sel.classList.add("selected");
+    }
+  }, tipoNota);
+
+  /** Preenche datas (input type=date aceita YYYY-MM-DD). */
+  await popupPage.locator("#dateStart").fill(dateFrom);
+  await popupPage.locator("#dateStart").dispatchEvent("change");
+  await popupPage.locator("#dateEnd").fill(dateTo);
+  await popupPage.locator("#dateEnd").dispatchEvent("change");
+
+  /** Garante radio XML (default já é XML, mas reforçamos). */
+  await popupPage.evaluate(() => {
+    const r = document.querySelector('input[name="downloadType"][value="xml"]');
+    if (r) {
+      r.checked = true;
+      r.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+
+  /** Click no «Iniciar Download». dispatchEvent para não trazer o popup à frente. */
+  await popupPage.locator("#startDownloadBtn").dispatchEvent("click");
+}
+
+async function popupSaysSemNotas(popupPage) {
+  try {
+    const text = await popupPage.evaluate(() => {
+      const s = document.getElementById("status");
+      return s ? s.textContent || "" : "";
+    });
+    return /sem\s+notas|nenhuma\s+nfs|0\s+notas\s+encontradas/i.test(text);
+  } catch {
+    return false;
+  }
 }

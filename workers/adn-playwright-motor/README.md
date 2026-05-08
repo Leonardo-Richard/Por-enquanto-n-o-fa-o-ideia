@@ -32,11 +32,12 @@ set ADN_PLAYWRIGHT_CHANNEL=chrome
 
 ## O que o modo «browser real» faz
 
-1. Abre o **Emissor Nacional** (URL configurável; por defeito o login do portal contribuinte).
-2. Arranca o Chromium **com a extensão** (`--load-extension` / `--disable-extensions-except`).
-3. Usa um **perfil persistente** (`ADN_CHROME_USER_DATA_DIR`) — sessões, cookies e políticas de certificado ficam guardados aí.
-4. Tenta clicar numa ligação/botão de **«Certificado digital»** (vários selectores de texto).
-5. **Espera** até aparecer pelo menos um ficheiro **`.xml` novo** na pasta `--output-dir` (a extensão ou o fluxo após login deve gravar aí), ou falha com `STDERR_CAT_EXTENSION` ao fim do tempo.
+1. Ajusta `Preferences` do perfil Chrome para `download.default_directory = --output-dir` (sem prompt). Assim os ficheiros gravados pela extensão via `chrome.downloads.download` caem na pasta certa.
+2. Arranca o Chromium **com a extensão** (`--load-extension` / `--disable-extensions-except`) e perfil persistente (`ADN_CHROME_USER_DATA_DIR`).
+3. Abre o **Emissor Nacional** (URL configurável; por defeito o login do portal contribuinte). Com a política `AutoSelectCertificateForUrls` configurada pelo worker Python, o Chrome escolhe sozinho o certificado.
+4. Aguarda autenticação (URL deixa de conter `Login`) e navega para `Notas/Emitidas` (ou `Recebidas`, conforme `ADN_BROWSER_TIPO_NOTA`).
+5. Abre o popup da extensão («Baixar NFSe») numa nova aba (`chrome-extension://<id>/popup.html`), preenche datas (`ADN_BROWSER_FETCH_FROM`/`TO` ou janela móvel de `ADN_BROWSER_FETCH_DAYS`), escolhe XML e clica em **Iniciar Download**.
+6. Aguarda XML novos em `--output-dir` (recursivo). Considera concluído quando o número de ficheiros estabiliza durante `ADN_BROWSER_IDLE_SETTLE_SEC`. Se ao fim de `ADN_BROWSER_WAIT_ARTIFACTS_SEC` nada foi gravado, falha com `STDERR_CAT_EXTENSION`.
 
 ### Limitação importante (certificado)
 
@@ -59,7 +60,12 @@ Sem isso, o passo 4 pode abrir o diálogo e ficar à espera até ao timeout.
 | `ADN_PLAYWRIGHT_FATIA_ZERO` | Não | `1` força só XML de teste (ignora browser). |
 | `ADN_PLAYWRIGHT_CHANNEL` | Não | Ex.: `chrome` para usar Chrome instalado (recomendado com certificado). |
 | `ADN_BROWSER_HEADLESS` | Não | `1` = headless (muitas extensões **não** funcionam; por defeito **janela visível**). |
-| `ADN_BROWSER_WAIT_ARTIFACTS_SEC` | Não | Segundos a aguardar XML novo (defeito `300`). |
+| `ADN_BROWSER_WAIT_ARTIFACTS_SEC` | Não | Segundos a aguardar XML novo (defeito `600`). |
+| `ADN_BROWSER_IDLE_SETTLE_SEC` | Não | Janela sem novos ficheiros para considerar concluído (defeito `20`). |
+| `ADN_BROWSER_TIPO_NOTA` | Não | `Emitidas` (defeito) ou `Recebidas`. |
+| `ADN_BROWSER_FETCH_FROM` | Não | Data inicial `YYYY-MM-DD`. Se omissa, usa `hoje - ADN_BROWSER_FETCH_DAYS`. |
+| `ADN_BROWSER_FETCH_TO` | Não | Data final `YYYY-MM-DD`. Se omissa, usa hoje. |
+| `ADN_BROWSER_FETCH_DAYS` | Não | Janela móvel em dias quando `FETCH_FROM` está vazia (defeito `31`, máximo `365`). |
 | `ADN_BROWSER_DEBUG` | Não | `1` — logs no stderr (sem caminhos completos sensíveis em produção). |
 | `ADN_PLAYWRIGHT_FATIA_ZERO_FAIL` | Não | `1` — falha simulada (testes). |
 
