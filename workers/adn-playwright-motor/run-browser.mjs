@@ -20,10 +20,11 @@ const DEFAULT_LOGIN_URL =
   "https://www.nfse.gov.br/EmissorNacional/Login?ReturnUrl=%2fEmissorNacional";
 
 /**
- * ID estável da extensão «Baixar NFSe» (a extensão tem campo `key` no manifest, logo o
+ * ID *esperado* da extensão «Baixar NFSe» (a extensão tem campo `key` no manifest, logo o
  * mesmo ID é gerado quando carregada como unpacked via --load-extension).
+ * Em runtime confirmamos com `detectLoadedExtensionId` (mais robusto contra alterações).
  */
-const ADN_EXT_ID = "enehmclajcndmgefbmjhecccoegbdgea";
+const ADN_EXT_ID_FALLBACK = "enehmclajcndmgefbmjhecccoegbdgea";
 
 function dlog(msg) {
   if (process.env.ADN_BROWSER_DEBUG === "1") {
@@ -218,16 +219,34 @@ export async function runBrowserFlow(opts) {
     process.exit(11);
   }
 
-  /** Abre o popup da extensão como aba normal. ID estável graças ao campo `key` no manifest. */
-  const popupUrl = `chrome-extension://${ADN_EXT_ID}/popup.html`;
+  /** Detecta o ID real da extensão carregada (preferível ao ID hard-coded). */
+  let extId = ADN_EXT_ID_FALLBACK;
+  try {
+    const detected = await detectLoadedExtensionId(context, 25_000);
+    if (detected) {
+      extId = detected;
+      dlog(`extensão detectada: id=${extId}`);
+    } else {
+      dlog(
+        `nenhum service-worker de extensão detectado a tempo; a tentar ID fallback ${ADN_EXT_ID_FALLBACK}`,
+      );
+    }
+  } catch (e) {
+    dlog(`detectLoadedExtensionId erro ignorado: ${e?.message || e}`);
+  }
+
+  /** Abre o popup da extensão como aba normal. */
+  const popupUrl = `chrome-extension://${extId}/popup.html`;
   let popupPage;
   try {
     popupPage = await context.newPage();
     await popupPage.goto(popupUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
   } catch (e) {
     await context.close().catch(() => {});
+    const hint = manifestHintFromExtDir(extDir);
     process.stderr.write(
-      `STDERR_CAT_EXTENSION falha ao abrir popup da extensao (${popupUrl}): ${e?.message || e}\n`,
+      `STDERR_CAT_EXTENSION falha ao abrir popup da extensao (${popupUrl}): ${e?.message || e}\n` +
+        `${hint}\n`,
     );
     process.exit(12);
   }
@@ -422,5 +441,62 @@ async function popupSaysSemNotas(popupPage) {
     return /sem\s+notas|nenhuma\s+nfs|0\s+notas\s+encontradas/i.test(text);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Detecta o ID da extensão carregada via `--load-extension`. Manifest v3 expõe um
+ * service worker em `chrome-extension://<ID>/...`. Faz polling até `timeoutMs`.
+ *
+ * @param {import('playwright').BrowserContext} context
+ * @param {number} timeoutMs
+ * @returns {Promise<string | null>}
+ */
+async function detectLoadedExtensionId(context, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const swList = typeof context.serviceWorkers === "function" ? context.serviceWorkers() : [];
+      for (const sw of swList) {
+        const url = (sw.url && sw.url()) || "";
+        const m = /^chrome-extension:\/\/([a-p]{32})\//.exec(url);
+        if (m) return m[1];
+      }
+      const bgList =
+        typeof context.backgroundPages === "function" ? context.backgroundPages() : [];
+      for (const bg of bgList) {
+        const url = (bg.url && bg.url()) || "";
+        const m = /^chrome-extension:\/\/([a-p]{32})\//.exec(url);
+        if (m) return m[1];
+      }
+    } catch {
+      /* ignore e tenta de novo */
+    }
+    await new Promise((r) => setTimeout(r, 750));
+  }
+  return null;
+}
+
+/**
+ * Mensagem de diagnóstico quando o popup falha — verifica se manifest.json e popup.html
+ * existem na pasta da extensão e avisa se há `_metadata/` (que pode bloquear unpacked).
+ */
+function manifestHintFromExtDir(extDir) {
+  try {
+    const manifestPath = path.join(extDir, "manifest.json");
+    if (!fs.existsSync(manifestPath)) {
+      return `[hint] ${manifestPath} NÃO EXISTE — copie a extensão descompactada para esta pasta.`;
+    }
+    const popupPath = path.join(extDir, "popup.html");
+    if (!fs.existsSync(popupPath)) {
+      return `[hint] ${popupPath} NÃO EXISTE — a pasta da extensão está incompleta.`;
+    }
+    const meta = path.join(extDir, "_metadata");
+    if (fs.existsSync(meta)) {
+      return `[hint] Pasta ${meta} existe — Chrome pode rejeitar como unpacked. Apague essa pasta.`;
+    }
+    return `[hint] manifest.json e popup.html existem em ${extDir}; verifique chrome://extensions e ADN_BROWSER_EXTENSION_DIR.`;
+  } catch (e) {
+    return `[hint] não consegui inspeccionar ${extDir}: ${e?.message || e}`;
   }
 }
