@@ -395,12 +395,22 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         data_out.mkdir(parents=True, exist_ok=True)
         with playwright_browser_file_lock(_repo_root()):
             job_log(jid, "motor_B", "a iniciar subprocesso Playwright (motor cenário B).")
-            code, err_tail, cat = run_playwright_motor_subprocess(
-                repo_root=_repo_root(),
-                output_dir=data_out,
-                cnpj=cnpj,
-                job_id=jid,
-            )
+            # Em Chromium for Testing as policies AutoSelectCertificateForUrls são
+            # ignoradas; arrancamos um watcher Win32 que detecta o diálogo nativo
+            # «Selecione um certificado» e envia ENTER para o aceitar (o cert
+            # default já foi importado para a loja Pessoal).
+            from cert_dialog_clicker import start_watcher as _start_cert_dialog_watcher
+
+            _stop_cert_watcher = _start_cert_dialog_watcher()
+            try:
+                code, err_tail, cat = run_playwright_motor_subprocess(
+                    repo_root=_repo_root(),
+                    output_dir=data_out,
+                    cnpj=cnpj,
+                    job_id=jid,
+                )
+            finally:
+                _stop_cert_watcher()
             if code != 0:
                 job_log(jid, "motor_B", f"falha exit={code} category={cat}")
                 # Imprime no console do worker as últimas linhas do stderr/stdout do motor

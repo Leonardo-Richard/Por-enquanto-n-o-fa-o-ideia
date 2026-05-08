@@ -307,13 +307,15 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
         ensure_ascii=False,
     )
 
-    # Escreve em HKLM e HKCU, em AMBAS as hives `Google\Chrome` e `Chromium`.
-    # Chrome estável lê de Google\Chrome; Chromium for Testing (bundled do
-    # Playwright) lê de Chromium. Em qualquer cenário a policy aplica.
+    # Escreve em HKLM e HKCU em todas as hives suportadas:
+    #   - `Google\Chrome` → Chrome estável (com restrições em 137+)
+    #   - `Microsoft\Edge` → Microsoft Edge (recomendado: Chromium com policies activas)
+    #   - `Chromium` → Chromium build (Chrome for Testing IGNORA estas policies, mas
+    #     mantemos para outros Chromium builds com policy management activo)
     ps_script = (
         "$rule=$env:ADN_RULE;"
         "foreach ($root in 'HKLM:','HKCU:') {"
-        "  foreach ($brand in 'Google\\Chrome','Chromium') {"
+        "  foreach ($brand in 'Google\\Chrome','Microsoft\\Edge','Chromium') {"
         "    $key=\"$root\\SOFTWARE\\Policies\\$brand\\AutoSelectCertificateForUrls\";"
         "    try {"
         "      New-Item -Path $key -Force | Out-Null;"
@@ -384,15 +386,15 @@ def _set_chrome_extension_force_install_policy() -> dict[str, Any]:
     )
     value = f"{ext_id};{ADN_BROWSER_EXTENSION_UPDATE_URL}"
     """
-    Escreve a policy em HKLM (máquina-wide) E HKCU (utilizador), em AMBAS as hives
-    `Google\\Chrome` e `Chromium` — Chrome estável lê de Google\\Chrome; Chromium
-    for Testing (bundled do Playwright, recomendado) lê de Chromium.
+    Escreve a policy em HKLM e HKCU para Chrome, Edge e Chromium.
+    Microsoft Edge é a opção recomendada: Chromium-based, respeita policies
+    correctamente e ainda aceita `--load-extension` em versões actuais.
     """
     ps_script = (
         "$value=$env:ADN_FORCE_VALUE;"
         "$reasons=@();"
         "foreach ($root in 'HKLM:','HKCU:') {"
-        "  foreach ($brand in 'Google\\Chrome','Chromium') {"
+        "  foreach ($brand in 'Google\\Chrome','Microsoft\\Edge','Chromium') {"
         "    $key=\"$root\\SOFTWARE\\Policies\\$brand\\ExtensionInstallForcelist\";"
         "    try {"
         "      New-Item -Path $key -Force | Out-Null;"
