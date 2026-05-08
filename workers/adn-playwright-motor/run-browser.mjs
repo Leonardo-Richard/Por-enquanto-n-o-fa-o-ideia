@@ -176,10 +176,17 @@ export async function runBrowserFlow(opts) {
   dlog(`tipoNota=${tipoNota} dateFrom=${dateFrom} dateTo=${dateTo}`);
   dlog(`waitArtifactsSec=${waitArtifactsSec}`);
 
+  /**
+   * Por defeito o Playwright passa `--disable-component-update`, que desliga o
+   * **Component Update Service** — o mesmo serviço responsável por descarregar
+   * extensões force-installed via policy `ExtensionInstallForcelist`. Sem o updater,
+   * o Chrome vê a policy mas nunca chega à Web Store. Removemos só essa flag.
+   */
   const context = await chromium.launchPersistentContext(profileDir, {
     channel: channel || undefined,
     headless,
     args: launchArgs,
+    ignoreDefaultArgs: ["--disable-component-update"],
     viewport: { width: 1360, height: 900 },
     locale: "pt-BR",
     ignoreHTTPSErrors: true,
