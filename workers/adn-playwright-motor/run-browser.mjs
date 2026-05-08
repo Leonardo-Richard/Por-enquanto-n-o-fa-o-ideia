@@ -177,16 +177,28 @@ export async function runBrowserFlow(opts) {
   dlog(`waitArtifactsSec=${waitArtifactsSec}`);
 
   /**
-   * Por defeito o Playwright passa `--disable-component-update`, que desliga o
-   * **Component Update Service** — o mesmo serviço responsável por descarregar
-   * extensões force-installed via policy `ExtensionInstallForcelist`. Sem o updater,
-   * o Chrome vê a policy mas nunca chega à Web Store. Removemos só essa flag.
+   * Por defeito o Playwright passa várias flags que sabotam o force-install de
+   * extensões via policy:
+   *   - `--disable-component-update` desliga o Component Update Service (o serviço
+   *     que vai à Web Store buscar a extensão).
+   *   - `--disable-background-networking` desliga TODO o tráfego de fundo, incluindo
+   *     a comunicação com `clients2.google.com/service/update2/crx`.
+   *   - `--disable-default-apps` e `--disable-component-extensions-with-background-pages`
+   *     podem interferir com a inicialização do registo de extensões.
+   *
+   * Removemos esse conjunto via `ignoreDefaultArgs`. As outras flags do Playwright
+   * (--no-first-run, --enable-automation, etc.) ficam.
    */
   const context = await chromium.launchPersistentContext(profileDir, {
     channel: channel || undefined,
     headless,
     args: launchArgs,
-    ignoreDefaultArgs: ["--disable-component-update"],
+    ignoreDefaultArgs: [
+      "--disable-component-update",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-component-extensions-with-background-pages",
+    ],
     viewport: { width: 1360, height: 900 },
     locale: "pt-BR",
     ignoreHTTPSErrors: true,
@@ -241,9 +253,13 @@ export async function runBrowserFlow(opts) {
    * pode demorar até ~60s consoante a ligação de rede.
    */
   let extId = ADN_EXT_ID_FALLBACK;
+  /**
+   * Default 180 s para acomodar o primeiro download da Web Store em redes lentas.
+   * Sobreponha com `ADN_BROWSER_EXTENSION_WAIT_MS` se for preciso menos/mais.
+   */
   const extDetectTimeoutMs = Math.max(
     25_000,
-    Number.parseInt(process.env.ADN_BROWSER_EXTENSION_WAIT_MS || "60000", 10) || 60_000,
+    Number.parseInt(process.env.ADN_BROWSER_EXTENSION_WAIT_MS || "180000", 10) || 180_000,
   );
   try {
     const detected = await detectLoadedExtensionId(context, extDetectTimeoutMs);
