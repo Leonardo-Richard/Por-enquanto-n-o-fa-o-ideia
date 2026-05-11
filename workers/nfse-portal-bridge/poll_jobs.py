@@ -460,21 +460,11 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         "upload",
         f"{n_xml_cand} XML elegiveis (mtime >= inicio do job) em data/{cnpj}/ -> POST .../adn/uploads/prepare",
     )
-    counts = sync_data_directory(
-        base_url=portal_url,
-        secret=secret,
-        organization_id=oid,
-        company_id=cid,
-        job_id=jid,
-        cnpj=cnpj,
-        nfse_root=nfse,
-        min_xml_mtime_epoch=run_started_epoch,
-    )
-    job_log(
-        jid,
-        "upload",
-        f"concluído: xml={counts['xml']} pdf={counts['pdf']} skipped={counts['skipped']} syntheticKey={counts.get('syntheticKey', 0)}",
-    )
+
+    # PASSO A — Espelho local PRIMEIRO. Garante que os XML/PDF ficam na
+    # pasta configurada pelo utilizador mesmo que o upload para o portal
+    # falhe (HTTP 500, rede, etc.). Para o operador, ter os ficheiros no
+    # disco é a parte crítica; o upload para o portal é o complemento.
     mirror_summary: dict = {
         "mirrorWritten": 0,
         "mirrorFailed": 0,
@@ -483,10 +473,6 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     try:
         with psycopg.connect(dsn) as mconn:
             ctx = load_org_mirror_context(mconn, oid, cid)
-        # Política nova (cenário B / on-premise): se o utilizador configurou
-        # `local_download_root` no portal, o worker copia os XML/PDF para lá
-        # automaticamente. Só desliga se `NFSE_LOCAL_MIRROR_DISABLED=1` ou
-        # `NFSE_LOCAL_MIRROR_ENABLED=0` (override explícito do operador).
         mirror_enabled = local_mirror_writes_enabled()
         mirror_root = (ctx.get("root") or "").strip()
         if not mirror_enabled:
@@ -533,6 +519,26 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         "espelho_local",
         f"resumo written={mirror_summary.get('mirrorWritten', 0)} failed={mirror_summary.get('mirrorFailed', 0)} "
         f"hadFailures={mirror_summary.get('mirrorHadFailures')}",
+    )
+
+    # PASSO B — Upload para o portal. Acontece DEPOIS do espelho local,
+    # portanto se falhar (ex.: HTTP 500 do backend) os ficheiros locais já
+    # estão na pasta do utilizador. Ainda assim deixamos a exception subir
+    # para que o job fique marcado como `failed` e seja reprocessado.
+    counts = sync_data_directory(
+        base_url=portal_url,
+        secret=secret,
+        organization_id=oid,
+        company_id=cid,
+        job_id=jid,
+        cnpj=cnpj,
+        nfse_root=nfse,
+        min_xml_mtime_epoch=run_started_epoch,
+    )
+    job_log(
+        jid,
+        "upload",
+        f"concluído: xml={counts['xml']} pdf={counts['pdf']} skipped={counts['skipped']} syntheticKey={counts.get('syntheticKey', 0)}",
     )
 
     artifacts_total = counts["xml"] + counts["pdf"]
