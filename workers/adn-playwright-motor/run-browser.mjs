@@ -537,18 +537,28 @@ export async function runBrowserFlow(opts) {
       lastStatusLog = now;
       const st = await readPopupStatus(popupPage);
       const elapsedSec = Math.round((now - artifactSince) / 1000);
+      /**
+       * Loga também o estado das pastas em CADA heartbeat: quantos ficheiros
+       * recentes há no `outputDir` e no `~/Downloads`. Sem isto é quase
+       * impossível diagnosticar quando a extensão baixa para outra pasta.
+       */
+      const outRecent = snapshotRecentFiles(opts.outputDir, artifactSince, 50).length;
+      const dlDir = userDownloadsDir();
+      const dlRecent = dlDir ? snapshotRecentFiles(dlDir, artifactSince, 50).length : 0;
       if (st.statusText !== lastStatusText) {
         lastStatusText = st.statusText;
         process.stderr.write(
           `[adn-playwright-motor] popup status @${elapsedSec}s: ` +
             `disabled=${st.buttonDisabled} text=${JSON.stringify(st.statusText)} ` +
-            `xmls=${found} zips=${totalZipsIngested}+${totalZipsFromDownloads}\n`,
+            `xmls=${found} zips=${totalZipsIngested}+${totalZipsFromDownloads} ` +
+            `out_recent=${outRecent} dl_recent=${dlRecent}\n`,
         );
       } else {
         process.stderr.write(
           `[adn-playwright-motor] heartbeat @${elapsedSec}s: ` +
             `xmls=${found} zips_extraidos=${totalZipsIngested} ` +
-            `zips_downloads=${totalZipsFromDownloads}\n`,
+            `zips_downloads=${totalZipsFromDownloads} ` +
+            `out_recent=${outRecent} dl_recent=${dlRecent}\n`,
         );
       }
     }
@@ -565,7 +575,7 @@ export async function runBrowserFlow(opts) {
           () => ({ statusText: "" }),
         );
         process.stderr.write(
-          "[adn-playwright-motor] popup sinalizou ausência de notas no período; " +
+          "[adn-playwright-motor] popup sinalizou ausência de notas no período (CONFIRMADO: botão enabled + sem progresso); " +
             `status=${JSON.stringify(semNotasStatus.statusText)} ` +
             `exit_path=sem_notas xmls=${found} zips_extraidos=${totalZipsIngested} ` +
             `zips_de_downloads=${totalZipsFromDownloads}\n`,
@@ -583,6 +593,10 @@ export async function runBrowserFlow(opts) {
           totalZipsFromDownloads,
           found,
         });
+        process.stderr.write(
+          `[adn-playwright-motor] exit_path=sem_notas exit_code=0 found=${found} ` +
+            `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
+        );
         await context.close().catch(() => {});
         process.exit(0);
       }
@@ -617,7 +631,13 @@ export async function runBrowserFlow(opts) {
           `${stderrCat} extensão recusou o pedido (${blockingErr}). ` +
             `${popupDiagInfo}\n`,
         );
-        process.exit(blockingErr === "session_expired" ? 10 : 12);
+        const exitCode = blockingErr === "session_expired" ? 10 : 12;
+        process.stderr.write(
+          `[adn-playwright-motor] exit_path=blocking_error reason=${blockingErr} ` +
+            `exit_code=${exitCode} found=${found} ` +
+            `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
+        );
+        process.exit(exitCode);
       }
     } catch {
       /* ignore */
@@ -665,6 +685,10 @@ export async function runBrowserFlow(opts) {
       totalZipsIngested,
       totalZipsFromDownloads,
     });
+    process.stderr.write(
+      `[adn-playwright-motor] exit_path=timeout exit_code=12 found=${found} ` +
+        `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
+    );
     process.exit(12);
   }
 
@@ -675,6 +699,10 @@ export async function runBrowserFlow(opts) {
     totalZipsIngested,
     totalZipsFromDownloads,
   });
+  process.stderr.write(
+    `[adn-playwright-motor] exit_path=success exit_code=0 found=${found} ` +
+      `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
+  );
   await context.close().catch(() => {});
 
   dlog(
@@ -1499,21 +1527,57 @@ async function capturePopupDiagnostics(popupPage, outputDir) {
 }
 
 async function popupSaysSemNotas(popupPage) {
+  /**
+   * MUITO IMPORTANTE: a extensão «Baixar NFSe» itera mês a mês e durante o
+   * processo emite mensagens transientes do tipo «Sem notas para Jan/2026» ou
+   * «Mês 8 de 12 concluído». Se reagirmos imediatamente a um «Sem notas» do
+   * `#status`, o motor sai antes da extensão acabar (caso visto: motor exit=0
+   * com 0 XMLs reais).
+   *
+   * Regras para considerar "sem notas no período" como ESTADO FINAL:
+   *   1. O texto tem de afirmar explicitamente conclusão global («concluído»,
+   *      «finalizado», «encerrado», «não foram encontradas notas no período»,
+   *      etc.) ou similar, NÃO um mês individual.
+   *   2. O botão «Iniciar Download» tem de estar ENABLED (`buttonDisabled=false`),
+   *      sinal de que a extensão não está a trabalhar.
+   *   3. NÃO pode haver um status de progresso activo do tipo
+   *      «Mês N de M», «Aguardando próximo mês», «Baixando», «Processando».
+   *
+   * Devolve `false` em qualquer dúvida — preferimos o motor esperar até ao
+   * timeout do que sair cedo demais.
+   */
   try {
-    const text = await popupPage.evaluate(() => {
+    const state = await popupPage.evaluate(() => {
       const s = document.getElementById("status");
-      return s ? s.textContent || "" : "";
+      const text = s ? (s.textContent || "").trim() : "";
+      const fullText = (document.body.innerText || "").trim();
+      const btn = document.querySelector("#startDownload, button.start-download, button[type='submit']");
+      const disabled = btn ? !!btn.disabled : null;
+      return { statusText: text, fullText, disabled };
     });
-    /**
-     * Word boundary (`\b`) é crítico: sem ele, `0\s+notas` apanha o `0` final
-     * de "**10**0 notas encontradas" e o motor sai indevidamente.
-     */
-    return (
-      /\bsem\s+notas\b/i.test(text) ||
-      /\bnenhuma\s+nfs/i.test(text) ||
-      /\b0\s+notas\s+encontradas\b/i.test(text) ||
-      /\bnenhuma\s+nota\s+encontrada\b/i.test(text)
-    );
+    const { statusText, fullText, disabled } = state;
+    if (!statusText && !fullText) return false;
+    const haystack = `${statusText}\n${fullText}`;
+
+    // Sinais de progresso → não está terminado, ignorar.
+    if (
+      /m[êe]s\s+\d+\s+de\s+\d+/i.test(haystack) ||
+      /aguardando\s+pr[oó]ximo/i.test(haystack) ||
+      /baixando|processando|carregando|iniciando/i.test(haystack)
+    ) {
+      return false;
+    }
+
+    // Se o botão ainda está disabled, a extensão ainda está a trabalhar.
+    if (disabled === true) return false;
+
+    // Sinais de conclusão global "sem notas".
+    const concluded =
+      /n[ãa]o\s+(foram\s+)?(encontradas?|h[aá])\s+notas\s+(no\s+per[ií]odo|para\s+o\s+per[ií]odo)/i.test(haystack) ||
+      /nenhuma\s+nota\s+(foi\s+)?(encontrada|emitida|recebida)\s+(no|para\s+o)\s+per[ií]odo/i.test(haystack) ||
+      /(processo|download)\s+(conclu[ií]do|finalizado).*0\s+notas/i.test(haystack) ||
+      /per[ií]odo\s+sem\s+notas/i.test(haystack);
+    return concluded;
   } catch {
     return false;
   }

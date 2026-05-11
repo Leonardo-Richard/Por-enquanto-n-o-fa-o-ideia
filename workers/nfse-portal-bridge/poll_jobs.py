@@ -426,18 +426,25 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
                 )
             finally:
                 _stop_cert_watcher()
+            # Imprime no console do worker as últimas linhas do stderr/stdout do motor
+            # SEMPRE (mesmo em sucesso), porque o motor B emite informação
+            # diagnóstica crítica em stderr (snapshot de Downloads, scan
+            # outputDir, exit_path, etc.) que só vemos aqui. Em caso de falha,
+            # `err_tail` continua a ir truncado para o portal via
+            # MotorExecutionError.
+            tail_for_console = (err_tail or "").strip()
+            if tail_for_console:
+                label = "motor_B stderr/stdout (últimas linhas)"
+                if code == 0:
+                    label = "motor_B stderr (diagnóstico — exit=0)"
+                print(
+                    f"[nfse-portal-bridge] {label}:",
+                    flush=True,
+                )
+                for line in tail_for_console.splitlines()[-60:]:
+                    print(f"    {line}", flush=True)
             if code != 0:
                 job_log(jid, "motor_B", f"falha exit={code} category={cat}")
-                # Imprime no console do worker as últimas linhas do stderr/stdout do motor
-                # (sem tocar no payload PATCH para o portal — `err_tail` continua truncado lá).
-                tail_for_console = (err_tail or "").strip()
-                if tail_for_console:
-                    print(
-                        "[nfse-portal-bridge] motor_B stderr/stdout (últimas linhas):",
-                        flush=True,
-                    )
-                    for line in tail_for_console.splitlines()[-40:]:
-                        print(f"    {line}", flush=True)
                 raise MotorExecutionError(
                     f"Motor Playwright terminou com código {code}.",
                     category=cat,
