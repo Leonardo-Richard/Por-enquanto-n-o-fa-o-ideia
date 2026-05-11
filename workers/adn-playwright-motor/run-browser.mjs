@@ -325,6 +325,26 @@ export async function runBrowserFlow(opts) {
   });
 
   /**
+   * **CRÍTICO**: força o download directory ao nível do Chrome DevTools
+   * Protocol (CDP). O Chromium for Testing IGNORA o
+   * `prefs.download.default_directory` em vários caminhos (incluindo quando
+   * a extensão usa `chrome.downloads.download` com um nome relativo sem
+   * `saveAs`). O CDP `Browser.setDownloadBehavior` é o único caminho que
+   * funciona em TODAS as situações — inclusive para downloads disparados por
+   * extensões.
+   *
+   * Bonus: com `eventsEnabled: true` recebemos `Browser.downloadWillBegin`
+   * e `Browser.downloadProgress`, que nos permitem registar EXACTAMENTE
+   * onde cada ficheiro foi gravado e o seu GUID.
+   *
+   * Aplicamos via `context.newCDPSession()` para uma page qualquer (a
+   * primeira que abrimos a seguir). Mas ANTES disso, precisamos de uma
+   * page para criar a sessão.
+   */
+  const cdpDownloadDir = path.resolve(opts.outputDir);
+  fs.mkdirSync(cdpDownloadDir, { recursive: true });
+
+  /**
    * Lê o ficheiro `Preferences` REAL que o Chrome escreveu após arrancar e
    * imprime o `download.default_directory` que ele acabou por usar. Útil
    * para perceber se o Chrome aceitou a nossa configuração ou se sobrepôs.
@@ -347,6 +367,58 @@ export async function runBrowserFlow(opts) {
   }
 
   const portalPage = await context.newPage();
+
+  /**
+   * Aplica `Browser.setDownloadBehavior` ao browser inteiro via CDP. Funciona
+   * por contexto (não por page), mas precisamos de uma session aberta numa
+   * page para invocar o método `Browser.*`.
+   *
+   * NOTA: este método é case-sensitive para o path no Windows e exige
+   * caminho ABSOLUTO. Já fizemos `path.resolve()` acima.
+   */
+  try {
+    const cdp = await context.newCDPSession(portalPage);
+    await cdp.send("Browser.setDownloadBehavior", {
+      behavior: "allow",
+      downloadPath: cdpDownloadDir,
+      eventsEnabled: true,
+    });
+    process.stderr.write(
+      `[adn-playwright-motor] CDP Browser.setDownloadBehavior aplicado: ` +
+        `downloadPath=${cdpDownloadDir}\n`,
+    );
+    /**
+     * Eventos CDP. `downloadWillBegin` chega quando o download arranca e
+     * tem o GUID + URL + filename sugerido. `downloadProgress` actualiza
+     * com `state` (`inProgress`, `completed`, `canceled`).
+     *
+     * Quando completar, o ficheiro é guardado em
+     * `<downloadPath>/<guid>` (sem extensão!). É EXACTAMENTE o que vemos
+     * no histórico do Chrome (UUIDs sem extensão).
+     */
+    cdp.on("Browser.downloadWillBegin", (event) => {
+      process.stderr.write(
+        `[adn-playwright-motor] CDP downloadWillBegin guid=${event.guid} ` +
+          `suggested=${JSON.stringify(event.suggestedFilename)} ` +
+          `url=${event.url}\n`,
+      );
+    });
+    cdp.on("Browser.downloadProgress", (event) => {
+      if (event.state === "completed" || event.state === "canceled") {
+        process.stderr.write(
+          `[adn-playwright-motor] CDP downloadProgress guid=${event.guid} ` +
+            `state=${event.state} ` +
+            `receivedBytes=${event.receivedBytes} totalBytes=${event.totalBytes}\n`,
+        );
+      }
+    });
+  } catch (e) {
+    process.stderr.write(
+      `[adn-playwright-motor] CDP Browser.setDownloadBehavior FALHOU: ` +
+        `${e?.message || e}\n`,
+    );
+  }
+
   const artifactSince = Date.now() - 10_000;
 
   try {
@@ -784,6 +856,24 @@ function emitFinalDiagnosticSnapshot(outputDir, sinceMs, summary) {
       process.stderr.write(`[diag] ${label} > ${f.path} (${f.size}B)\n`);
     }
   }
+  /**
+   * Busca alargada: quando o caminho oficial falha, procuramos em pastas
+   * adicionais onde o Chrome pode ter caído, para descobrirmos onde os
+   * UUIDs realmente foram parar.
+   */
+  const extra = extendedDownloadSearchDirs().filter(
+    (d) => !places.some(([, p]) => path.resolve(p) === path.resolve(d)),
+  );
+  for (const dirPath of extra) {
+    const recent = snapshotRecentFiles(dirPath, sinceMs, 10);
+    if (recent.length === 0) continue;
+    process.stderr.write(
+      `[diag] EXTRA dir=${dirPath} ficheiros_recentes=${recent.length}\n`,
+    );
+    for (const f of recent.slice(0, 5)) {
+      process.stderr.write(`[diag] EXTRA > ${f.path} (${f.size}B)\n`);
+    }
+  }
 }
 
 /**
@@ -840,6 +930,44 @@ function userDownloadsDir() {
     if (fs.existsSync(c)) return c;
   }
   return null;
+}
+
+/**
+ * Pastas adicionais onde o Chrome pode ter colocado ficheiros (sobretudo
+ * quando o `default_directory` é ignorado). Inclui:
+ *   - Documentos\Downloads, OneDrive\Downloads.
+ *   - User Data\Default\Downloads dos Chromium / Chrome for Testing instalados.
+ *   - Temp paths.
+ *
+ * Não dependemos disto para o fluxo principal — só para diagnóstico final
+ * quando `found=0`, para descobrirmos onde o Chrome guardou.
+ */
+function extendedDownloadSearchDirs() {
+  const set = new Set();
+  const home = process.env.USERPROFILE || process.env.HOME || os.homedir();
+  if (home) {
+    set.add(path.join(home, "Downloads"));
+    set.add(path.join(home, "Documents", "Downloads"));
+    set.add(path.join(home, "OneDrive", "Downloads"));
+    set.add(path.join(home, "OneDrive - Personal", "Downloads"));
+  }
+  const local = process.env.LOCALAPPDATA;
+  if (local) {
+    set.add(path.join(local, "Google", "Chrome for Testing", "User Data", "Default", "Downloads"));
+    set.add(path.join(local, "Google", "Chrome", "User Data", "Default", "Downloads"));
+    set.add(path.join(local, "Chromium", "User Data", "Default", "Downloads"));
+    set.add(path.join(local, "Microsoft", "Edge", "User Data", "Default", "Downloads"));
+    set.add(path.join(local, "Temp"));
+  }
+  const temp = process.env.TEMP || process.env.TMP;
+  if (temp) set.add(temp);
+  return [...set].filter((d) => {
+    try {
+      return fs.existsSync(d) && fs.statSync(d).isDirectory();
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
