@@ -509,9 +509,28 @@ export async function runBrowserFlow(opts) {
     try {
       const semNotas = await popupSaysSemNotas(popupPage);
       if (semNotas) {
-        process.stderr.write(
-          "[adn-playwright-motor] popup sinalizou ausência de notas no período; saindo sem erro.\n",
+        const semNotasStatus = await readPopupStatus(popupPage).catch(
+          () => ({ statusText: "" }),
         );
+        process.stderr.write(
+          "[adn-playwright-motor] popup sinalizou ausência de notas no período; " +
+            `status=${JSON.stringify(semNotasStatus.statusText)} ` +
+            `exit_path=sem_notas xmls=${found} zips_extraidos=${totalZipsIngested} ` +
+            `zips_de_downloads=${totalZipsFromDownloads}\n`,
+        );
+        // Capturar screenshot do popup para o user confirmar visualmente.
+        const semNotasDiag = await capturePopupDiagnostics(
+          popupPage,
+          opts.outputDir,
+        ).catch(() => "(popup diag falhou)");
+        process.stderr.write(`[adn-playwright-motor] ${semNotasDiag}\n`);
+        // Snapshot final dos paths que monitoramos — útil para depurar se de
+        // facto a extensão diz «sem notas» mas há um ZIP esquecido algures.
+        emitFinalDiagnosticSnapshot(opts.outputDir, artifactSince, {
+          totalZipsIngested,
+          totalZipsFromDownloads,
+          found,
+        });
         await context.close().catch(() => {});
         process.exit(0);
       }
@@ -576,37 +595,28 @@ export async function runBrowserFlow(opts) {
 
     await context.close().catch(() => {});
 
-    /**
-     * Snapshot de diagnóstico: listamos qualquer ficheiro recente em outputDir
-     * + Downloads para o `stderr_tail` (consumido pelo worker), facilitando
-     * descobrir se o ZIP caiu fora da pasta esperada ou ficou em `.crdownload`.
-     */
-    const recentOut = snapshotRecentFiles(opts.outputDir, artifactSince);
-    const dlPath = userDownloadsDir();
-    const recentDl = dlPath ? snapshotRecentFiles(dlPath, artifactSince) : [];
     process.stderr.write(
       "STDERR_CAT_EXTENSION Nenhum XML novo na pasta de saida dentro do tempo. " +
-        "Verifique extensao, sessao e ADN_BROWSER_WAIT_ARTIFACTS_SEC.\n" +
-        `[diag] outputDir=${opts.outputDir} ficheiros_recentes=${recentOut.length} ` +
-        `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n` +
+        "Verifique extensao, sessao e ADN_BROWSER_WAIT_ARTIFACTS_SEC. exit_path=timeout\n" +
         `[diag] popup status final: disabled=${finalStatus.buttonDisabled} ` +
         `text=${JSON.stringify(finalStatus.statusText)}\n` +
         `[diag] popup ${popupDiagInfo}\n`,
     );
-    for (const f of recentOut.slice(0, 10)) {
-      process.stderr.write(`[diag] outputDir > ${f.path} (${f.size}B)\n`);
-    }
-    if (dlPath) {
-      process.stderr.write(
-        `[diag] downloadsDir=${dlPath} ficheiros_recentes=${recentDl.length}\n`,
-      );
-      for (const f of recentDl.slice(0, 10)) {
-        process.stderr.write(`[diag] downloads > ${f.path} (${f.size}B)\n`);
-      }
-    }
+    emitFinalDiagnosticSnapshot(opts.outputDir, artifactSince, {
+      found,
+      totalZipsIngested,
+      totalZipsFromDownloads,
+    });
     process.exit(12);
   }
 
+  // Sucesso: snapshot diagnóstico ANTES de fechar o contexto, para sempre
+  // sabermos para onde foi o download (mesmo no caminho feliz).
+  emitFinalDiagnosticSnapshot(opts.outputDir, artifactSince, {
+    found,
+    totalZipsIngested,
+    totalZipsFromDownloads,
+  });
   await context.close().catch(() => {});
 
   dlog(
@@ -654,6 +664,40 @@ function listFilesByExt(dir, sinceMs, extensions) {
     }
   }
   return out;
+}
+
+/**
+ * Emite no stderr um snapshot final dos paths relevantes: `outputDir`,
+ * `Downloads/` do utilizador e perfil do Chrome (caso a extensão tenha gravado
+ * numa subpasta inesperada). Chamado em TODOS os exit paths para que tenhamos
+ * SEMPRE rastreio de onde foi o download.
+ */
+function emitFinalDiagnosticSnapshot(outputDir, sinceMs, summary) {
+  const dl = userDownloadsDir();
+  const profileDir = (process.env.ADN_CHROME_USER_DATA_DIR || "").trim();
+  const places = [
+    ["outputDir", outputDir],
+    dl ? ["downloadsDir", dl] : null,
+    profileDir ? ["chromeProfile", profileDir] : null,
+  ].filter(Boolean);
+  process.stderr.write(
+    `[adn-playwright-motor] snapshot final: xmls=${summary.found || 0} ` +
+      `zips_extraidos=${summary.totalZipsIngested || 0} ` +
+      `zips_de_downloads=${summary.totalZipsFromDownloads || 0}\n`,
+  );
+  for (const [label, dirPath] of places) {
+    if (!fs.existsSync(dirPath)) {
+      process.stderr.write(`[diag] ${label}=${dirPath} (não existe)\n`);
+      continue;
+    }
+    const recent = snapshotRecentFiles(dirPath, sinceMs, 20);
+    process.stderr.write(
+      `[diag] ${label}=${dirPath} ficheiros_recentes=${recent.length}\n`,
+    );
+    for (const f of recent.slice(0, 10)) {
+      process.stderr.write(`[diag] ${label} > ${f.path} (${f.size}B)\n`);
+    }
+  }
 }
 
 /**
@@ -786,6 +830,12 @@ function ingestZipDownloads(outputDir, sinceMs) {
  * Procura ZIPs novos em `Downloads/` do utilizador (fallback caso a extensão
  * tenha ignorado `download.default_directory`). Move-os para `outputDir` e
  * descomprime. Devolve número de ZIPs movidos.
+ *
+ * Heurística: TODOS os ZIPs com mtime >= sinceMs são considerados. Antes
+ * filtrávamos pelo nome (`nfse|notas|emitidas|recebidas`), mas algumas versões
+ * da extensão usam nomes genéricos (e.g., `download.zip`, `arquivos.zip`) que
+ * eram ignorados. Como `sinceMs` é o início do job e o lock `playwright_browser_file_lock`
+ * garante exclusividade, o risco de apanhar ZIP alheio é mínimo.
  */
 function ingestZipsFromUserDownloads(outputDir, sinceMs) {
   const dl = userDownloadsDir();
@@ -809,9 +859,7 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
       continue;
     }
     if (st.mtimeMs < sinceMs) continue;
-    // Heurística: nomes típicos da extensão começam por «NFSe-» / «NFS-e» / contêm CNPJ.
-    const looksLikeNfse = /nfs[-_]?e|nfse|notas|emitidas|recebidas/i.test(ent.name);
-    if (!looksLikeNfse) continue;
+
     const dest = path.join(outputDir, ent.name);
     try {
       fs.copyFileSync(src, dest);
@@ -826,7 +874,9 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
         }
       }
       moved += 1;
-      dlog(`zip movido de Downloads para outputDir: ${ent.name}`);
+      process.stderr.write(
+        `[adn-playwright-motor] zip movido de Downloads para outputDir: ${ent.name} (${st.size}B)\n`,
+      );
     } catch (e) {
       dlog(`falha ao mover ${ent.name} de Downloads: ${e?.message || e}`);
     }
@@ -1062,7 +1112,16 @@ async function popupSaysSemNotas(popupPage) {
       const s = document.getElementById("status");
       return s ? s.textContent || "" : "";
     });
-    return /sem\s+notas|nenhuma\s+nfs|0\s+notas\s+encontradas/i.test(text);
+    /**
+     * Word boundary (`\b`) é crítico: sem ele, `0\s+notas` apanha o `0` final
+     * de "**10**0 notas encontradas" e o motor sai indevidamente.
+     */
+    return (
+      /\bsem\s+notas\b/i.test(text) ||
+      /\bnenhuma\s+nfs/i.test(text) ||
+      /\b0\s+notas\s+encontradas\b/i.test(text) ||
+      /\bnenhuma\s+nota\s+encontrada\b/i.test(text)
+    );
   } catch {
     return false;
   }
