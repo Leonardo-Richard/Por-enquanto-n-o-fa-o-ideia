@@ -160,9 +160,10 @@ export function AdnCertificateReadinessCard({
           />
         ) : (
           <p className="mt-3 text-xs text-black/55 dark:text-white/50">
-            Para mostrar o envio de ficheiro (.pfx / .p12) aqui, active também{" "}
+            O envio de ficheiro (.pfx / .p12) está desactivado neste build. Para voltar a mostrar, remova{" "}
+            <span className="font-mono text-[11px]">NEXT_PUBLIC_CERT_UPLOAD_UI_ENABLED=false</span> ou defina{" "}
             <span className="font-mono text-[11px]">NEXT_PUBLIC_CERT_UPLOAD_UI_ENABLED=true</span> e reinicie o
-            servidor de desenvolvimento.
+            servidor.
           </p>
         )}
         <p className="mt-3 text-xs text-black/55 dark:text-white/50">{SECURITY_NOTE}</p>
@@ -309,15 +310,29 @@ export function AdnCertificateReadinessCard({
         />
       ) : null}
 
-      <p className="mt-3 text-xs text-black/55 dark:text-white/50">{SECURITY_NOTE}</p>
-
-      <p className="mt-2 text-xs text-black/55 dark:text-white/45">
-        A ligação ao Ambiente Nacional usa o certificado da empresa instalado no servidor de recolha — não nesta
-        página.
-      </p>
-      <p className="mt-1 text-xs text-black/55 dark:text-white/45">
-        A sua equipa técnica pode seguir o guia oficial para instalar ou renovar o certificado.
-      </p>
+      {isCertUploadUiEnabled() && data.canVerify ? (
+        <p className="mt-3 text-xs text-black/55 dark:text-white/50">
+          O ficheiro e a palavra-passe são enviados ao servidor de forma segura (não permanecem no browser). O worker
+          no servidor de recolha aplica o material para a ligação ao Ambiente Nacional. Também é possível instalar
+          só no servidor, seguindo o guia técnico.
+        </p>
+      ) : isCertUploadUiEnabled() && !data.canVerify ? (
+        <p className="mt-3 text-xs text-black/55 dark:text-white/50">
+          Apenas administradores da organização podem enviar o certificado por aqui. Para outras contas, a instalação
+          faz-se no servidor de recolha (guia técnico).
+        </p>
+      ) : (
+        <>
+          <p className="mt-3 text-xs text-black/55 dark:text-white/50">{SECURITY_NOTE}</p>
+          <p className="mt-2 text-xs text-black/55 dark:text-white/45">
+            A ligação ao Ambiente Nacional usa o certificado da empresa instalado no servidor de recolha — não nesta
+            página.
+          </p>
+          <p className="mt-1 text-xs text-black/55 dark:text-white/45">
+            A sua equipa técnica pode seguir o guia oficial para instalar ou renovar o certificado.
+          </p>
+        </>
+      )}
 
       {verifyError ? (
         <p className="mt-2 text-xs text-amber-900 dark:text-amber-200" role="alert">
