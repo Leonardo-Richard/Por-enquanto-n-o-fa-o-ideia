@@ -23,6 +23,8 @@
 | `ADN_BROWSER_FETCH_TO` | Motor Node | `YYYY-MM-DD` ou hoje (default). |
 | `ADN_BROWSER_FETCH_DAYS` | Motor Node | Janela em dias a partir de hoje quando `FETCH_FROM` não está definido. Sem default — quando ausente o motor usa `today − 12 meses + 1 dia`. **Limite forçado**: a extensão recusa janelas > 12 meses ("Período máximo permitido: 12 meses"); o motor faz clamp e avisa via stderr. |
 | `ADN_BROWSER_TIPO_NOTA` | Motor Node | `Emitidas` (default) ou `Recebidas`. |
+| `ADN_BROWSER_PERIOD_RETRIES` | Motor Node | Tentativas para encolher a janela quando a extensão recusa por "12 meses" (default 3, 0 desliga). |
+| `ADN_BROWSER_PERIOD_SHRINK_DAYS` | Motor Node | Dias a adicionar ao `from` em cada retry (default 14). |
 | `ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN` | Portal (Next) | Limite GET execuções org (default 60/min). |
 
 ## 2. Rollback instantâneo
@@ -72,16 +74,20 @@ A extensão «Baixar NFSe» recusa qualquer janela superior a **12 meses** com:
 
 > Período máximo permitido: 12 meses. Reduza o período e tente novamente.
 
-O motor calcula automaticamente uma janela segura de **`today − 12 meses + 1 dia`** (≈364 dias). Em 8/5/2026 → de 9/5/2025 a 8/5/2026.
+Empíricamente, a extensão usa contagem em **meses calendário** ou **365 dias estritos** — mesmo janelas de 364 dias (e.g., `2025-05-12 → 2026-05-11`) são recusadas. O motor adopta duas medidas:
 
-Para histórico mais antigo, dispare **jobs separados** com janelas explícitas (e.g., `ADN_BROWSER_FETCH_FROM=2024-01-01` / `ADN_BROWSER_FETCH_TO=2024-12-31`). Em pipeline:
+1. **Janela default conservadora**: `today − 1 ano + 7 dias` (≈358 dias). Em 11/5/2026 → de 18/5/2025 a 11/5/2026.
+
+2. **Retry automático com encolhimento progressivo**: quando o popup mostra `Período máximo permitido: 12 meses` após o click, o motor encolhe o `from` em `ADN_BROWSER_PERIOD_SHRINK_DAYS` (default 14) e tenta de novo, até `ADN_BROWSER_PERIOD_RETRIES` (default 3) tentativas. A janela efectivamente aceite é logada via stderr (`janela efectiva (após retry)`).
+
+Para histórico mais antigo (`>12 meses`), dispare **jobs separados** com janelas explícitas:
 
 ```
 job 1: ADN_BROWSER_FETCH_FROM=2025-01-01 ADN_BROWSER_FETCH_TO=2025-12-31
 job 2: ADN_BROWSER_FETCH_FROM=2024-01-01 ADN_BROWSER_FETCH_TO=2024-12-31
 ```
 
-Quando o motor detecta a mensagem do popup ("Período máximo permitido: 12 meses"), sai cedo com `STDERR_CAT_EXTENSION extensão recusou o pedido (period_over_12_months)` em vez de esperar pelo timeout.
+Quando esgotar todos os retries (caso a janela de 1 ano explícita seja rejeitada e o encolhimento não cubra), o motor sai com `STDERR_CAT_EXTENSION extensão recusou o pedido (period_over_12_months)` + screenshot do popup em `data/<cnpj>/_diag/popup-<ts>.png`.
 
 ## 5. Ingestão de downloads da extensão (ZIP)
 

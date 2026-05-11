@@ -52,15 +52,22 @@ function parseLocalIsoDate(s) {
 }
 
 /**
- * Calcula `to − 12 meses + 1 dia` — o `from` mais antigo que a extensão
- * «Baixar NFSe» aceita ("Período máximo permitido: 12 meses"). Adicionar 1 dia
- * dá margem para casos de borda (e.g., 8/5/2026 − 1 ano = 8/5/2025 pode ser
- * interpretado pela extensão como "12 meses e 1 dia" e rejeitado).
+ * Calcula `to − 1 ano + 7 dias` — `from` mais antigo seguro para a extensão
+ * «Baixar NFSe» ("Período máximo permitido: 12 meses").
+ *
+ * Empíricamente a extensão recusa mesmo janelas de 364 dias (e.g., 12/5/2025
+ * → 11/5/2026), provavelmente usando contagem em meses calendário ou 365 dias
+ * estritos com comparação `>` (não `>=`). Adicionar 7 dias dá margem confortável
+ * (~358 dias = ~11 meses e 24 dias) para qualquer interpretação razoável.
+ *
+ * Cliente que quiser maximizar a janela pode opt-in com `ADN_BROWSER_FETCH_FROM`
+ * explícito; o retry automático em `driveExtensionPopupWithRetry` cobre o caso
+ * em que essa janela explícita ainda é recusada.
  */
 function dateMinus12MonthsSafe(to) {
   const d = new Date(to.getTime());
   d.setFullYear(d.getFullYear() - 1);
-  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + 7);
   return d;
 }
 
@@ -400,8 +407,27 @@ export async function runBrowserFlow(opts) {
    */
   await portalPage.bringToFront();
 
+  let effectiveDateFrom = dateFrom;
+  let periodAcceptedAfterRetry = false;
   try {
-    await driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo });
+    const piloted = await driveExtensionPopupWithRetry(popupPage, {
+      tipoNota,
+      dateFrom,
+      dateTo,
+    });
+    effectiveDateFrom = piloted.dateFrom;
+    if (piloted.dateFrom !== dateFrom) {
+      process.stderr.write(
+        `[adn-playwright-motor] janela efectiva (após retry): ` +
+          `dateFrom=${piloted.dateFrom} dateTo=${piloted.dateTo} (tentativas=${piloted.attempts}).\n`,
+      );
+    }
+    /**
+     * Se o retry levou a uma janela aceite, marcamos a flag — assim a detecção
+     * de `period_over_12_months` no loop principal não dispara falso positivo
+     * caso o popup mantenha texto residual da tentativa anterior.
+     */
+    periodAcceptedAfterRetry = !piloted.blocked;
   } catch (e) {
     await context.close().catch(() => {});
     process.stderr.write(
@@ -496,7 +522,15 @@ export async function runBrowserFlow(opts) {
     /** Atalho: erro bloqueante (período > 12 meses, sessão expirada). */
     try {
       const blockingErr = await popupBlockingError(popupPage);
-      if (blockingErr) {
+      /**
+       * Quando o `driveExtensionPopupWithRetry` já aceitou uma janela menor,
+       * ignoramos `period_over_12_months` residual (a extensão pode manter o
+       * texto antigo no DOM mesmo depois de aceitar a nova janela). Outros
+       * erros bloqueantes (sessão expirada, etc.) continuam a parar o motor.
+       */
+      const shouldIgnore =
+        blockingErr === "period_over_12_months" && periodAcceptedAfterRetry;
+      if (blockingErr && !shouldIgnore) {
         process.stderr.write(
           `[adn-playwright-motor] popup bloqueado: ${blockingErr}; a capturar diagnostics.\n`,
         );
@@ -920,6 +954,59 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
    */
   await popupPage.locator("#startDownloadBtn").click({ force: true, timeout: 10_000 });
   process.stderr.write("[adn-playwright-motor] click em #startDownloadBtn enviado.\n");
+}
+
+/**
+ * Pilota a extensão com **retry automático** se o popup recusar com
+ * `period_over_12_months`. Cada retry encolhe a janela pelo lado do `from` em
+ * N dias (default 14) até a extensão aceitar OU esgotar tentativas.
+ *
+ * Devolve a janela efectivamente aceite (pode ser menor que a pedida) para que
+ * o log e o `summaryJson` reflictam o que o motor realmente buscou.
+ */
+async function driveExtensionPopupWithRetry(popupPage, { tipoNota, dateFrom, dateTo }) {
+  const maxRetries = Math.max(
+    0,
+    Number.parseInt(process.env.ADN_BROWSER_PERIOD_RETRIES || "3", 10) || 3,
+  );
+  const shrinkStepDays = Math.max(
+    1,
+    Number.parseInt(process.env.ADN_BROWSER_PERIOD_SHRINK_DAYS || "14", 10) || 14,
+  );
+
+  let currentFrom = dateFrom;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      process.stderr.write(
+        `[adn-playwright-motor] retry ${attempt}/${maxRetries}: janela anterior recusada, ` +
+          `a tentar dateFrom=${currentFrom} dateTo=${dateTo}.\n`,
+      );
+    }
+    await driveExtensionPopup(popupPage, { tipoNota, dateFrom: currentFrom, dateTo });
+
+    // Pausa curta para o popup processar o click e (eventualmente) mostrar erro.
+    await new Promise((r) => setTimeout(r, 2500));
+    const err = await popupBlockingError(popupPage);
+    if (err !== "period_over_12_months") {
+      return { dateFrom: currentFrom, dateTo, attempts: attempt + 1, blocked: err };
+    }
+    if (attempt === maxRetries) {
+      process.stderr.write(
+        `[adn-playwright-motor] esgotadas ${maxRetries} tentativas de encolher janela; ` +
+          `extensão continua a recusar com period_over_12_months.\n`,
+      );
+      return {
+        dateFrom: currentFrom,
+        dateTo,
+        attempts: attempt + 1,
+        blocked: err,
+      };
+    }
+    const fromD = parseLocalIsoDate(currentFrom);
+    fromD.setDate(fromD.getDate() + shrinkStepDays);
+    currentFrom = fmtIsoDate(fromD);
+  }
+  return { dateFrom: currentFrom, dateTo, attempts: maxRetries + 1 };
 }
 
 /**
