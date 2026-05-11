@@ -120,19 +120,29 @@ def _safe_get_title(win32gui_mod, hwnd: int) -> str:
         return ""
 
 
-def _enum_top_level(win32gui_mod) -> list[tuple[int, str, str]]:
-    """Devolve [(hwnd, title, class)] de janelas top-level visíveis."""
-    found: list[tuple[int, str, str]] = []
+def _enum_top_level(win32gui_mod, include_invisible: bool = False) -> list[tuple[int, str, str, bool]]:
+    """
+    Devolve [(hwnd, title, class, visible)] de janelas top-level.
+
+    Por defeito devolve só as visíveis (compatibilidade); com
+    `include_invisible=True` devolve **todas**, marcando o estado de
+    visibilidade. Útil porque alguns diálogos modais do Chrome
+    («Selecione um certificado») aparecem com `IsWindowVisible=False`
+    durante o flash, e o user pode estar com foco numa thumbnail da
+    taskbar quando o pop-up surge.
+    """
+    found: list[tuple[int, str, str, bool]] = []
 
     def _cb(hwnd: int, _ctx) -> None:
         try:
-            if not win32gui_mod.IsWindowVisible(hwnd):
-                return
+            visible = bool(win32gui_mod.IsWindowVisible(hwnd))
         except Exception:
+            visible = False
+        if not include_invisible and not visible:
             return
         title = _safe_get_title(win32gui_mod, hwnd)
         cls = _safe_get_class(win32gui_mod, hwnd)
-        found.append((hwnd, title, cls))
+        found.append((hwnd, title, cls, visible))
 
     try:
         win32gui_mod.EnumWindows(_cb, None)
@@ -187,13 +197,61 @@ def _post_enter(win32gui_mod, win32con_mod, hwnd: int) -> bool:
 
 
 def _global_enter(win32api_mod, win32con_mod, win32gui_mod, hwnd_focus: int | None) -> bool:
-    """SetForegroundWindow (best-effort) + keybd_event ENTER (input global)."""
+    """
+    Força foco em `hwnd_focus` (melhor esforço) e envia ENTER global.
+
+    Estratégia para vencer as restrições de SetForegroundWindow do Windows
+    (que normalmente requerem input do utilizador):
+
+    1. `ShowWindow(SW_RESTORE)` — caso a janela esteja minimizada.
+    2. `BringWindowToTop` — eleva sem mudar z-order completo.
+    3. **AttachThreadInput hack** — atacha o thread da janela em foreground
+       actual ao thread alvo, o que permite `SetForegroundWindow` funcionar
+       mesmo sem input recente. Depois detacha.
+    4. `SetForegroundWindow` + `SetFocus`.
+    5. `keybd_event` VK_RETURN (down + up).
+    """
     if hwnd_focus is not None:
+        try:
+            win32gui_mod.ShowWindow(hwnd_focus, win32con_mod.SW_RESTORE)
+        except Exception:
+            pass
+        try:
+            win32gui_mod.BringWindowToTop(hwnd_focus)
+        except Exception:
+            pass
+        # AttachThreadInput hack — torna SetForegroundWindow eficaz mesmo
+        # sem input recente do utilizador.
+        attached = False
+        cur_tid = 0
+        tgt_tid = 0
+        try:
+            import win32process  # type: ignore
+
+            cur_hwnd = win32gui_mod.GetForegroundWindow()
+            cur_tid, _ = win32process.GetWindowThreadProcessId(cur_hwnd) if cur_hwnd else (0, 0)
+            tgt_tid, _ = win32process.GetWindowThreadProcessId(hwnd_focus)
+            if cur_tid and tgt_tid and cur_tid != tgt_tid:
+                win32process.AttachThreadInput(cur_tid, tgt_tid, True)
+                attached = True
+        except Exception:
+            pass
         try:
             win32gui_mod.SetForegroundWindow(hwnd_focus)
             time.sleep(0.08)
         except Exception:
             pass
+        try:
+            win32gui_mod.SetFocus(hwnd_focus)
+        except Exception:
+            pass
+        if attached:
+            try:
+                import win32process  # type: ignore
+
+                win32process.AttachThreadInput(cur_tid, tgt_tid, False)
+            except Exception:
+                pass
     try:
         win32api_mod.keybd_event(win32con_mod.VK_RETURN, 0, 0, 0)
         time.sleep(0.05)
@@ -259,19 +317,30 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
     verbose_diag = os.environ.get("ADN_CERT_DIALOG_DIAG_VERBOSE", "1").strip() != "0"
 
     while not stop_event.is_set() and clicks < max_clicks:
-        top = _enum_top_level(win32gui_mod)
+        # Inclui janelas invisíveis no scan — pop-ups modais do Chrome
+        # podem ter `IsWindowVisible=False` momentaneamente, e o ENTER
+        # precisa de ser entregue antes do user/scheduler perder foco.
+        top = _enum_top_level(win32gui_mod, include_invisible=True)
 
         # ---- Camada 1 + 2: procurar diálogo por título OU classe ----
         targets: list[tuple[int, str, str, str]] = []
         chrome_top: list[tuple[int, str, str]] = []
+        nfse_chrome: list[tuple[int, str, str]] = []
         all_visible: list[tuple[int, str, str]] = []
-        for hwnd, title, cls in top:
-            all_visible.append((hwnd, title, cls))
+        for hwnd, title, cls, visible in top:
+            if visible:
+                all_visible.append((hwnd, title, cls))
             if _looks_like_cert_dialog(title, cls):
                 targets.append((hwnd, title, cls, "top-level"))
                 continue
             if _is_chrome_window(cls, title):
                 chrome_top.append((hwnd, title, cls))
+                # Janela do PORTAL NFS-e especificamente — alvo preferido para
+                # SetForegroundWindow + ENTER global, porque o popup interno
+                # do Chrome é child do RenderWidget desta janela.
+                lower_t = (title or "").lower()
+                if "nfs-e" in lower_t or "nfse" in lower_t or "emissornacional" in lower_t:
+                    nfse_chrome.append((hwnd, title, cls))
                 for chwnd, ctitle, ccls in _enum_children(win32gui_mod, hwnd):
                     if _looks_like_cert_dialog(ctitle, ccls):
                         targets.append((chwnd, ctitle, ccls, f"child of {hwnd}"))
@@ -349,12 +418,18 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
                     flush=True,
                 )
 
-        # ---- Camada 3: foreground fallback ----
-        # Quando o título do diálogo NÃO é exposto pela API Win32 (Chromium for
-        # Testing), enviamos ENTER global enquanto o foreground for o Chrome.
-        # Limitado a `ADN_CERT_DIALOG_GLOBAL_MAX` cliques (default 4) para não
-        # interferir com a navegação após login (acções subsequentes não
-        # esperam ENTER global).
+        # ---- Camada 3: forçar foco na janela do NFS-e + ENTER ----
+        # **Crítico**: pop-ups modais do Chrome moderno (Chromium for Testing)
+        # não são janelas Win32 separadas — são Views internos renderizados
+        # dentro do RenderWidget da página NFS-e. Para enviar ENTER que o
+        # Chrome aceite, é preciso que o FOCO esteja na janela do portal —
+        # o `GetForegroundWindow()` pode devolver outra coisa qualquer
+        # (taskbar thumbnail, cmd, file explorer) quando o user/agendamento
+        # mexe noutras janelas.
+        #
+        # Por isso, em vez de confiar no foreground actual, **forçamos** o
+        # foco numa das `nfse_chrome` (preferido) ou `chrome_top` antes
+        # de enviar o ENTER global.
         if (
             global_enter_enabled
             and not targets
@@ -363,27 +438,23 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
             and (now - started_at) >= global_enter_delay
             and (now - last_global_enter) >= global_enter_interval
         ):
-            try:
-                fg_hwnd = win32gui_mod.GetForegroundWindow()
-            except Exception:
-                fg_hwnd = 0
-            if fg_hwnd:
-                fg_cls = _safe_get_class(win32gui_mod, fg_hwnd)
-                fg_title = _safe_get_title(win32gui_mod, fg_hwnd)
-                if _is_chrome_window(fg_cls, fg_title):
-                    last_global_enter = now
-                    if _global_enter(
-                        win32api_mod, win32con_mod, win32gui_mod, fg_hwnd
-                    ):
-                        clicks += 1
-                        global_enter_count += 1
-                        print(
-                            f"[cert-dialog-clicker] foreground keybd_event ENTER "
-                            f"(fg_hwnd={fg_hwnd} cls={fg_cls!r} title={fg_title!r}) "
-                            f"(global={global_enter_count}/{global_enter_max} "
-                            f"clicks={clicks})",
-                            flush=True,
-                        )
+            target_chromes = nfse_chrome or chrome_top
+            if target_chromes:
+                tgt_hwnd, tgt_title, tgt_cls = target_chromes[0]
+                last_global_enter = now
+                if _global_enter(
+                    win32api_mod, win32con_mod, win32gui_mod, tgt_hwnd
+                ):
+                    clicks += 1
+                    global_enter_count += 1
+                    print(
+                        f"[cert-dialog-clicker] forced-focus keybd_event ENTER "
+                        f"(hwnd={tgt_hwnd} cls={tgt_cls!r} title={tgt_title!r} "
+                        f"source={'nfse' if nfse_chrome else 'chrome_top'}) "
+                        f"(global={global_enter_count}/{global_enter_max} "
+                        f"clicks={clicks})",
+                        flush=True,
+                    )
 
         stop_event.wait(0.5)
 
