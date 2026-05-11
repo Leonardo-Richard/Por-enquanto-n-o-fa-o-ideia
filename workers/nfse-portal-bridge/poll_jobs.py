@@ -523,26 +523,58 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
 
     # PASSO B — Upload para o portal. Acontece DEPOIS do espelho local,
     # portanto se falhar (ex.: HTTP 500 do backend) os ficheiros locais já
-    # estão na pasta do utilizador. Ainda assim deixamos a exception subir
-    # para que o job fique marcado como `failed` e seja reprocessado.
-    counts = sync_data_directory(
-        base_url=portal_url,
-        secret=secret,
-        organization_id=oid,
-        company_id=cid,
-        job_id=jid,
-        cnpj=cnpj,
-        nfse_root=nfse,
-        min_xml_mtime_epoch=run_started_epoch,
-    )
-    job_log(
-        jid,
-        "upload",
-        f"concluído: xml={counts['xml']} pdf={counts['pdf']} skipped={counts['skipped']} syntheticKey={counts.get('syntheticKey', 0)}",
-    )
+    # estão na pasta do utilizador. Se o espelho local tiver sucesso (≥ 1
+    # ficheiro gravado), uma falha no upload é tratada como sucesso parcial
+    # — o objectivo principal (XML/PDF na pasta do operador) foi alcançado.
+    mirror_written = int(mirror_summary.get("mirrorWritten", 0) or 0)
+    upload_portal_error: str | None = None
+    try:
+        counts = sync_data_directory(
+            base_url=portal_url,
+            secret=secret,
+            organization_id=oid,
+            company_id=cid,
+            job_id=jid,
+            cnpj=cnpj,
+            nfse_root=nfse,
+            min_xml_mtime_epoch=run_started_epoch,
+        )
+        job_log(
+            jid,
+            "upload",
+            f"concluído: xml={counts['xml']} pdf={counts['pdf']} skipped={counts['skipped']} syntheticKey={counts.get('syntheticKey', 0)}",
+        )
+    except Exception as e_upload:  # noqa: BLE001
+        if mirror_written <= 0:
+            # Nem espelho local nem portal — propaga (job → failed).
+            raise
+        # Espelho local fez o trabalho; apenas registamos o erro de upload e
+        # continuamos para marcar `completed` com flag de sucesso parcial.
+        upload_portal_error = f"{type(e_upload).__name__}: {e_upload!s}"[:500]
+        counts = {"xml": 0, "pdf": 0, "skipped": 0, "syntheticKey": 0}
+        job_log(
+            jid,
+            "upload",
+            (
+                f"FALHOU mas espelho local OK (mirrorWritten={mirror_written}) — "
+                f"job marcado completed em modo localMirrorOnly. Erro: "
+                f"{upload_portal_error}"
+            ),
+        )
+        print(
+            f"[nfse-portal-bridge] upload portal falhou MAS espelho local OK "
+            f"({mirror_written} ficheiros em {mirror_summary.get('mirrorDestinationPath')}); "
+            f"job marcado completed (localMirrorOnly). Erro: {upload_portal_error}",
+            flush=True,
+        )
 
     artifacts_total = counts["xml"] + counts["pdf"]
-    if artifacts_total <= 0 and not skip_nfse_dist and not bool(cert_sync.get("materialized")):
+    if (
+        artifacts_total <= 0
+        and mirror_written <= 0
+        and not skip_nfse_dist
+        and not bool(cert_sync.get("materialized"))
+    ):
         raise NoCompanyArtifactsError(
             "Nenhum XML/PDF da empresa foi encontrado após execução do job e não houve "
             "materialização de certificado a partir do cofre. O job foi marcado como failed."
@@ -565,6 +597,18 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
         "certificateMaterializedReason": str(cert_sync.get("reason") or ""),
         **mirror_summary,
     }
+    if upload_portal_error:
+        # Sinaliza claramente que o portal NÃO recebeu os artefactos, embora
+        # o disco local tenha os ficheiros. Operador deve investigar o
+        # backend (uploads/prepare HTTP 500) — quando resolver, basta
+        # disparar um remirror_job ou novo job que o upload acerta.
+        completed_summary["localMirrorOnly"] = True
+        completed_summary["uploadPortalError"] = upload_portal_error
+        completed_summary["uploadPortalHint"] = (
+            "Os XML/PDF foram gravados no disco do worker (mirrorDestinationPath) "
+            "mas o upload para o portal falhou. Verifique os logs do backend (EasyPanel/Vercel) "
+            "— uploads/prepare devolveu HTTP 500. Quando resolvido, dispare nova sincronização."
+        )
 
     job_log(jid, "portal", "PATCH job=completed (a aplicar resumo no portal…)")
     try:
