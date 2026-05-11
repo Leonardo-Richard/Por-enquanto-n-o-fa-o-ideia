@@ -1369,22 +1369,54 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
 async function clickCertificadoDigitalIfPresent(page) {
   const timeout = 15_000;
   const locators = [
-    page.getByRole("link", { name: /certificado\s+digital/i }),
-    page.getByRole("button", { name: /certificado\s+digital/i }),
-    page.locator("a").filter({ hasText: /certificado\s+digital/i }),
-    page.locator('[href*="certificado" i]').first(),
+    { name: "role=link 'Certificado Digital'", loc: page.getByRole("link", { name: /certificado\s+digital/i }) },
+    { name: "role=button 'Certificado Digital'", loc: page.getByRole("button", { name: /certificado\s+digital/i }) },
+    { name: "a hasText certificado digital", loc: page.locator("a").filter({ hasText: /certificado\s+digital/i }) },
+    { name: "[href*=certificado]", loc: page.locator('[href*="certificado" i]').first() },
+    /**
+     * Variantes adicionais — o portal NFS-e por vezes usa `e-CNPJ`, «Entrar
+     * com certificado digital» ou apenas «Entrar» quando o cert é
+     * obrigatório. Tentamos por ordem decrescente de especificidade.
+     */
+    { name: "role=link 'e-CNPJ'", loc: page.getByRole("link", { name: /e-?cnpj/i }) },
+    { name: "role=button 'Entrar'", loc: page.getByRole("button", { name: /\bentrar\b/i }) },
+    { name: "role=link 'Entrar'", loc: page.getByRole("link", { name: /\bentrar\b/i }) },
   ];
 
-  for (const loc of locators) {
+  for (const { name, loc } of locators) {
     try {
       const first = loc.first();
       await first.waitFor({ state: "visible", timeout: 5000 });
       await first.click({ timeout });
+      process.stderr.write(
+        `[adn-playwright-motor] clickCertificadoDigital: clicado em "${name}".\n`,
+      );
       await new Promise((r) => setTimeout(r, 2000));
       return true;
     } catch {
       /* tentar próximo */
     }
+  }
+
+  /**
+   * Nenhum dos selectores encontrou — captura o conteúdo da página actual
+   * para diagnóstico (URL + título + primeiros 400 chars de texto visível).
+   * Permite saber se o portal mudou ou se a URL já redireccionou para a
+   * Dashboard (caso em que o cert foi auto-aceite).
+   */
+  try {
+    const diag = await page.evaluate(() => ({
+      url: location.href,
+      title: document.title,
+      textSnippet: (document.body?.innerText || "").slice(0, 400),
+    }));
+    process.stderr.write(
+      `[adn-playwright-motor] clickCertificadoDigital: nenhum selector clicável. ` +
+        `url=${diag.url} title=${JSON.stringify(diag.title)} ` +
+        `snippet=${JSON.stringify(diag.textSnippet.replace(/\s+/g, " "))}\n`,
+    );
+  } catch (e) {
+    dlog(`falha a capturar diag clickCertificadoDigital: ${e?.message || e}`);
   }
   return false;
 }
@@ -1394,6 +1426,8 @@ async function clickCertificadoDigitalIfPresent(page) {
  */
 async function waitForAuthenticatedPortal(page, timeoutMs) {
   const start = Date.now();
+  let lastUrl = "";
+  let lastLog = 0;
   while (Date.now() - start < timeoutMs) {
     const url = page.url();
     if (
@@ -1401,6 +1435,20 @@ async function waitForAuthenticatedPortal(page, timeoutMs) {
       !/\/Login/i.test(url)
     ) {
       return;
+    }
+    /**
+     * Periodicamente loga a URL actual para sabermos onde o portal ficou
+     * preso. Permite distinguir entre «pop-up de cert ainda aberto», «página
+     * de login com cert recusado», «erro Cloudflare/portal».
+     */
+    const now = Date.now();
+    if (url !== lastUrl || now - lastLog > 10_000) {
+      lastUrl = url;
+      lastLog = now;
+      process.stderr.write(
+        `[adn-playwright-motor] waitForAuthenticatedPortal: url=${url} ` +
+          `elapsed=${Math.round((now - start) / 1000)}s/${Math.round(timeoutMs / 1000)}s\n`,
+      );
     }
     await new Promise((r) => setTimeout(r, 1500));
   }

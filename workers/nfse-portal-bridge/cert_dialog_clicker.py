@@ -52,10 +52,37 @@ import time
 from typing import Callable
 
 _DIALOG_TITLE_NEEDLES = (
+    # Português Brasil / Portugal
     "selecione um certificado",
+    "selecionar um certificado",
     "selecionar certificado",
-    "select a certificate",
     "selecciona um certificado",
+    "seleccione um certificado",
+    "escolha um certificado",
+    "escolher certificado",
+    "certificado",  # último recurso — muito permissivo, pode dar falso positivo
+    # Inglês
+    "select a certificate",
+    "select certificate",
+    "choose a certificate",
+    "client certificate",
+    # Janelas genéricas onde o cert dialog pode aparecer
+    "segurança do windows",
+    "windows security",
+    "credenciais",
+    "credentials",
+    "autenticação",
+    "authentication required",
+)
+
+# Janelas com estas CLASSES Win32 são fortes candidatas a diálogo de
+# selecção de certificado (mesmo sem título correspondente). O Windows
+# moderno usa Credential Dialog XAML Host para vários picker dialogs;
+# `#32770` é a class genérica de DialogBox Win32 clássicos.
+_CERT_DIALOG_CLASS_NEEDLES = (
+    "credential dialog xaml host",
+    "credui_dialog",
+    "credui",
 )
 
 _CHROME_WIDGET_CLASS_PREFIX = "Chrome_WidgetWin_"
@@ -137,6 +164,18 @@ def _title_matches_cert_dialog(title: str) -> bool:
     return any(needle in lower for needle in _DIALOG_TITLE_NEEDLES)
 
 
+def _class_matches_cert_dialog(cls: str) -> bool:
+    if not cls:
+        return False
+    lower = cls.lower()
+    return any(needle in lower for needle in _CERT_DIALOG_CLASS_NEEDLES)
+
+
+def _looks_like_cert_dialog(title: str, cls: str) -> bool:
+    """Match por título ou por classe — qualquer dos dois conta como hit."""
+    return _title_matches_cert_dialog(title) or _class_matches_cert_dialog(cls)
+
+
 def _post_enter(win32gui_mod, win32con_mod, hwnd: int) -> bool:
     try:
         win32gui_mod.PostMessage(hwnd, win32con_mod.WM_KEYDOWN, win32con_mod.VK_RETURN, 0)
@@ -184,20 +223,22 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
     global_enter_enabled = (
         os.environ.get("ADN_CERT_DIALOG_GLOBAL_ENTER", "1").strip() != "0"
     )
-    # Delay maior (10s) para deixar o Chrome carregar a página de login antes de
+    # Delay inicial (8s) para deixar o Chrome carregar a página de login antes de
     # disparar ENTER global (evita ENTER em campos vazios pré-pop-up).
     global_enter_delay = max(
-        0.0, float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_DELAY", "10") or "10")
+        0.0, float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_DELAY", "8") or "8")
     )
-    # Limite reduzido (2): 1 confirma o cert, 1 retry em caso de cert pop-up
-    # demorar a aparecer. Mais cliques disparam acções no portal/extensão pós
-    # login (campos com foco, submits) e podem quebrar o fluxo.
+    # Limite default 5: o pop-up de cert pode demorar a aparecer e o foreground
+    # nem sempre fica focado nele logo. 5 ENTERs ao longo de ~40s dão mais
+    # chances de confirmar o cert. Após autenticação, o motor sai do loop de
+    # cert (sessão activa) e o watcher só envia mais ENTER se a janela
+    # foreground ainda for do Chrome — risco controlado.
     global_enter_max = max(
-        1, int(os.environ.get("ADN_CERT_DIALOG_GLOBAL_MAX", "2") or "2")
+        1, int(os.environ.get("ADN_CERT_DIALOG_GLOBAL_MAX", "5") or "5")
     )
     global_enter_interval = max(
         0.5,
-        float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC", "5") or "5"),
+        float(os.environ.get("ADN_CERT_DIALOG_GLOBAL_INTERVAL_SEC", "8") or "8"),
     )
 
     started_at = time.time()
@@ -215,26 +256,31 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
         flush=True,
     )
 
+    verbose_diag = os.environ.get("ADN_CERT_DIALOG_DIAG_VERBOSE", "1").strip() != "0"
+
     while not stop_event.is_set() and clicks < max_clicks:
         top = _enum_top_level(win32gui_mod)
 
-        # ---- Camada 1 + 2: procurar diálogo por título ----
+        # ---- Camada 1 + 2: procurar diálogo por título OU classe ----
         targets: list[tuple[int, str, str, str]] = []
         chrome_top: list[tuple[int, str, str]] = []
+        all_visible: list[tuple[int, str, str]] = []
         for hwnd, title, cls in top:
-            if _title_matches_cert_dialog(title):
+            all_visible.append((hwnd, title, cls))
+            if _looks_like_cert_dialog(title, cls):
                 targets.append((hwnd, title, cls, "top-level"))
                 continue
             if _is_chrome_window(cls, title):
                 chrome_top.append((hwnd, title, cls))
                 for chwnd, ctitle, ccls in _enum_children(win32gui_mod, hwnd):
-                    if _title_matches_cert_dialog(ctitle):
+                    if _looks_like_cert_dialog(ctitle, ccls):
                         targets.append((chwnd, ctitle, ccls, f"child of {hwnd}"))
 
         # ---- Diagnóstico periódico ----
         now = time.time()
         if (now - last_diag) >= diag_interval:
             last_diag = now
+            # Sample principal: janelas Chrome/NFSe.
             sample = ", ".join(
                 f"hwnd={h} cls={c!r} title={t!r}"
                 for h, t, c in chrome_top[:6]
@@ -245,6 +291,39 @@ def _watcher_loop(stop_event: threading.Event, max_clicks: int) -> None:
                 f"clicks={clicks} sample=[{sample}]",
                 flush=True,
             )
+            # Sample alargado: TODAS as janelas top-level visíveis com título
+            # não-vazio — útil para descobrir como o pop-up nativo aparece em
+            # ambientes onde o título não bate nos needles. Filtra ruído de
+            # janelas sem título (system trays, ghost windows).
+            if verbose_diag:
+                non_empty = [
+                    (h, t, c)
+                    for h, t, c in all_visible
+                    if (t or "").strip() and not _is_chrome_window(c, t)
+                ]
+                if non_empty:
+                    extra_sample = " | ".join(
+                        f"hwnd={h} cls={c!r} title={t!r}"
+                        for h, t, c in non_empty[:8]
+                    )
+                    print(
+                        f"[cert-dialog-clicker] diag-extra non_chrome_windows="
+                        f"{len(non_empty)} sample=[{extra_sample}]",
+                        flush=True,
+                    )
+            # Foreground window — pode dar pista se o pop-up de cert está focado.
+            try:
+                fg_hwnd_diag = win32gui_mod.GetForegroundWindow()
+            except Exception:
+                fg_hwnd_diag = 0
+            if fg_hwnd_diag:
+                fg_cls_diag = _safe_get_class(win32gui_mod, fg_hwnd_diag)
+                fg_title_diag = _safe_get_title(win32gui_mod, fg_hwnd_diag)
+                print(
+                    f"[cert-dialog-clicker] diag-foreground hwnd={fg_hwnd_diag} "
+                    f"cls={fg_cls_diag!r} title={fg_title_diag!r}",
+                    flush=True,
+                )
 
         # ---- Camadas 1 + 2: ENTER directo nos hwnd com título ----
         for hwnd, title, cls, origin in targets:
