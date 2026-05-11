@@ -23,8 +23,10 @@ Variáveis de ambiente:
   ADN_PLAYWRIGHT_FATIA_ZERO — Opcional; 1 força só XML de teste (sem Playwright)
   NFSE_BRIDGE_SKIP_NFSE_DIST — Se "1", não corre descarga NFSE_dist nem motor Playwright (smoke).
       Recomendação (FR-ADN-B-07): skip ambos os motores de descarga; ver runbook adn-motor-cenario-b.
-  NFSE_LOCAL_MIRROR_ENABLED — Se "1", copia XML/PDF para organizations.local_download_root quando definida (opt-in).
-  NFSE_LOCAL_MIRROR_DISABLED — Se "1", não copia mesmo com ENABLED (prevalece; LM-02A).
+  NFSE_LOCAL_MIRROR_ENABLED — Default LIGADO. Pôr "0" desliga o espelho em disco local (cenários cloud sem disco).
+  NFSE_LOCAL_MIRROR_DISABLED — Se "1", força desligar o espelho (prevalece sobre ENABLED; LM-02A).
+      Política: por defeito copiamos XML/PDF para organizations.local_download_root quando o utilizador
+      configurou a pasta raiz no portal. Se não houver pasta configurada, a etapa é saltada graciosamente.
   ADN_WORKER_INSECURE_SSL — Se "1", desactiva verificação TLS nos pedidos HTTPS do worker (só diagnóstico).
   ADN_CLEAN_STALE_ON_WORKER_START — Se "0", não recupera jobs «running» órfãos ao arrancar. Por omissão "1":
       jobs em running com started_at há mais de ADN_STALE_JOB_HOURS são REPOSTOS para queued (reclaim) para nova tentativa.
@@ -481,14 +483,37 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
     try:
         with psycopg.connect(dsn) as mconn:
             ctx = load_org_mirror_context(mconn, oid, cid)
-        job_log(jid, "espelho_local", "espelho em disco só com NFSE_LOCAL_MIRROR_ENABLED=1 (senão só portal).")
+        # Política nova (cenário B / on-premise): se o utilizador configurou
+        # `local_download_root` no portal, o worker copia os XML/PDF para lá
+        # automaticamente. Só desliga se `NFSE_LOCAL_MIRROR_DISABLED=1` ou
+        # `NFSE_LOCAL_MIRROR_ENABLED=0` (override explícito do operador).
+        mirror_enabled = local_mirror_writes_enabled()
+        mirror_root = (ctx.get("root") or "").strip()
+        if not mirror_enabled:
+            job_log(
+                jid,
+                "espelho_local",
+                "espelho em disco DESLIGADO via env (NFSE_LOCAL_MIRROR_DISABLED=1 ou ENABLED=0); só portal.",
+            )
+        elif not mirror_root:
+            job_log(
+                jid,
+                "espelho_local",
+                "espelho em disco activo mas a organização não tem pasta raiz configurada — só portal.",
+            )
+        else:
+            job_log(
+                jid,
+                "espelho_local",
+                f"espelho em disco activo — destino base: {mirror_root}",
+            )
         mirror_summary = mirror_data_directory_to_local(
             root=ctx.get("root"),
             cnpj_digits=str(ctx.get("cnpj_digits") or cnpj),
             system_code=str(ctx.get("system_code") or ""),
             trade_name=str(ctx.get("trade_name") or ""),
             nfse_root=nfse,
-            disabled_env=not local_mirror_writes_enabled(),
+            disabled_env=not mirror_enabled,
         )
     except Exception as e:  # noqa: BLE001
         print(f"[nfse-portal-bridge] espelho local ignorado após erro: {e!s}", flush=True)

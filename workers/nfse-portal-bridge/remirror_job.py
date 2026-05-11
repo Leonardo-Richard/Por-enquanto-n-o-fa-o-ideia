@@ -49,8 +49,8 @@ def process_remirror_job(job: dict, dsn: str, portal_url: str, secret: str) -> N
             secret,
             oid,
             jid,
-            "Espelho em disco não activo no worker (defina NFSE_LOCAL_MIRROR_ENABLED=1 para regravar em pasta raiz). "
-            "Os ficheiros já estão no portal para descarregar pelo browser.",
+            "Espelho em disco DESLIGADO neste worker (NFSE_LOCAL_MIRROR_DISABLED=1 ou NFSE_LOCAL_MIRROR_ENABLED=0). "
+            "Remova esses overrides para regravar em pasta raiz. Os ficheiros já estão no portal para descarregar pelo browser.",
         )
         return
 
