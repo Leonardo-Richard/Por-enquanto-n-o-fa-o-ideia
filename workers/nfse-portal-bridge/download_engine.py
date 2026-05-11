@@ -160,18 +160,29 @@ def run_playwright_motor_subprocess(
         "--job-id",
         job_id,
     ]
+    # Em Python 3.13 no Windows, `text=True` sem `encoding` usa `cp1252` por defeito,
+    # que falha a decodificar bytes UTF-8 (acentos PT, emojis, HTML capturado do
+    # popup, etc.) com `UnicodeDecodeError` na thread reader do subprocess. Forçamos
+    # `encoding="utf-8"` + `errors="replace"` para que o output seja sempre
+    # decodificável, substituindo bytes inválidos por U+FFFD em vez de explodir.
+    env["PYTHONIOENCODING"] = env.get("PYTHONIOENCODING", "utf-8")
     try:
         proc = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout_sec,
             env=env,
             cwd=str(script.parent),
         )
     except subprocess.TimeoutExpired as e:
         cat = "timeout"
-        err = (e.stderr or "") + "\nSTDERR_CAT_TIMEOUT subprocess.TimeoutExpired"
+        err_stderr = e.stderr
+        if isinstance(err_stderr, bytes):
+            err_stderr = err_stderr.decode("utf-8", errors="replace")
+        err = (err_stderr or "") + "\nSTDERR_CAT_TIMEOUT subprocess.TimeoutExpired"
         return (-9, err, cat)
     except OSError as e:
         return (1, str(e), "unknown")
