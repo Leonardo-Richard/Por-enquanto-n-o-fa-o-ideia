@@ -301,6 +301,51 @@ export async function runBrowserFlow(opts) {
     acceptDownloads: true,
   });
 
+  /**
+   * Hook em downloads. Quando o Playwright vê um download a ser disparado por
+   * uma página normal, dispara este evento. Como a extensão usa
+   * `chrome.downloads.download`, o evento NÃO é disparado, mas se algum dia
+   * for, queremos saber onde caiu. Apenas log — não bloqueamos nem
+   * cancelamos.
+   */
+  context.on("page", (pg) => {
+    pg.on("download", (dl) => {
+      process.stderr.write(
+        `[adn-playwright-motor] event:download url=${dl.url()} ` +
+          `suggested=${dl.suggestedFilename()}\n`,
+      );
+      dl.path()
+        .then((p) => {
+          process.stderr.write(
+            `[adn-playwright-motor] event:download path=${p}\n`,
+          );
+        })
+        .catch(() => {});
+    });
+  });
+
+  /**
+   * Lê o ficheiro `Preferences` REAL que o Chrome escreveu após arrancar e
+   * imprime o `download.default_directory` que ele acabou por usar. Útil
+   * para perceber se o Chrome aceitou a nossa configuração ou se sobrepôs.
+   */
+  try {
+    const prefsPath = path.join(profileDir, "Default", "Preferences");
+    if (fs.existsSync(prefsPath)) {
+      const raw = fs.readFileSync(prefsPath, "utf8");
+      const prefs = JSON.parse(raw);
+      const dlDir = prefs?.download?.default_directory;
+      const prompt = prefs?.download?.prompt_for_download;
+      process.stderr.write(
+        `[adn-playwright-motor] Chrome Preferences pós-launch: ` +
+          `download.default_directory=${JSON.stringify(dlDir)} ` +
+          `prompt_for_download=${prompt}\n`,
+      );
+    }
+  } catch (e) {
+    dlog(`falha a ler Preferences pós-launch: ${e?.message || e}`);
+  }
+
   const portalPage = await context.newPage();
   const artifactSince = Date.now() - 10_000;
 
@@ -902,6 +947,18 @@ function adoptExtensionlessDownloads(outputDir, sinceMs) {
     ".tmp",
   ]);
 
+  /** Contadores de diagnóstico para sabermos o que o scan viu. */
+  const stats = {
+    files: 0,
+    knownExt: 0,
+    olderThanSince: 0,
+    tooSmall: 0,
+    magicXml: 0,
+    magicZip: 0,
+    magicUnknown: 0,
+    samples: /** @type {string[]} */ ([]),
+  };
+
   const stack = [outputDir];
   while (stack.length > 0) {
     const cur = stack.pop();
@@ -914,24 +971,33 @@ function adoptExtensionlessDownloads(outputDir, sinceMs) {
     for (const ent of entries) {
       const full = path.join(cur, ent.name);
       if (ent.isDirectory()) {
-        // Pula subpastas de diagnóstico para não interferir com screenshots.
         if (ent.name === "_diag") continue;
         stack.push(full);
         continue;
       }
+      stats.files += 1;
       const ext = path.extname(ent.name).toLowerCase();
-      if (KNOWN_EXTS.has(ext)) continue;
-      // Sem extensão (ou extensão desconhecida) — verifica magic bytes.
+      if (KNOWN_EXTS.has(ext)) {
+        stats.knownExt += 1;
+        continue;
+      }
       let st;
       try {
         st = fs.statSync(full);
       } catch {
         continue;
       }
-      if (st.mtimeMs < sinceMs) continue;
-      if (st.size < 8) continue;
+      if (st.mtimeMs < sinceMs) {
+        stats.olderThanSince += 1;
+        continue;
+      }
+      if (st.size < 8) {
+        stats.tooSmall += 1;
+        continue;
+      }
       const kind = detectFileKindByMagic(full);
       if (kind === "xml") {
+        stats.magicXml += 1;
         try {
           fs.renameSync(full, `${full}.xml`);
           result.xmlRenamed += 1;
@@ -939,18 +1005,39 @@ function adoptExtensionlessDownloads(outputDir, sinceMs) {
           /* ignore */
         }
       } else if (kind === "zip") {
+        stats.magicZip += 1;
         try {
           fs.renameSync(full, `${full}.zip`);
           result.zipRenamed += 1;
         } catch {
           /* ignore */
         }
+      } else {
+        stats.magicUnknown += 1;
+        if (stats.samples.length < 5) {
+          stats.samples.push(`${ent.name}(${st.size}B)`);
+        }
       }
     }
   }
-  if (result.xmlRenamed > 0 || result.zipRenamed > 0) {
+  /**
+   * Imprime SEMPRE um sumário quando o scan correu, mesmo sem renomeações,
+   * para sabermos se há ficheiros sem extensão dentro do outputDir.
+   */
+  if (
+    stats.files > 0 &&
+    (result.xmlRenamed > 0 ||
+      result.zipRenamed > 0 ||
+      stats.magicUnknown > 0 ||
+      process.env.ADN_BROWSER_DEBUG === "1")
+  ) {
     process.stderr.write(
-      `[adn-playwright-motor] adoptados ficheiros sem extensão: xml=${result.xmlRenamed} zip=${result.zipRenamed}\n`,
+      `[adn-playwright-motor] scan outputDir: total=${stats.files} ` +
+        `knownExt=${stats.knownExt} older=${stats.olderThanSince} ` +
+        `tooSmall=${stats.tooSmall} magic_xml=${stats.magicXml} ` +
+        `magic_zip=${stats.magicZip} magic_unknown=${stats.magicUnknown}` +
+        (stats.samples.length > 0 ? ` samples=${stats.samples.join(",")}` : "") +
+        ` renamed_xml=${result.xmlRenamed} renamed_zip=${result.zipRenamed}\n`,
     );
   }
   return result;
@@ -977,10 +1064,39 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
     return 0;
   }
   let moved = 0;
+  /**
+   * Contadores de diagnóstico, para sabermos exactamente quantos ficheiros há
+   * na pasta `Downloads` em cada scan e quantos foram aceites/recusados.
+   */
+  const stats = {
+    totalEntries: 0,
+    olderThanSince: 0,
+    extZip: 0,
+    extXml: 0,
+    extlessXml: 0,
+    extlessZip: 0,
+    extlessUnknown: 0,
+    knownExtSkipped: 0,
+    samples: /** @type {string[]} */ ([]),
+  };
+
+  const KNOWN_EXTS_SKIP = new Set([
+    ".pdf",
+    ".processed",
+    ".json",
+    ".crdownload",
+    ".png",
+    ".html",
+    ".txt",
+    ".tmp",
+    ".adn-imported",
+  ]);
+
   for (const ent of entries) {
     if (!ent.isFile()) continue;
+    stats.totalEntries += 1;
     const lower = ent.name.toLowerCase();
-    if (!lower.endsWith(".zip")) continue;
+    const ext = path.extname(lower);
     const src = path.join(dl, ent.name);
     let st;
     try {
@@ -988,12 +1104,70 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
     } catch {
       continue;
     }
-    if (st.mtimeMs < sinceMs) continue;
+    if (st.mtimeMs < sinceMs) {
+      stats.olderThanSince += 1;
+      continue;
+    }
 
-    const dest = path.join(outputDir, ent.name);
+    /**
+     * Decide o que fazer com o ficheiro:
+     *   - .zip → mover.
+     *   - .xml → mover (a extensão pode entregar XML individuais).
+     *   - sem extensão (UUID puro como `abdc8cef-...`) → magic-detect e
+     *     mover renomeado para `.zip` ou `.xml` conforme o caso. Este é
+     *     o caso real visto nos screenshots do utilizador.
+     *   - extensões conhecidas não-úteis → skip.
+     */
+    let destBaseName = ent.name;
+    let kind = null;
+
+    if (ext === ".zip") {
+      stats.extZip += 1;
+      kind = "zip";
+    } else if (ext === ".xml") {
+      stats.extXml += 1;
+      kind = "xml";
+    } else if (ext === "" || /^\.[0-9a-f-]{6,}$/i.test(ext)) {
+      // Sem extensão ou extensão que parece ser parte de UUID (caso o split
+      // em ponto tenha confundido).
+      const magic = detectFileKindByMagic(src);
+      if (magic === "zip") {
+        stats.extlessZip += 1;
+        kind = "zip";
+        destBaseName = `${ent.name}.zip`;
+      } else if (magic === "xml") {
+        stats.extlessXml += 1;
+        kind = "xml";
+        destBaseName = `${ent.name}.xml`;
+      } else {
+        stats.extlessUnknown += 1;
+        if (stats.samples.length < 5) {
+          stats.samples.push(`${ent.name}(${st.size}B,magic=?)`);
+        }
+        continue;
+      }
+    } else if (KNOWN_EXTS_SKIP.has(ext)) {
+      stats.knownExtSkipped += 1;
+      continue;
+    } else {
+      // Extensão desconhecida — ainda assim tenta magic-detect.
+      const magic = detectFileKindByMagic(src);
+      if (magic === "zip") {
+        stats.extlessZip += 1;
+        kind = "zip";
+        destBaseName = `${ent.name}.zip`;
+      } else if (magic === "xml") {
+        stats.extlessXml += 1;
+        kind = "xml";
+        destBaseName = `${ent.name}.xml`;
+      } else {
+        continue;
+      }
+    }
+
+    const dest = path.join(outputDir, destBaseName);
     try {
       fs.copyFileSync(src, dest);
-      // Tenta apagar o original para não re-processar; se falhar, marca-o.
       try {
         fs.unlinkSync(src);
       } catch {
@@ -1005,11 +1179,33 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
       }
       moved += 1;
       process.stderr.write(
-        `[adn-playwright-motor] zip movido de Downloads para outputDir: ${ent.name} (${st.size}B)\n`,
+        `[adn-playwright-motor] ${kind} movido de Downloads para outputDir: ` +
+          `${ent.name} -> ${destBaseName} (${st.size}B)\n`,
       );
     } catch (e) {
       dlog(`falha ao mover ${ent.name} de Downloads: ${e?.message || e}`);
     }
+  }
+
+  /**
+   * Log de scan SEMPRE (mesmo quando moved=0) para sabermos:
+   *   - se a pasta tem ou não ficheiros recentes,
+   *   - quantos foram recusados e porquê,
+   *   - amostra de UUIDs sem extensão e seu magic-byte resultado.
+   */
+  if (
+    stats.totalEntries > 0 &&
+    (process.env.ADN_BROWSER_DEBUG === "1" || moved === 0)
+  ) {
+    process.stderr.write(
+      `[adn-playwright-motor] scan ~/Downloads: total=${stats.totalEntries} ` +
+        `older=${stats.olderThanSince} ` +
+        `zip=${stats.extZip} xml=${stats.extXml} ` +
+        `extless_xml=${stats.extlessXml} extless_zip=${stats.extlessZip} ` +
+        `extless_unknown=${stats.extlessUnknown} skipped=${stats.knownExtSkipped}` +
+        (stats.samples.length > 0 ? ` samples=${stats.samples.join(",")}` : "") +
+        ` moved=${moved}\n`,
+    );
   }
   return moved;
 }
