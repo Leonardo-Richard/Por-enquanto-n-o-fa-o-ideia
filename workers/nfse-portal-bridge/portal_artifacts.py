@@ -67,7 +67,32 @@ def upload_file(
         "contentType": content_type,
         "kind": kind,
     }
-    prep = internal_json_post(base_url, secret, "/api/internal/v1/adn/uploads/prepare", prep_body)
+    # Diagnóstico: quando o portal responde HTTP 500 (mensagem genérica
+    # "Erro interno do servidor") perdemos o detalhe real. Imprimimos os
+    # campos relevantes do prep_body ANTES de chamar o portal, para que o
+    # log do worker mostre o que estava a ser enviado e seja possível
+    # cruzar com os logs do backend (EasyPanel/Vercel).
+    if os.environ.get("ADN_UPLOAD_DEBUG", "1").strip() != "0":
+        try:
+            print(
+                f"[nfse-portal-bridge] uploads/prepare body: kind={kind} "
+                f"accessKey={access_key} (len={len(access_key)}) "
+                f"sha256={sha} contentType={content_type} "
+                f"contentSize={len(content)}B",
+                flush=True,
+            )
+        except Exception:
+            pass
+    try:
+        prep = internal_json_post(base_url, secret, "/api/internal/v1/adn/uploads/prepare", prep_body)
+    except RuntimeError as e:
+        # Anota a chave de acesso e o tamanho do conteúdo no erro para
+        # facilitar o diagnóstico — permite saber QUAL nota falhou, não só
+        # o código HTTP genérico.
+        raise RuntimeError(
+            f"{e}\n[contexto] accessKey={access_key} kind={kind} "
+            f"sha256={sha} contentSize={len(content)}B"
+        ) from e
     upload_url = prep.get("uploadUrl")
     draft_id = prep.get("artifactDraftId")
     if not upload_url or not draft_id:
