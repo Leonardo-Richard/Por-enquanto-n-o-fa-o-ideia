@@ -23,6 +23,7 @@
 | `ADN_BROWSER_FETCH_TO` | Motor Node | `YYYY-MM-DD` ou hoje (default). |
 | `ADN_BROWSER_FETCH_DAYS` | Motor Node | Janela em dias a partir de hoje quando `FETCH_FROM` não está definido. Sem default — quando ausente o motor usa `today − 12 meses + 1 dia`. **Limite forçado**: a extensão recusa janelas > 12 meses ("Período máximo permitido: 12 meses"); o motor faz clamp e avisa via stderr. |
 | `ADN_BROWSER_TIPO_NOTA` | Motor Node | `Emitidas` (default) ou `Recebidas`. |
+| `ADN_BROWSER_COMPACT_ZIP` | Motor Node | `1` (default) liga a opção «Compactar em .zip» no popup da extensão para que esta entregue **um único ZIP** com todos os XML. `0` deixa a extensão entregar XMLs individuais (ficheiros com nome UUID sem extensão `.xml`, que o motor depois renomeia automaticamente). |
 | `ADN_BROWSER_PERIOD_RETRIES` | Motor Node | Tentativas para encolher a janela quando a extensão recusa por "12 meses" (default 3, 0 desliga). |
 | `ADN_BROWSER_PERIOD_SHRINK_DAYS` | Motor Node | Dias a adicionar ao `from` em cada retry (default 14). |
 | `ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN` | Portal (Next) | Limite GET execuções org (default 60/min). |
@@ -89,14 +90,22 @@ job 2: ADN_BROWSER_FETCH_FROM=2024-01-01 ADN_BROWSER_FETCH_TO=2024-12-31
 
 Quando esgotar todos os retries (caso a janela de 1 ano explícita seja rejeitada e o encolhimento não cubra), o motor sai com `STDERR_CAT_EXTENSION extensão recusou o pedido (period_over_12_months)` + screenshot do popup em `data/<cnpj>/_diag/popup-<ts>.png`.
 
-## 5. Ingestão de downloads da extensão (ZIP)
+## 5. Ingestão de downloads da extensão (ZIP + XMLs sem extensão)
 
-A extensão «Baixar NFSe» entrega os XML dentro de **um ZIP** (raramente, XMLs soltos). O motor (`run-browser.mjs`) faz, em cada iteração do loop de espera:
+A extensão «Baixar NFSe» pode entregar os artefactos em **dois modos**:
 
-1. Move ZIPs novos do `~/Downloads` do utilizador para `--output-dir` quando o nome bate em `/nfs[-_]?e|notas|emitidas|recebidas/i` (fallback caso a extensão ignore o `download.default_directory`).
-2. Descomprime cada ZIP novo em `--output-dir/<zipBaseName>/` (Windows: `Expand-Archive`; com fallback `tar -xf`. Linux: `unzip`).
-3. Renomeia o ZIP processado para `<orig>.processed` (idempotência inter-iterações).
-4. Procura `.xml` novos recursivamente (apenas mtime ≥ início do job).
+1. **Compactar em .zip = ON** (default deste motor, via `ADN_BROWSER_COMPACT_ZIP=1`): um único `*.zip` com todos os XML lá dentro. Recomendado — facilita a ingestão.
+2. **Compactar em .zip = OFF**: a extensão dispara `chrome.downloads.download` para **cada XML individual** com o nome igual ao UUID do ficheiro **sem extensão** (ex.: `40344be2-2789-4dfb-9774-df2093ff7c75`, 9 KB). Depois apaga-os após processar (os 3 primeiros ficam «Removido» no histórico do Chrome). Este é o caso onde, na prática, o `outputDir` ficava vazio.
+
+O motor (`run-browser.mjs`) faz, em cada iteração do loop de espera:
+
+1. **`adoptExtensionlessDownloads`** — lê os primeiros 64 bytes de cada ficheiro sem extensão em `--output-dir` e:
+   - se começar por `<?xml` (ou `<` após BOM): renomeia para `<orig>.xml`,
+   - se começar por `PK\x03\x04`: renomeia para `<orig>.zip` (descomprimido no passo seguinte).
+2. **`ingestZipsFromUserDownloads`** — move ZIPs novos do `~/Downloads` do utilizador para `--output-dir` (fallback caso a extensão ignore o `download.default_directory`). Heurística permissiva: qualquer `*.zip` com mtime ≥ início do job.
+3. **`ingestZipDownloads`** — descomprime cada ZIP novo em `--output-dir/<zipBaseName>/` (Windows: `Expand-Archive`; com fallback `tar -xf`. Linux: `unzip`). Renomeia o ZIP para `<orig>.processed` (idempotência).
+4. **`adoptExtensionlessDownloads` (2.ª passagem)** — caso o ZIP contivesse XMLs ainda sem extensão.
+5. **`listNewXmlFilesRecursive`** — procura `.xml` novos recursivamente (apenas mtime ≥ início do job).
 
 Se ao fim do timer (`ADN_BROWSER_WAIT_ARTIFACTS_SEC`) ainda não houver `.xml`, o motor faz um snapshot diagnóstico para o `stderr_tail`:
 

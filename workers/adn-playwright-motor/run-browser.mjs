@@ -457,6 +457,13 @@ export async function runBrowserFlow(opts) {
   const statusLogInterval = 15_000;
 
   while (Date.now() < deadline) {
+    // Adopta ficheiros sem extensão (UUIDs puros) ANTES de tudo — renomeia
+    // XMLs individuais para `.xml` e ZIPs para `.zip` para o resto do pipeline.
+    const adopted = adoptExtensionlessDownloads(opts.outputDir, artifactSince);
+    if (adopted.xmlRenamed > 0 || adopted.zipRenamed > 0) {
+      lastChange = Date.now();
+    }
+
     const movedFromDl = ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
     if (movedFromDl > 0) {
       totalZipsFromDownloads += movedFromDl;
@@ -574,9 +581,15 @@ export async function runBrowserFlow(opts) {
     await new Promise((r) => setTimeout(r, 2000));
   }
 
-  // Última passagem para apanhar ZIPs que cheguem no fim do timer.
+  // Última passagem para apanhar ficheiros que cheguem no fim do timer:
+  //   1) renomear UUIDs sem extensão para .xml / .zip,
+  //   2) puxar ZIPs do `~/Downloads`,
+  //   3) descomprimir ZIPs novos,
+  //   4) recontar XMLs.
+  adoptExtensionlessDownloads(opts.outputDir, artifactSince);
   totalZipsFromDownloads += ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
   totalZipsIngested += ingestZipDownloads(opts.outputDir, artifactSince);
+  adoptExtensionlessDownloads(opts.outputDir, artifactSince);
   found = listNewXmlFilesRecursive(opts.outputDir, artifactSince).length;
 
   if (found === 0) {
@@ -827,6 +840,123 @@ function ingestZipDownloads(outputDir, sinceMs) {
 }
 
 /**
+ * Lê os primeiros bytes de `filePath` e devolve a "magic kind":
+ *   - `"xml"` se começa por `<?xml` ou `<` (XML, com ou sem BOM).
+ *   - `"zip"` se começa por `PK\x03\x04` (ZIP local file header).
+ *   - `null` para outros casos (PDF, lixo, etc.).
+ */
+function detectFileKindByMagic(filePath) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "r");
+    const buf = Buffer.alloc(64);
+    const n = fs.readSync(fd, buf, 0, 64, 0);
+    if (n <= 0) return null;
+    const head = buf.subarray(0, n);
+    // ZIP: 50 4B 03 04 (PK..)
+    if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) {
+      return "zip";
+    }
+    // BOM utf-8: EF BB BF
+    let offset = 0;
+    if (head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf) offset = 3;
+    const text = head.subarray(offset).toString("utf8").trimStart();
+    if (text.startsWith("<?xml") || text.startsWith("<")) return "xml";
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/**
+ * Apanha ficheiros sem extensão (e.g., UUID puro, como a extensão «Baixar
+ * NFSe» grava XMLs individuais) e:
+ *   - se forem XML: renomeia para `<name>.xml` para o `listNewXmlFilesRecursive` os apanhar.
+ *   - se forem ZIP: renomeia para `<name>.zip` (o ciclo seguinte descomprime).
+ *
+ * Devolve `{ xmlRenamed, zipRenamed }`. Ignora ficheiros que já têm extensão
+ * conhecida (`.xml`, `.pdf`, `.zip`, `.processed`, `.json`, `.crdownload`).
+ */
+function adoptExtensionlessDownloads(outputDir, sinceMs) {
+  const result = { xmlRenamed: 0, zipRenamed: 0 };
+  if (!fs.existsSync(outputDir)) return result;
+
+  const KNOWN_EXTS = new Set([
+    ".xml",
+    ".pdf",
+    ".zip",
+    ".processed",
+    ".json",
+    ".crdownload",
+    ".png",
+    ".html",
+    ".txt",
+    ".tmp",
+  ]);
+
+  const stack = [outputDir];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of entries) {
+      const full = path.join(cur, ent.name);
+      if (ent.isDirectory()) {
+        // Pula subpastas de diagnóstico para não interferir com screenshots.
+        if (ent.name === "_diag") continue;
+        stack.push(full);
+        continue;
+      }
+      const ext = path.extname(ent.name).toLowerCase();
+      if (KNOWN_EXTS.has(ext)) continue;
+      // Sem extensão (ou extensão desconhecida) — verifica magic bytes.
+      let st;
+      try {
+        st = fs.statSync(full);
+      } catch {
+        continue;
+      }
+      if (st.mtimeMs < sinceMs) continue;
+      if (st.size < 8) continue;
+      const kind = detectFileKindByMagic(full);
+      if (kind === "xml") {
+        try {
+          fs.renameSync(full, `${full}.xml`);
+          result.xmlRenamed += 1;
+        } catch {
+          /* ignore */
+        }
+      } else if (kind === "zip") {
+        try {
+          fs.renameSync(full, `${full}.zip`);
+          result.zipRenamed += 1;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  if (result.xmlRenamed > 0 || result.zipRenamed > 0) {
+    process.stderr.write(
+      `[adn-playwright-motor] adoptados ficheiros sem extensão: xml=${result.xmlRenamed} zip=${result.zipRenamed}\n`,
+    );
+  }
+  return result;
+}
+
+/**
  * Procura ZIPs novos em `Downloads/` do utilizador (fallback caso a extensão
  * tenha ignorado `download.default_directory`). Move-os para `outputDir` e
  * descomprime. Devolve número de ZIPs movidos.
@@ -977,6 +1107,72 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
       r.dispatchEvent(new Event("change", { bubbles: true }));
     }
   });
+
+  /**
+   * **CRÍTICO**: liga a opção "Compactar em .zip". Caso contrário, a extensão
+   * baixa **um XML individual por nota** (com nome UUID sem extensão `.xml`)
+   * e depois apaga-os após zipar (alguns ficam «Removido» no histórico do
+   * Chrome), deixando o `outputDir` sem nada que o motor possa apanhar.
+   *
+   * Com `compactZip=true`, a extensão entrega **um único ZIP** com todos os
+   * XMLs lá dentro — o nosso `ingestZipDownloads` descomprime e o motor
+   * acha os XML normalmente.
+   *
+   * Pode ser desligado por `ADN_BROWSER_COMPACT_ZIP=0` (não recomendado).
+   */
+  const compactZip = process.env.ADN_BROWSER_COMPACT_ZIP !== "0";
+  if (compactZip) {
+    const compactResult = await popupPage.evaluate(() => {
+      /**
+       * O checkbox pode ter id, name ou label diferente conforme a versão da
+       * extensão. Tentamos vários selectores antes de desistir.
+       */
+      const candidates = [
+        '#compactZip',
+        '#compactarZip',
+        '#zip',
+        'input[type="checkbox"][name*="zip" i]',
+        'input[type="checkbox"][id*="zip" i]',
+        'input[type="checkbox"][id*="compact" i]',
+      ];
+      for (const sel of candidates) {
+        const el = document.querySelector(sel);
+        if (el && el.type === "checkbox") {
+          if (!el.checked) {
+            el.checked = true;
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          return { selector: sel, checked: el.checked };
+        }
+      }
+      /**
+       * Fallback: procura por label contendo «compactar» / «zip» e clica no
+       * checkbox associado.
+       */
+      const labels = Array.from(document.querySelectorAll("label"));
+      for (const lbl of labels) {
+        const txt = (lbl.textContent || "").toLowerCase();
+        if (txt.includes("compactar") || txt.includes("em .zip") || txt.includes("em zip")) {
+          const cb =
+            lbl.querySelector('input[type="checkbox"]') ||
+            (lbl.htmlFor && document.getElementById(lbl.htmlFor));
+          if (cb && cb.type === "checkbox") {
+            if (!cb.checked) {
+              cb.checked = true;
+              cb.dispatchEvent(new Event("input", { bubbles: true }));
+              cb.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            return { selector: `label:"${(lbl.textContent || "").trim()}"`, checked: cb.checked };
+          }
+        }
+      }
+      return { selector: null, checked: false };
+    });
+    process.stderr.write(
+      `[adn-playwright-motor] compactar-em-zip: selector=${JSON.stringify(compactResult.selector)} checked=${compactResult.checked}\n`,
+    );
+  }
 
   /** Snapshot inicial do estado do popup (#status, disabled state do botão). */
   const initial = await popupPage.evaluate(() => {
