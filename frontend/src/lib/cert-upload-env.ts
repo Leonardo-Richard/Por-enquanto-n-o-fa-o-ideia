@@ -1,6 +1,13 @@
-/** API de upload só activa quando explicitamente ligada (defesa em profundidade). */
+/**
+ * API de registo de certificado (GET/POST/DELETE …/certificate).
+ * Por omissão está activa; defina `CERT_UPLOAD_API_ENABLED=false` para desactivar (ex.: ambientes muito restritos).
+ */
 export function isCertUploadApiEnabled(): boolean {
-  return process.env.CERT_UPLOAD_API_ENABLED === "true";
+  const v = process.env.CERT_UPLOAD_API_ENABLED?.trim().toLowerCase();
+  if (v === "false" || v === "0") {
+    return false;
+  }
+  return true;
 }
 
 export function getCertUploadMaxBytes(): number {

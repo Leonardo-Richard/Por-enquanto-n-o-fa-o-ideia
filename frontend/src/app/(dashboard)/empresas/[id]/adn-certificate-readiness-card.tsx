@@ -131,7 +131,8 @@ export function AdnCertificateReadinessCard({
         </h3>
         <p className="mt-2 text-sm text-black/75 dark:text-white/70">
           O portal não encontrou o endpoint de verificação de certificado neste ambiente (por exemplo, a API de
-          registo ainda desactivada no processo Node). Defina{" "}
+          registo desactivada no processo Node). Remova{" "}
+          <span className="font-mono text-[11px] sm:text-xs">CERT_UPLOAD_API_ENABLED=false</span> ou defina{" "}
           <span className="font-mono text-[11px] sm:text-xs">CERT_UPLOAD_API_ENABLED=true</span> no ficheiro{" "}
           <span className="font-mono text-[11px] sm:text-xs">.env</span> na raiz do repositório ou em{" "}
           <span className="font-mono text-[11px] sm:text-xs">frontend/.env.local</span>, guarde e reinicie o{" "}

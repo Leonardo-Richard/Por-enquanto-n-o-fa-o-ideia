@@ -36,7 +36,7 @@ export type AdnOrganizationAccessContext = {
 export type ResolveAdnPublicAccessOptions = {
   /**
    * Quando `false`, não exige `organizations.adnSyncEnabled` (ex.: registo de certificado
-   * com `CERT_UPLOAD_API_ENABLED` antes de activar a fila ADN na organização).
+   * pelo portal com a API de upload activa — por omissão — antes de activar a fila ADN na organização).
    * Default: `true` (comportamento original para sync, artefactos, etc.).
    */
   requireOrgAdnSyncEnabled?: boolean;

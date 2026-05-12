@@ -156,9 +156,9 @@ export function AdnCertificateRegistrationForm({
 
       {certApiAvailable === false ? (
         <p className="mt-2 text-xs text-black/60 dark:text-white/50" role="status">
-          O registo de certificado pelo portal não está activo neste ambiente (API). Peça à equipa técnica
-          para activar <span className="font-mono">CERT_UPLOAD_API_ENABLED</span> ou use o guia do servidor de
-          recolha.
+          O registo de certificado pelo portal está desactivado neste ambiente (o servidor responde 404 ao endpoint).
+          Peça à equipa técnica para remover <span className="font-mono">CERT_UPLOAD_API_ENABLED=false</span> ou use o
+          guia do servidor de recolha.
         </p>
       ) : null}
 

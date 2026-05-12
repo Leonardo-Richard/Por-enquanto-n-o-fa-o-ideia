@@ -692,7 +692,7 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
 
   it("GET certificate-readiness com ADN desactivado na organização e API de upload desactivada → 404", async () => {
     const prevCertApi = process.env.CERT_UPLOAD_API_ENABLED;
-    delete process.env.CERT_UPLOAD_API_ENABLED;
+    process.env.CERT_UPLOAD_API_ENABLED = "false";
     try {
       vi.mocked(getAuthedSession).mockResolvedValue({
         user: {
@@ -1064,40 +1064,43 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
       clearCertUploadVaultMockForTests();
     });
 
-    it("sem CERT_UPLOAD_API_ENABLED → 404", async () => {
+    it("com CERT_UPLOAD_API_ENABLED=false → 404", async () => {
       const prev = process.env.CERT_UPLOAD_API_ENABLED;
-      delete process.env.CERT_UPLOAD_API_ENABLED;
-      vi.mocked(getAuthedSession).mockResolvedValue({
-        user: {
-          id: ids.adminOn,
-          email: "a@b",
-          name: "Admin On",
-          emailVerified: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          image: null,
-          isSuperadmin: false,
-        },
-        session: {
-          id: "s-cert-off",
-          userId: ids.adminOn,
-          expiresAt: new Date(),
-          token: "t",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          activeCompanyId: ids.companyOn,
-          activeOrganizationId: ids.orgOn,
-        },
-      } as Awaited<ReturnType<typeof getAuthedSession>>);
+      process.env.CERT_UPLOAD_API_ENABLED = "false";
+      try {
+        vi.mocked(getAuthedSession).mockResolvedValue({
+          user: {
+            id: ids.adminOn,
+            email: "a@b",
+            name: "Admin On",
+            emailVerified: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            image: null,
+            isSuperadmin: false,
+          },
+          session: {
+            id: "s-cert-off",
+            userId: ids.adminOn,
+            expiresAt: new Date(),
+            token: "t",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            activeCompanyId: ids.companyOn,
+            activeOrganizationId: ids.orgOn,
+          },
+        } as Awaited<ReturnType<typeof getAuthedSession>>);
 
-      const res = await getCompanyCertificate(new Request("http://test/"), {
-        params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
-      });
-      expect(res.status).toBe(404);
-      if (prev === undefined) {
-        delete process.env.CERT_UPLOAD_API_ENABLED;
-      } else {
-        process.env.CERT_UPLOAD_API_ENABLED = prev;
+        const res = await getCompanyCertificate(new Request("http://test/"), {
+          params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+        });
+        expect(res.status).toBe(404);
+      } finally {
+        if (prev === undefined) {
+          delete process.env.CERT_UPLOAD_API_ENABLED;
+        } else {
+          process.env.CERT_UPLOAD_API_ENABLED = prev;
+        }
       }
     });
 
