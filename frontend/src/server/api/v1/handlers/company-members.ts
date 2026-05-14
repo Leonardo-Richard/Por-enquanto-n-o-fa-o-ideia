@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { companies, companyMemberships, user } from "@repo/db";
 import { memberPostBodySchema, membersQuerySchema } from "@repo/shared";
 import { auth } from "@/lib/auth";
+import { ORG_ADMIN_PROVISIONED_VERSION } from "@/lib/legal-documents";
 import { getDb } from "@/lib/db";
 import { canManageUsers } from "@/lib/authz";
 import { insertAuditEvent } from "@/lib/audit";
@@ -136,6 +137,7 @@ export async function handlePostCompanyMembers(request: Request, companyId: stri
           name: body.name.trim(),
           email,
           password: body.password,
+          legalDocumentVersion: ORG_ADMIN_PROVISIONED_VERSION,
         },
         headers: request.headers,
       });

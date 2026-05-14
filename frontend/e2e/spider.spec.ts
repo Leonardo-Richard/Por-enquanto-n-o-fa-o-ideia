@@ -9,6 +9,8 @@ const SEED_PATHS = [
   "/",
   "/login",
   "/registo",
+  "/privacidade",
+  "/termos",
   "/recuperar",
   "/dashboard",
   "/empresas",

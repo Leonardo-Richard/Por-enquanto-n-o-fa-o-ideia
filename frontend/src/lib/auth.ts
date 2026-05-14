@@ -1,8 +1,12 @@
 import * as schema from "@repo/db";
+import { APIError } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { ALLOWED_LEGAL_DOCUMENT_VERSIONS } from "./legal-documents";
 import { getDb } from "./db";
+
+const allowedLegalDocumentVersions = new Set<string>(ALLOWED_LEGAL_DOCUMENT_VERSIONS);
 
 function getBaseUrl(): string {
   return (
@@ -87,6 +91,24 @@ function buildAuth() {
           required: false,
           defaultValue: false,
           input: false,
+        },
+        legalDocumentVersion: {
+          type: "string",
+          required: true,
+          input: true,
+          transform: {
+            input: (value: unknown) => {
+              const trimmed = typeof value === "string" ? value.trim() : "";
+              if (!allowedLegalDocumentVersions.has(trimmed)) {
+                throw APIError.from("BAD_REQUEST", {
+                  message:
+                    "É necessário aceitar a política de privacidade e os termos na versão actual para criar conta.",
+                  code: "LEGAL_DOCUMENT_VERSION_INVALID",
+                });
+              }
+              return trimmed;
+            },
+          },
         },
       },
     },

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
@@ -424,6 +425,15 @@ export default function ConfiguracoesPage() {
         <p className="mt-2 leading-relaxed">
           Credenciais de portais e notas fiscais exigem criptografia em trânsito e em repouso; esta interface é um
           protótipo funcional. Produção deve usar cofre de segredos e auditoria de acesso.
+        </p>
+        <p className="mt-3 text-xs">
+          <Link href="/privacidade" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
+            Política de privacidade
+          </Link>
+          {" · "}
+          <Link href="/termos" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
+            Termos de uso
+          </Link>
         </p>
       </section>
     </div>

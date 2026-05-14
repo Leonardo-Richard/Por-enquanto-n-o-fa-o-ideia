@@ -20,6 +20,7 @@ export async function signUpEmail(input: {
   name: string;
   email: string;
   password: string;
+  legalDocumentVersion: string;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
   const res = await fetch("/api/auth/sign-up/email", {
     method: "POST",

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useAppSession } from "@/context/app-session";
+import { LegalFooterLinks } from "@/components/legal-footer-links";
 import { signInEmail } from "@/lib/auth-browser";
 
 function safeNext(raw: string | null): string {
@@ -159,7 +160,10 @@ function LoginForm() {
           </Link>
         </p>
 
-        <p className="mt-8 text-center text-xs text-black/50 dark:text-white/45">
+        <p className="mt-6 text-center text-xs text-black/50 dark:text-white/45">
+          <LegalFooterLinks className="inline-flex flex-wrap justify-center gap-x-2 gap-y-1" />
+        </p>
+        <p className="mt-4 text-center text-xs text-black/50 dark:text-white/45">
           <Link href="/" className="underline-offset-2 hover:underline">
             Voltar ao site público
           </Link>

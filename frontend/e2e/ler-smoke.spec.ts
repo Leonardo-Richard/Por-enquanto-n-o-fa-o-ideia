@@ -75,6 +75,7 @@ test.describe("LER smoke — fluxo crítico", () => {
     await page.getByLabel("Nome").fill(`Smoke LER ${suffix}`);
     await page.getByLabel("E-mail").fill(email);
     await page.getByLabel("Senha", { exact: true }).fill(password);
+    await page.getByRole("checkbox", { name: /Política de privacidade/i }).check();
     await page.getByRole("button", { name: "Registar" }).click();
 
     await page.waitForURL(/\/empresas/, { timeout: 45_000 });

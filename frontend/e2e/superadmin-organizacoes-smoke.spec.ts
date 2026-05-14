@@ -34,6 +34,7 @@ test.describe("superadmin — organizações (smoke)", () => {
     await page.getByLabel("Nome").fill("E2E Admin Gate Norm");
     await page.getByLabel("E-mail").fill(email);
     await page.getByLabel("Senha", { exact: true }).fill(password);
+    await page.getByRole("checkbox", { name: /Política de privacidade/i }).check();
     await page.getByRole("button", { name: "Registar" }).click();
 
     await page.waitForURL(/\/empresas/, { timeout: 30_000 });
@@ -60,6 +61,7 @@ test.describe("superadmin — organizações (smoke)", () => {
     await page.getByLabel("Nome").fill("E2E Superadmin Org");
     await page.getByLabel("E-mail").fill(email);
     await page.getByLabel("Senha", { exact: true }).fill(password);
+    await page.getByRole("checkbox", { name: /Política de privacidade/i }).check();
     await page.getByRole("button", { name: "Registar" }).click();
 
     await page.waitForURL(/\/empresas/, { timeout: 30_000 });

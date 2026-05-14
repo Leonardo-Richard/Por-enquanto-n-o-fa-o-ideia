@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalFooterLinks } from "@/components/legal-footer-links";
 
 export default function Home() {
   return (
@@ -162,8 +163,9 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-black/5 py-10 dark:border-white/10">
-        <div className="mx-auto max-w-5xl px-6 text-center text-xs text-black/50 dark:text-white/45">
-          Portal de Automação de Notas Fiscais · alinhado ao project brief
+        <div className="mx-auto max-w-5xl space-y-3 px-6 text-center text-xs text-black/50 dark:text-white/45">
+          <LegalFooterLinks className="flex flex-wrap justify-center gap-x-2 gap-y-1" />
+          <p>Portal de Automação de Notas Fiscais · alinhado ao project brief</p>
         </div>
       </footer>
     </div>

@@ -16,6 +16,7 @@ import {
   organizationMembersQuerySchema,
 } from "@repo/shared";
 import { getDb } from "@/lib/db";
+import { ORG_ADMIN_PROVISIONED_VERSION } from "@/lib/legal-documents";
 import { isSuperadmin } from "@/lib/authz";
 import { insertAuditEvent } from "@/lib/audit";
 import { jsonError, toPublicApiError } from "../lib/errors";
@@ -347,6 +348,7 @@ export async function handlePostOrganizationMembers(request: Request, organizati
           email: normalizedEmail,
           emailVerified: false,
           isSuperadmin: false,
+          legalDocumentVersion: ORG_ADMIN_PROVISIONED_VERSION,
         });
 
         await tx.insert(account).values({

@@ -27,6 +27,8 @@ export const user = pgTable("user", {
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
   isSuperadmin: boolean("isSuperadmin").notNull().default(false),
+  /** Versão dos documentos legais aceites no registo público, ou marcador de provisão administrativa. */
+  legalDocumentVersion: text("legalDocumentVersion"),
 });
 
 export const organizations = pgTable(
