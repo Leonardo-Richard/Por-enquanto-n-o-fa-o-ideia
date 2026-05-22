@@ -58,6 +58,10 @@ pip install -r requirements.txt
 | `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
 | `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `npm run fix:adn-stale-jobs`. |
 | `ADN_WORKER_INSECURE_SSL` | `1` | **Só diagnóstico:** desliga verificação TLS para pedidos HTTPS do worker (Supabase Storage + API interna). Não usar em produção. Preferir `certifi` (já em `requirements.txt`) e rede sem inspecção SSL quebrada. |
+| `ADN_UPLOAD_DEBUG` | `1` | **Opcional:** antes de cada `uploads/prepare`, imprime uma linha de diagnóstico (`kind`, chave truncada, `sha256`, tamanho). Por defeito **desligado** (não definir ou valor diferente de `1`). |
+| `ADN_UPLOAD_LOG_FULL_ACCESS_KEYS` | `1` | Com `ADN_UPLOAD_DEBUG=1`: mostra a chave de acesso **completa** nos logs; usar só em diagnóstico controlado. |
+
+**Menor privilégio Postgres:** ver [`docs/runbooks/adn-worker-postgres-least-privilege.md`](../../docs/runbooks/adn-worker-postgres-least-privilege.md).
 
 **Importante (monorepo):** o Next lê `frontend/.env.local` com prioridade. Se `ADN_WORKER_HMAC_SECRET` estiver vazio aí, as rotas internas ADN respondem **503** mesmo com o segredo correcto na raiz `.env`.
 

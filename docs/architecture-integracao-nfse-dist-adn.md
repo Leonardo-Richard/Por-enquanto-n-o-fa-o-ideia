@@ -13,7 +13,7 @@
 | Camada | Decisão |
 | ------ | -------- |
 | **Runtime ADN** | **Worker dedicado** (VM Windows na fase 1) que embala ou invoca a lógica tipo **NFSE_dist**; sem executar downloads ADN dentro de **Vercel Server Functions** de duração curta nem no browser. |
-| **Portal (Next.js)** | **Route Handlers** em `apps/web` expõem API **v1** para UI (sessão Better Auth) e namespace **`/api/internal/v1/adn/*`** para ingestão **máquina-a-máquina** (**NFR20**). |
+| **Portal (Next.js)** | **Route Handlers** em `frontend/src/app/api/` expõem API **v1** para UI (sessão Better Auth) e namespace **`/api/internal/v1/adn/*`** para ingestão **máquina-a-máquina** (**NFR20**). |
 | **Persistência** | **PostgreSQL** (Supabase): jobs, artefactos (metadados + ponteiro para blob), falhas reprocessáveis; **Supabase Storage** (ou S3 compatível via mesmo padrão) para bytes XML/PDF. |
 | **Multi-tenant** | Toda linha com `organization_id` + `company_id` (empresa monitorada = `companies.id`); invariantes alinhados a **FR36–FR37**. |
 | **Feature flag** | Coluna em `organizations` ou tabela `organization_features`; verificada **no primeiro middleware de handler** antes de qualquer corpo (**FR45**). |
@@ -219,7 +219,8 @@ Eventos append-only (tabela existente ou extensão alinhada a `audit_events`):
 
 - `adn_sync_requested` — `actor_user_id`, `organization_id`, `company_id`, `adn_sync_job_id`.  
 - `adn_sync_completed` / `adn_sync_failed` — incluir contagens.  
-- `adn_artifact_downloaded` — `actor_user_id`, `artifact_id`, **sem** URL assinada no payload.
+- `adn_artifact_downloaded` — `actor_user_id`, `artifact_id`, **sem** URL assinada no payload.  
+- `adn_artifacts_bulk_downloaded` — `count`, `totalBytes` (ZIP de PDFs por empresa), **sem** URLs.
 
 ---
 
@@ -243,6 +244,7 @@ Variáveis **só** no ambiente da VM: `ADN_WORKER_HMAC_SECRET`, caminhos de cert
 - **Local:** secção no detalhe da empresa monitorada — `apps/web/src/app/(dashboard)/empresas/[id]/` (ou rota `organizations/...` quando existir).  
 - **Dados:** TanStack Query com chaves do **spec UX**; **polling** apenas quando `status === 'running'` para limitar carga (**NFR21** indirectamente).  
 - **Feature flag:** `GET /api/v1/session/...` ou payload da org deve incluir `adnSyncEnabled` para a UI **não** montar rotas (evitar flash).
+- **Bulk PDF:** `GET /api/v1/organizations/{organizationId}/monitored-companies/{companyId}/adn/artifacts/pdfs.zip` — ZIP só com PDFs (`kind=pdf`), ACL igual às outras rotas ADN; limites `ADN_PDFS_ZIP_MAX_COUNT` (default 200) e `ADN_PDFS_ZIP_MAX_TOTAL_BYTES` (default 150 MB); auditoria `adn_artifacts_bulk_downloaded`.
 
 ---
 
@@ -288,6 +290,8 @@ sequenceDiagram
 | `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md` | `organizations`, `companies`, jobs |
 | `docs/architecture-importacao-certificado-empresa-monitorada-adn.md` | Guia ADN no portal, env `NEXT_PUBLIC_ADN_CERT_RUNBOOK_URL`, worker + `clients.local.json`, `error_code` certificado (**CE-FR10**) |
 | `docs/front-end-spec-integracao-nfse-dist-adn.md` | Polling, modais, query keys |
+| `docs/architecture-adn-job-queue-fairness.md` | Fila global vs round-robin / quotas por organização (evolução) |
+| `docs/runbooks/adn-worker-postgres-least-privilege.md` | Role Postgres com permissões mínimas para o worker |
 | `docs/architecture-cenario-b-adn-playwright-extensao-chrome.md` | Motor opcional de descarga (Playwright + extensão no worker); `summary_json` estendido; contrato HMAC inalterado |
 
 ---
@@ -296,6 +300,7 @@ sequenceDiagram
 
 | Data       | Versão | Descrição |
 | ---------- | ------ | ---------- |
+| 2026-05-15 | 1.2    | Referências a `frontend/`, fairness da fila e runbook Postgres menor privilégio para o worker. |
 | 2026-04-30 | 1.1    | Referência à arquitectura **motor cenário B** (`architecture-cenario-b-adn-playwright-extensao-chrome.md`). |
 | 2026-04-22 | 1.0    | Arquitetura inicial: sistema, dados, API, Storage, segurança worker, testes. |
 

@@ -7,18 +7,18 @@ Este documento descreve a arquitetura técnica unificada (web, API, workers, age
 **Documentos de entrada:** `docs/prd.md` (**v0.2+**), `docs/front-end-spec.md` (v0.3+), incremento **agendamento por empresa:** `docs/architecture-agendamento-por-empresa.md`, `docs/front-end-spec-agendamento-por-empresa.md`, `docs/prd-atualizacao-agendamento-por-empresa.md`.  
 **Incremento login, empresa ativa e papéis:** `docs/architecture-login-empresas-roles.md`, `docs/front-end-spec-login-empresas-roles.md`, `docs/prd-atualizacao-login-empresas-roles.md`.  
 **Incremento organização vs. empresas monitoradas:** `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md`, `docs/front-end-spec-dois-niveis-organizacao-vs-empresas-fiscais.md`, `docs/prd-atualizacao-dois-niveis-organizacao-vs-empresas-fiscais.md`.  
-**Incremento ADN / NFS-e (worker + Storage):** `docs/architecture-integracao-nfse-dist-adn.md`, `docs/front-end-spec-integracao-nfse-dist-adn.md`, `docs/prd-integracao-nfse-dist-adn.md`.  
+**Incremento ADN / NFS-e (worker + Storage):** `docs/architecture-integracao-nfse-dist-adn.md`, `docs/front-end-spec-integracao-nfse-dist-adn.md`, `docs/prd-integracao-nfse-dist-adn.md`; fairness da fila e evolução: `docs/architecture-adn-job-queue-fairness.md`; role Postgres mínima do worker: `docs/runbooks/adn-worker-postgres-least-privilege.md`.  
 **Delta certificado e-CNPJ / guia ADN (portal + worker):** `docs/architecture-importacao-certificado-empresa-monitorada-adn.md` (PRD: `docs/prd-importacao-certificado-empresa-monitorada-adn.md`; UX: `docs/front-end-spec-importacao-certificado-empresa-monitorada-adn.md`).
 
 ### Starter Template ou Projeto Existente
 
-**Estado:** *Greenfield* — sem repositório de aplicação pré-existente no workspace.  
-**Recomendação de arranque:** monorepo **Turborepo** com app **Next.js** (App Router, TypeScript), pacotes partilhados e agente desktop em pacote separado (ou repositório irmão para releases do instalador Windows). O preset AIOS `nextjs-react` alinha com esta linha.
+**Estado:** *Greenfield* no PRD; **implementação actual** — monorepo **Turborepo** + **npm workspaces** com app **Next.js** em `frontend/` (App Router, TypeScript), pacote opcional `backend/`, pacotes partilhados em `packages/*` e worker Python ADN em `workers/nfse-portal-bridge/`. O preset AIOS `nextjs-react` alinha com esta linha.
 
 ### Change Log
 
 | Date       | Version | Description                                              | Author        |
 | ---------- | ------- | -------------------------------------------------------- | ------------- |
+| 2026-05-15 | 0.7     | Estrutura do repositório alinhada ao código (`frontend/`, npm workspaces, worker ADN Python) | Architect (AIOS) |
 | 2026-04-24 | 0.6     | Referência ao delta **certificado ADN / guia**; ver `docs/architecture-importacao-certificado-empresa-monitorada-adn.md` | Architect (AIOS) |
 | 2026-04-22 | 0.5     | Referência ao incremento **ADN / NFS-e**; ver `docs/architecture-integracao-nfse-dist-adn.md` | Architect (AIOS) |
 | 2026-04-22 | 0.4     | Referência ao incremento **organização vs. empresas monitoradas**; ver `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md` | Architect (AIOS) |
@@ -52,14 +52,14 @@ O sistema segue um modelo **web SaaS + cliente local**: a aplicação **Next.js*
 
 ### Repository Structure
 
-- **Structure:** **Monorepo** (PRD — repositório único para web, workers partilhados, pacotes `shared`).
-- **Monorepo tool:** **Turborepo** + **pnpm** workspaces.
-- **Package organization:**
-  - `apps/web` — Next.js (UI + REST API / route handlers).
-  - `apps/worker` *(opcional pacote separado)* — processo Node para consumo de fila e tarefas > 60s; no MVP pode ser o mesmo código invocado por cron HTTP ou fila.
-  - `apps/agent` — cliente desktop (Tauri ou Electron — ver secção agente).
-  - `packages/shared` — tipos TS, validadores (Zod), constantes de contrato agente.
-  - `packages/config` — ESLint/TSConfig partilhados.
+- **Structure:** **Monorepo** (repositório único para web, API, pacotes partilhados e worker ADN).
+- **Monorepo tool:** **Turborepo** + **npm workspaces** (`package.json` na raiz com `workspaces: ["frontend", "backend", "packages/*"]`).
+- **Package organization (código actual):**
+  - `frontend/` — Next.js (UI + REST API / route handlers em `src/app/api/`).
+  - `backend/` — Next.js opcional (API separada em desenvolvimento, p.ex. porta 3001).
+  - `packages/db`, `packages/shared`, `packages/scheduling`, etc. — tipos, Drizzle, agendamento.
+  - `workers/nfse-portal-bridge/` — worker **Python** que consome `adn_sync_jobs`, corre NFSE_dist / Playwright e chama rotas internas HMAC do portal.
+  - *Futuro / PRD:* `apps/agent` — cliente desktop (Tauri ou Electron); ainda não espelhado como pacote `apps/` neste repo.
 
 ### High Level Architecture Diagram
 
@@ -81,7 +81,7 @@ graph TB
   end
 
   subgraph workers [Processamento assíncrono]
-    W[Worker Node - jobs]
+    W[Worker Python ADN ou Node jobs]
   end
 
   U -->|HTTPS| WEB
@@ -129,7 +129,7 @@ Tabela de referência para o MVP (versões a fixar no bootstrap do repositório)
 | Frontend Testing | Vitest + Testing Library | latest | Unit/component | Pirâmide PRD |
 | Backend Testing | Vitest + supertest / hono fetch | latest | Integração API | — |
 | E2E Testing | Playwright | latest | Smoke login → empresa → job | PRD testing |
-| Build Tool | Turborepo + pnpm | latest | Monorepo | PRD monorepo |
+| Build Tool | Turborepo + npm workspaces | latest | Monorepo | `npm` na raiz + `turbo` |
 | Bundler | Turbopack (Next) | integrado | Dev/build | Default Next |
 | IaC Tool | Terraform ou Pulumi *(fase 2)* | — | Infra reprodutível | Opcional no MVP |
 | CI/CD | GitHub Actions | — | Lint, test, deploy Vercel | Standard |
@@ -428,16 +428,15 @@ CREATE INDEX idx_jobs_status_retry ON jobs(status, next_retry_at);
 ### Component Organization
 
 ```
-apps/web/src/
+frontend/src/
 ├── app/                    # App Router — rotas públicas e (dashboard)
 ├── components/
 │   ├── ui/                 # shadcn
-│   └── features/           # empresas, jobs, agente
+│   └── …                   # features (empresas, ADN, admin, …)
 ├── lib/
-│   ├── api-client.ts       # fetch com credenciais
-│   ├── query-keys.ts
-│   └── validators.ts       # CNPJ etc.
-└── hooks/
+│   ├── auth.ts             # Better Auth, etc.
+│   └── …
+└── server/                 # handlers API, gates admin, rotas internas ADN
 ```
 
 ### State Management
@@ -473,7 +472,7 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
 ### Service Architecture
 
 - **Camada HTTP:** Route Handlers finos → chamam **serviços de domínio** (`CompanyService`, `JobService`, `AgentService`).
-- **Worker:** mesmo pacote ou `apps/worker` com import dos serviços; execução via **cron HTTP protegido por secret** ou **BullMQ** consumindo Redis.
+- **Worker ADN (actual):** processo Python `workers/nfse-portal-bridge/poll_jobs.py` com Postgres + HMAC para `/api/internal/v1/adn/*`; ver `docs/architecture-integracao-nfse-dist-adn.md`. Outros workers Node (cron HTTP, BullMQ) permanecem como opção de evolução no PRD.
 - **Agendamento mensal:** tick diário em `America/Sao_Paulo` que, no dia **D** = `companies.monthly_run_day`, cria job `scheduled_monthly` com **idempotência** `sched_monthly:{company_id}:{YYYY-MM}` (ver `docs/architecture-agendamento-por-empresa.md`). Alternativa gerida: Inngest/Trigger.dev com a mesma chave de deduplicação.
 
 ### Authentication and Authorization
@@ -523,19 +522,19 @@ interface DownloadCommandV1 {
 ## Unified Project Structure
 
 ```
-nf-portal/
-├── apps/
-│   ├── web/                 # Next.js
-│   └── agent-desktop/       # Tauri (recomendado) ou Electron
+portal-automacao-nf/        # nome do pacote na raiz conforme package.json
+├── frontend/               # Next.js (UI + API)
+├── backend/                # Next.js API opcional (dev)
 ├── packages/
-│   ├── shared/              # types, zod schemas, agent contract
-│   └── config/              # eslint, tsconfig
+│   ├── db/
+│   ├── shared/
+│   └── scheduling/
+├── workers/
+│   └── nfse-portal-bridge/ # Python — fila ADN + NFSE_dist
+├── scripts/                # npm run worker:adn-bridge, smoke, fix jobs
 ├── docs/
-│   ├── prd.md
-│   ├── front-end-spec.md
-│   └── architecture.md
 ├── turbo.json
-├── pnpm-workspace.yaml
+├── package.json            # workspaces npm
 └── README.md
 ```
 
@@ -545,46 +544,42 @@ nf-portal/
 
 ### Prerequisites
 
-```bash
-# Node 22 LTS, pnpm 9+, Git
-corepack enable && corepack prepare pnpm@latest --activate
-```
+- **Node.js** 22 LTS (ou a versão alinhada ao monorepo), **npm** 11+ (ver `packageManager` na raiz), Git.
 
 ### Initial Setup
 
 ```bash
-pnpm install
-cp apps/web/.env.example apps/web/.env.local
-# Configurar DATABASE_URL, REDIS_URL, AUTH_SECRET
-pnpm db:migrate   # prisma ou drizzle — a definir no bootstrap
+npm install
+# Variáveis: copiar ou criar .env na raiz e frontend/.env.local conforme docs/qa e README do worker
+# Migrações: seguir pacote @repo/db / Drizzle do repositório
 ```
 
 ### Development Commands
 
 ```bash
-pnpm dev          # turborepo: web (+ worker local opcional)
-pnpm --filter web dev
-pnpm test
-pnpm e2e
+npm run dev              # turbo dev — todos os workspaces em dev
+npm run dev:frontend     # só Next em frontend/ (porta 3000)
+npm run dev:with-adn-bridge   # frontend + worker Python ADN
+npm test
+npm run test:e2e -w frontend   # se configurado Playwright no workspace frontend
 ```
 
 ### Required Environment Variables
 
 ```bash
-# apps/web/.env.local
+# frontend/.env.local (e/ou .env na raiz — ver documentação ADN)
 DATABASE_URL=postgresql://...
-REDIS_URL=redis://...
-AUTH_SECRET=...
+ADN_WORKER_HMAC_SECRET=...
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-AGENT_WS_SECRET=...
-CRON_SECRET=...           # protege rotas de cron interno
+# Supabase, Better Auth, etc. conforme guias em docs/
+CRON_SECRET=...           # protege rotas de cron interno (se aplicável)
 ```
 
 ---
 
 ## Deployment Architecture
 
-**Frontend:** Vercel — build `apps/web`, output Next.
+**Frontend:** Vercel — build do workspace **`frontend/`** (root do app Next.js), output Next.
 
 **Backend:** mesmo projeto; **serverless functions** para API; **cron** Vercel para tick diário (verificar jobs pendentes e january monthly enqueue) ou worker externo.
 

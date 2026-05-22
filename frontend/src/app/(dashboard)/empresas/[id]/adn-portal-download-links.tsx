@@ -26,30 +26,39 @@ function kindLabel(kind: string): string {
 /** Lista integrada no painel ADN: links que abrem o download no navegador (signed URL). */
 export function AdnPortalDownloadLinks({ organizationId, companyId, refreshSignal = 0 }: Props) {
   const [items, setItems] = useState<ArtifactRow[]>([]);
+  const [hasPdfs, setHasPdfs] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyZip, setBusyZip] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(
-        apiUrl(
-          `/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/artifacts?limit=20`,
-        ),
-        { credentials: "include", cache: "no-store" },
-      );
-      if (!r.ok) {
+      const base = `/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/artifacts`;
+      const [listRes, pdfProbeRes] = await Promise.all([
+        fetch(apiUrl(`${base}?limit=20`), { credentials: "include", cache: "no-store" }),
+        fetch(apiUrl(`${base}?kind=pdf&limit=1`), { credentials: "include", cache: "no-store" }),
+      ]);
+      if (!listRes.ok) {
         setError("Não foi possível listar os ficheiros no portal.");
         setItems([]);
+        setHasPdfs(false);
         return;
       }
-      const j = (await r.json()) as { items?: ArtifactRow[] };
+      const j = (await listRes.json()) as { items?: ArtifactRow[] };
       setItems(Array.isArray(j.items) ? j.items : []);
+      if (pdfProbeRes.ok) {
+        const pj = (await pdfProbeRes.json()) as { items?: ArtifactRow[] };
+        setHasPdfs(Array.isArray(pj.items) && pj.items.length > 0);
+      } else {
+        setHasPdfs(false);
+      }
     } catch {
       setError("Erro de rede ao listar ficheiros.");
       setItems([]);
+      setHasPdfs(false);
     } finally {
       setLoading(false);
     }
@@ -95,6 +104,43 @@ export function AdnPortalDownloadLinks({ organizationId, companyId, refreshSigna
     },
     [organizationId, companyId],
   );
+
+  const downloadAllPdfsZip = useCallback(async () => {
+    setBusyZip(true);
+    setError(null);
+    try {
+      const r = await fetch(
+        apiUrl(
+          `/api/v1/organizations/${organizationId}/monitored-companies/${companyId}/adn/artifacts/pdfs.zip`,
+        ),
+        { credentials: "include", cache: "no-store" },
+      );
+      if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as { message?: string } | null;
+        setError(j?.message ?? "Não foi possível gerar o ZIP de PDFs.");
+        return;
+      }
+      const blob = await r.blob();
+      const cd = r.headers.get("Content-Disposition");
+      let filename = "pdfs.zip";
+      const match = cd?.match(/filename="([^"]+)"/);
+      if (match?.[1]) {
+        filename = match[1];
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Erro de rede ao pedir o ZIP de PDFs.");
+    } finally {
+      setBusyZip(false);
+    }
+  }, [organizationId, companyId]);
 
   return (
     <div className="mt-3 border-t border-black/8 pt-3 dark:border-white/10">
@@ -151,15 +197,33 @@ export function AdnPortalDownloadLinks({ organizationId, companyId, refreshSigna
           ))}
         </ul>
       ) : null}
-      {items.length > 0 ? (
-        <button
-          type="button"
-          className="mt-2 text-[11px] font-medium text-black/55 underline decoration-black/25 underline-offset-2 dark:text-white/50 dark:decoration-white/25"
-          onClick={() => void load()}
-        >
-          Actualizar lista
-        </button>
-      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {hasPdfs ? (
+          <button
+            type="button"
+            disabled={busyZip || Boolean(busyId)}
+            aria-busy={busyZip}
+            className="rounded border border-black/12 px-2.5 py-1 text-[11px] font-medium dark:border-white/18 disabled:opacity-50"
+            onClick={() => void downloadAllPdfsZip()}
+          >
+            {busyZip ? "A gerar ZIP…" : "Descarregar todos os PDFs (ZIP)"}
+          </button>
+        ) : null}
+        {hasPdfs ? (
+          <p className="text-[10px] text-black/45 dark:text-white/40">
+            Inclui todos os PDFs no portal (até 200 por pedido).
+          </p>
+        ) : null}
+        {items.length > 0 || hasPdfs ? (
+          <button
+            type="button"
+            className="text-[11px] font-medium text-black/55 underline decoration-black/25 underline-offset-2 dark:text-white/50 dark:decoration-white/25"
+            onClick={() => void load()}
+          >
+            Actualizar lista
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -12,6 +12,7 @@ type AuditEventType =
   | "adn_sync_completed"
   | "adn_sync_failed"
   | "adn_artifact_downloaded"
+  | "adn_artifacts_bulk_downloaded"
   | "organization_local_download_root_updated"
   | "organization_created_by_superadmin";
 

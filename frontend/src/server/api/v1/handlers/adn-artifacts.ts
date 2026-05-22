@@ -9,6 +9,7 @@ import { resolveAdnPublicAccess } from "./adn-public-access";
 const listQuery = z.object({
   issuedFrom: z.string().optional(),
   issuedTo: z.string().optional(),
+  kind: z.enum(["xml", "pdf"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   cursor: z.string().uuid().optional(),
 });
@@ -33,12 +34,15 @@ export async function handleGetAdnArtifacts(request: Request, organizationId: st
     if (!q.success) {
       return adnJsonFromZodError(400, "Parâmetros inválidos.", "ADN_INVALID_QUERY", q.error);
     }
-    const { issuedFrom, issuedTo, limit, cursor } = q.data;
+    const { issuedFrom, issuedTo, kind, limit, cursor } = q.data;
 
     let whereExpr = and(
       eq(adnArtifacts.organizationId, organizationId),
       eq(adnArtifacts.companyId, companyId),
     );
+    if (kind) {
+      whereExpr = and(whereExpr, eq(adnArtifacts.kind, kind));
+    }
     if (issuedFrom) {
       const d = new Date(`${issuedFrom}T00:00:00.000Z`);
       if (!Number.isNaN(d.getTime())) {

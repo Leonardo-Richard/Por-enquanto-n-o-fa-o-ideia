@@ -27,6 +27,8 @@ Variáveis de ambiente:
   NFSE_LOCAL_MIRROR_DISABLED — Se "1", força desligar o espelho (prevalece sobre ENABLED; LM-02A).
       Política: por defeito copiamos XML/PDF para organizations.local_download_root quando o utilizador
       configurou a pasta raiz no portal. Se não houver pasta configurada, a etapa é saltada graciosamente.
+  ADN_UPLOAD_DEBUG — Se "1", imprime linha de diagnóstico antes de cada uploads/prepare (chave truncada; ver ADN_UPLOAD_LOG_FULL_ACCESS_KEYS).
+  ADN_UPLOAD_LOG_FULL_ACCESS_KEYS — Com ADN_UPLOAD_DEBUG=1: inclui chave de acesso completa nos logs (só diagnóstico).
   ADN_WORKER_INSECURE_SSL — Se "1", desactiva verificação TLS nos pedidos HTTPS do worker (só diagnóstico).
   ADN_CLEAN_STALE_ON_WORKER_START — Se "0", não recupera jobs «running» órfãos ao arrancar. Por omissão "1":
       jobs em running com started_at há mais de ADN_STALE_JOB_HOURS são REPOSTOS para queued (reclaim) para nova tentativa.

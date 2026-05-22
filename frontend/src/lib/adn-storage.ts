@@ -60,3 +60,27 @@ export async function createAdnPresignedGetUrl(objectPath: string): Promise<{
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
   return { signedUrl: data.signedUrl, expiresAt, expiresIn };
 }
+
+/** Download de bytes via service role (bulk ZIP no servidor). */
+export async function downloadAdnObjectBytes(objectPath: string): Promise<Uint8Array> {
+  const supabase = getAdnSupabaseServiceClient();
+  const bucket = adnStorageBucket();
+  const { data, error } = await supabase.storage.from(bucket).download(objectPath);
+  if (error || !data) {
+    throw new Error(error?.message ?? "Falha ao obter ficheiro ADN do storage.");
+  }
+  const buf = await data.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+export function adnPdfsZipMaxCount(): number {
+  const raw = process.env["ADN_PDFS_ZIP_MAX_COUNT"];
+  const n = raw ? Number.parseInt(raw, 10) : 200;
+  return Number.isFinite(n) && n > 0 ? n : 200;
+}
+
+export function adnPdfsZipMaxTotalBytes(): number {
+  const raw = process.env["ADN_PDFS_ZIP_MAX_TOTAL_BYTES"];
+  const n = raw ? Number.parseInt(raw, 10) : 150 * 1024 * 1024;
+  return Number.isFinite(n) && n > 0 ? n : 150 * 1024 * 1024;
+}

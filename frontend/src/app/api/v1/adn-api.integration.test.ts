@@ -37,6 +37,7 @@ import {
   POST as postCompanyCertificate,
 } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/certificate/route";
 import { GET as getAutomationExportJson } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/automation-export.json/route";
+import { GET as getAdnArtifactsPdfsZip } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/artifacts/pdfs.zip/route";
 import { GET as getAdnRecentJobs } from "@/app/api/v1/organizations/[organizationId]/adn/recent-jobs/route";
 import { clearCertUploadVaultMockForTests } from "@/server/cert-upload/cert-upload-vault";
 
@@ -250,6 +251,36 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
     } as Awaited<ReturnType<typeof getAuthedSession>>);
 
     const res = await getAdnSync(new Request("http://test/"), {
+      params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("GET pdfs.zip sem membership na organização do URL → 403", async () => {
+    vi.mocked(getAuthedSession).mockResolvedValue({
+      user: {
+        id: ids.stranger,
+        email: "s@b",
+        name: "Stranger",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        isSuperadmin: false,
+      },
+      session: {
+        id: "s-str-zip",
+        userId: ids.stranger,
+        expiresAt: new Date(),
+        token: "t",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        activeCompanyId: ids.companyOff,
+        activeOrganizationId: ids.orgOff,
+      },
+    } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+    const res = await getAdnArtifactsPdfsZip(new Request("http://test/"), {
       params: Promise.resolve({ organizationId: ids.orgOn, companyId: ids.companyOn }),
     });
     expect(res.status).toBe(403);

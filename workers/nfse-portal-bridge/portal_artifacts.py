@@ -30,6 +30,24 @@ def _synthetic_access_key_44(cnpj: str, doc_id: str) -> str:
     return f"9{cnpj[:2]}{tail}"
 
 
+def _redact_access_key_for_log(access_key: str) -> str:
+    """Chave de acesso para logs: truncada; use `ADN_UPLOAD_LOG_FULL_ACCESS_KEYS=1` só em diagnóstico controlado."""
+    k = (access_key or "").strip()
+    if not k:
+        return "(vazio)"
+    if len(k) <= 10:
+        return f"len={len(k)}"
+    show_full = os.environ.get("ADN_UPLOAD_LOG_FULL_ACCESS_KEYS", "").strip() == "1"
+    if show_full:
+        return k
+    return f"{k[:6]}…{k[-4:]}(len={len(k)})"
+
+
+def _upload_debug_enabled() -> bool:
+    """Logs verbosos de upload só com `ADN_UPLOAD_DEBUG=1` (por omissão desligado)."""
+    return os.environ.get("ADN_UPLOAD_DEBUG", "").strip() == "1"
+
+
 def _issued_at_iso_from_xml(xml_text: str) -> str:
     try:
         root = ET.fromstring(xml_text)
@@ -72,13 +90,13 @@ def upload_file(
     # campos relevantes do prep_body ANTES de chamar o portal, para que o
     # log do worker mostre o que estava a ser enviado e seja possível
     # cruzar com os logs do backend (EasyPanel/Vercel).
-    if os.environ.get("ADN_UPLOAD_DEBUG", "1").strip() != "0":
+    if _upload_debug_enabled():
         try:
+            ak_log = _redact_access_key_for_log(access_key)
             print(
                 f"[nfse-portal-bridge] uploads/prepare body: kind={kind} "
-                f"accessKey={access_key} (len={len(access_key)}) "
-                f"sha256={sha} contentType={content_type} "
-                f"contentSize={len(content)}B",
+                f"accessKey={ak_log} contentType={content_type} "
+                f"sha256={sha} contentSize={len(content)}B",
                 flush=True,
             )
         except Exception:
@@ -90,7 +108,7 @@ def upload_file(
         # facilitar o diagnóstico — permite saber QUAL nota falhou, não só
         # o código HTTP genérico.
         raise RuntimeError(
-            f"{e}\n[contexto] accessKey={access_key} kind={kind} "
+            f"{e}\n[contexto] accessKey={_redact_access_key_for_log(access_key)} kind={kind} "
             f"sha256={sha} contentSize={len(content)}B"
         ) from e
     upload_url = prep.get("uploadUrl")
