@@ -1,8 +1,8 @@
 import type { Db } from "@repo/db";
 import { adnArtifactDrafts } from "@repo/db";
-import type { PrepareUploadInput } from "./schemas.js";
-import { assertOrgCompanyAdnEnabled } from "./validate-org-company.js";
-import type { AdnHandlerResult } from "./types.js";
+import type { PrepareUploadInput } from "./schemas";
+import { assertOrgCompanyAdnEnabled } from "./validate-org-company";
+import type { AdnHandlerResult } from "./types";
 
 export type PrepareUploadDeps = {
   storageBucket: string;

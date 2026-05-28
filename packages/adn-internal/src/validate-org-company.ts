@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { companies, organizations } from "@repo/db";
 import type { Db } from "@repo/db";
-import type { AdnHandlerResult } from "./types.js";
+import type { AdnHandlerResult } from "./types";
 
 /** Revalida org com ADN activo e empresa pertencente à org (prepare + commit). */
 export async function assertOrgCompanyAdnEnabled(

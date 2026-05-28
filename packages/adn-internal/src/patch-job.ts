@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { adnSyncJobs } from "@repo/db";
 import type { Db } from "@repo/db";
-import type { PatchJobInput } from "./schemas.js";
-import { resolveAdnAuditActorId } from "./system-audit.js";
-import type { AdnHandlerResult } from "./types.js";
+import type { PatchJobInput } from "./schemas";
+import { resolveAdnAuditActorId } from "./system-audit";
+import type { AdnHandlerResult } from "./types";
 
 export type PatchJobAuditFn = (
   db: Db,

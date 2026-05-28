@@ -1,10 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { adnArtifactDrafts, adnArtifacts, adnSyncJobs } from "@repo/db";
 import type { Db } from "@repo/db";
-import type { CommitArtifactInput } from "./schemas.js";
-import { assertOrgCompanyAdnEnabled } from "./validate-org-company.js";
-import { sha256Hex } from "./sha256.js";
-import type { AdnHandlerResult } from "./types.js";
+import type { CommitArtifactInput } from "./schemas";
+import { assertOrgCompanyAdnEnabled } from "./validate-org-company";
+import { sha256Hex } from "./sha256";
+import type { AdnHandlerResult } from "./types";
 
 export type CommitArtifactDeps = {
   /** Quando definido, verifica SHA-256 do objecto no storage antes do commit. */

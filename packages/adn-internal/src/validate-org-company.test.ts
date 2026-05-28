@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertOrgCompanyAdnEnabled } from "./validate-org-company.js";
+import { assertOrgCompanyAdnEnabled } from "./validate-org-company";
 
 describe("assertOrgCompanyAdnEnabled", () => {
   it("é função exportada", () => {
