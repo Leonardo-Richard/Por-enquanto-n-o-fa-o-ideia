@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { AdnExecutionsOverviewLastJob } from "@repo/shared";
 import { MonitoredCompanyRow } from "@/components/monitored-company-row";
 import type { MonitoredCompaniesQuery } from "@/hooks/use-monitored-companies";
 
@@ -11,12 +12,15 @@ export type MonitoredCompaniesSectionProps = {
   query: MonitoredCompaniesQuery;
   /** Org activa na sessão — para NFR29 / AC9 e coerência com o GET da lista. */
   effectiveOrganizationId: string | null | undefined;
+  /** Último job ADN por empresa (overview) — evita N GET /adn/sync só para rótulo. */
+  adnLastJobsByCompanyId?: Record<string, AdnExecutionsOverviewLastJob>;
 };
 
 export function MonitoredCompaniesSection({
   showSectionHeading = true,
   query,
   effectiveOrganizationId,
+  adnLastJobsByCompanyId,
 }: MonitoredCompaniesSectionProps) {
   const { companies, loading, issue, reload } = query;
 
@@ -66,6 +70,7 @@ export function MonitoredCompaniesSection({
                 key={c.id}
                 company={c}
                 effectiveOrganizationId={effectiveOrganizationId}
+                lastJobOverview={adnLastJobsByCompanyId?.[c.id]}
               />
             ))}
           </ul>

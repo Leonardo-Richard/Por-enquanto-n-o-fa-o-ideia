@@ -1,39 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAppSession } from "@/context/app-session";
 import {
+  adnJobDetailLabel,
+  adnJobStatusBadgeClass,
+  adnJobStatusLabel,
   downloadEngineLabel,
-  failureCategoryUserMessage,
+  isAdnJobInProgress,
 } from "@/lib/adn-executions-display";
 import { fetchAdnRecentJobs, type AdnRecentJobRow } from "@/lib/adn-recent-jobs-client";
 import { executionTriggerLabel } from "@/lib/execution-display";
 
-function jobStatusBadgeClass(status: string): string {
-  if (status === "running" || status === "queued") {
-    return "bg-amber-500/15 text-amber-900 dark:text-amber-100";
+type StatusFilter =
+  | "all"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "partial";
+
+const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "queued", label: "Na fila" },
+  { value: "running", label: "Em execução" },
+  { value: "completed", label: "Concluída" },
+  { value: "failed", label: "Falhou" },
+  { value: "partial", label: "Parcial" },
+];
+
+function parseStatusFilter(raw: string | null): StatusFilter {
+  if (
+    raw === "queued" ||
+    raw === "running" ||
+    raw === "completed" ||
+    raw === "failed" ||
+    raw === "partial"
+  ) {
+    return raw;
   }
-  if (status === "failed") {
-    return "bg-red-500/15 text-red-800 dark:text-red-200";
-  }
-  return "bg-emerald-600/15 text-emerald-900 dark:text-emerald-100";
+  return "all";
 }
 
-function jobStatusLabel(status: string): string {
-  if (status === "running") {
-    return "Em execução";
+function jobMatchesFilter(job: AdnRecentJobRow, filter: StatusFilter): boolean {
+  if (filter === "all") {
+    return true;
   }
-  if (status === "queued") {
-    return "Na fila";
+  if (filter === "completed") {
+    return job.status === "completed" || job.status === "partial";
   }
-  if (status === "failed") {
-    return "Falhou";
-  }
-  if (status === "partial") {
-    return "Parcial";
-  }
-  return "Concluída";
+  return job.status === filter;
 }
 
 function summaryDownloadEngine(summary: Record<string, unknown> | null): string | undefined {
@@ -44,44 +62,9 @@ function summaryDownloadEngine(summary: Record<string, unknown> | null): string 
   return typeof de === "string" ? de : undefined;
 }
 
-function summaryFailureCategory(summary: Record<string, unknown> | null): string | undefined {
-  if (!summary || typeof summary !== "object") {
-    return undefined;
-  }
-  const fc = summary.failureCategory;
-  return typeof fc === "string" ? fc : undefined;
-}
-
-function detailPrimary(job: AdnRecentJobRow): string {
-  const s = job.summary;
-  if (job.status === "failed") {
-    const cat = summaryFailureCategory(s);
-    const friendly = failureCategoryUserMessage(cat);
-    if (friendly) {
-      return friendly;
-    }
-    return "Não foi possível concluir a operação.";
-  }
-  if (job.status === "completed" || job.status === "partial") {
-    const ax = typeof s?.artifactsXml === "number" ? s.artifactsXml : null;
-    const ap = typeof s?.artifactsPdf === "number" ? s.artifactsPdf : null;
-    if (ax != null || ap != null) {
-      const parts: string[] = [];
-      if (ax != null) {
-        parts.push(`${ax} XML`);
-      }
-      if (ap != null) {
-        parts.push(`${ap} PDF`);
-      }
-      return parts.join(", ");
-    }
-  }
-  return "—";
-}
-
 function liveRegionMessage(
   loadState: "idle" | "loading" | "error" | "ok",
-  jobsLen: number,
+  visibleLen: number,
 ): string {
   if (loadState === "loading") {
     return "A carregar execuções.";
@@ -90,18 +73,27 @@ function liveRegionMessage(
     return "Erro ao carregar execuções.";
   }
   if (loadState === "ok") {
-    return `${jobsLen} execução${jobsLen === 1 ? "" : "ões"} carregada${jobsLen === 1 ? "" : "s"}.`;
+    return `${visibleLen} execução${visibleLen === 1 ? "" : "ões"} visível${visibleLen === 1 ? "" : "s"}.`;
   }
   return "";
 }
 
 export default function ExecucoesPage() {
+  const searchParams = useSearchParams();
   const { data: sessionData, isPending: sessionPending } = useAppSession();
   const activeOrgId = sessionData?.session.activeOrganizationId ?? null;
 
   const [jobs, setJobs] = useState<AdnRecentJobRow[]>([]);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "error" | "ok">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
+    parseStatusFilter(searchParams.get("status")),
+  );
+  const [cnpjSearch, setCnpjSearch] = useState("");
+
+  useEffect(() => {
+    setStatusFilter(parseStatusFilter(searchParams.get("status")));
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     if (!activeOrgId) {
@@ -125,6 +117,45 @@ export default function ExecucoesPage() {
     }
     void load();
   }, [activeOrgId, sessionPending, load]);
+
+  const hasInProgress = useMemo(
+    () => jobs.some((j) => isAdnJobInProgress(j.status)),
+    [jobs],
+  );
+
+  useEffect(() => {
+    if (!activeOrgId || !hasInProgress || loadState !== "ok") {
+      return;
+    }
+    const id = setInterval(() => {
+      void load();
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [activeOrgId, hasInProgress, loadState, load]);
+
+  const filteredJobs = useMemo(() => {
+    const q = cnpjSearch.trim().toLowerCase();
+    return jobs.filter((job) => {
+      if (!jobMatchesFilter(job, statusFilter)) {
+        return false;
+      }
+      if (!q) {
+        return true;
+      }
+      return job.companyCnpjMasked.toLowerCase().includes(q);
+    });
+  }, [jobs, statusFilter, cnpjSearch]);
+
+  const setFilterAndUrl = (next: StatusFilter) => {
+    setStatusFilter(next);
+    const url = new URL(window.location.href);
+    if (next === "all") {
+      url.searchParams.delete("status");
+    } else {
+      url.searchParams.set("status", next);
+    }
+    window.history.replaceState(null, "", url.pathname + url.search);
+  };
 
   if (sessionPending) {
     return (
@@ -158,15 +189,64 @@ export default function ExecucoesPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Execuções</h1>
-        <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Histórico de jobs ADN da organização (todas as empresas monitoradas).
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Execuções</h1>
+          <p className="mt-2 text-sm text-black/65 dark:text-white/60">
+            Histórico de jobs ADN da organização (todas as empresas monitoradas).
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loadState === "loading"}
+          className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium hover:bg-black/[0.03] disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/[0.04]"
+        >
+          Actualizar
+        </button>
       </div>
 
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div>
+          <label htmlFor="exec-status-filter" className="block text-xs font-medium text-black/55 dark:text-white/50">
+            Estado
+          </label>
+          <select
+            id="exec-status-filter"
+            value={statusFilter}
+            onChange={(e) => setFilterAndUrl(e.target.value as StatusFilter)}
+            className="mt-1 rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/15"
+          >
+            {STATUS_FILTER_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[12rem] flex-1 sm:max-w-xs">
+          <label htmlFor="exec-cnpj-search" className="block text-xs font-medium text-black/55 dark:text-white/50">
+            Pesquisar CNPJ
+          </label>
+          <input
+            id="exec-cnpj-search"
+            type="search"
+            value={cnpjSearch}
+            onChange={(e) => setCnpjSearch(e.target.value)}
+            placeholder="Máscara do CNPJ"
+            className="mt-1 w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/15"
+          />
+        </div>
+      </div>
+
+      {hasInProgress ? (
+        <p className="text-xs text-black/55 dark:text-white/50" role="status">
+          Há jobs na fila ou em execução — a lista actualiza automaticamente a cada 30 segundos.
+        </p>
+      ) : null}
+
       <p className="sr-only" aria-live="polite" aria-atomic="true">
-        {liveRegionMessage(loadState, jobs.length)}
+        {liveRegionMessage(loadState, filteredJobs.length)}
       </p>
 
       {loadState === "loading" ? (
@@ -195,9 +275,15 @@ export default function ExecucoesPage() {
         </p>
       ) : null}
 
-      {loadState === "ok" && jobs.length > 0 ? (
+      {loadState === "ok" && jobs.length > 0 && filteredJobs.length === 0 ? (
+        <p className="text-sm text-black/55 dark:text-white/50">
+          Nenhuma execução corresponde aos filtros actuais.
+        </p>
+      ) : null}
+
+      {loadState === "ok" && filteredJobs.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-black/5 dark:border-white/10">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="border-b border-black/5 bg-black/[0.03] text-xs font-medium uppercase tracking-wide text-black/50 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/45">
               <tr>
                 <th className="px-4 py-3">Quando</th>
@@ -205,14 +291,15 @@ export default function ExecucoesPage() {
                 <th className="px-4 py-3">Origem</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Detalhe</th>
+                <th className="px-4 py-3">Acções</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5 dark:divide-white/10">
-              {jobs.map((job) => {
+              {filteredJobs.map((job) => {
                 const de = summaryDownloadEngine(job.summary);
                 const motorLine = `Motor: ${downloadEngineLabel(de)}`;
-                const primary = detailPrimary(job);
-                const statusLbl = jobStatusLabel(job.status);
+                const primary = adnJobDetailLabel(job);
+                const statusLbl = adnJobStatusLabel(job.status);
                 return (
                   <tr key={job.id} className="bg-[var(--background)]">
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-black/70 dark:text-white/65">
@@ -224,7 +311,7 @@ export default function ExecucoesPage() {
                     <td className="px-4 py-3 text-xs">{executionTriggerLabel(job.trigger)}</td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${jobStatusBadgeClass(
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${adnJobStatusBadgeClass(
                           job.status,
                         )}`}
                       >
@@ -248,6 +335,14 @@ export default function ExecucoesPage() {
                           {motorLine}. Estado: {statusLbl}.
                         </div>
                       </details>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <Link
+                        href={`/empresas/${job.companyId}`}
+                        className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                      >
+                        Ver empresa
+                      </Link>
                     </td>
                   </tr>
                 );

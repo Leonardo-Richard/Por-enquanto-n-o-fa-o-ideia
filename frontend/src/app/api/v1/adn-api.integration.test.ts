@@ -39,6 +39,7 @@ import {
 import { GET as getAutomationExportJson } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/automation-export.json/route";
 import { GET as getAdnArtifactsPdfsZip } from "@/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/artifacts/pdfs.zip/route";
 import { GET as getAdnRecentJobs } from "@/app/api/v1/organizations/[organizationId]/adn/recent-jobs/route";
+import { GET as getAdnExecutionsOverview } from "@/app/api/v1/organizations/[organizationId]/adn/executions-overview/route";
 import { clearCertUploadVaultMockForTests } from "@/server/cert-upload/cert-upload-vault";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
@@ -1554,6 +1555,129 @@ describe.skipIf(!hasDb)("API ADN pública (integração)", () => {
 
       process.env.ADN_PUBLIC_RECENT_JOBS_RATE_LIMIT_PER_MIN = prev;
       clearAdnRateLimitBucketsForTests();
+    });
+  });
+
+  describe("GET /organizations/:id/adn/executions-overview", () => {
+    it("agrega contagens, último job por empresa e falhas recentes", async () => {
+      const db = getDb();
+      const company2 = randomUUID();
+      await db.insert(companies).values({
+        id: company2,
+        organizationId: ids.orgOn,
+        cnpjDigits: "98765432000199",
+        tradeName: "Empresa IT 2",
+        systemCode: `sys-${prefix}ov2`,
+        monthlyRunDay: 5,
+      });
+
+      const jOld = randomUUID();
+      const jNew = randomUUID();
+      const jFail = randomUUID();
+      const jQueued = randomUUID();
+      const staleQueued = randomUUID();
+
+      const now = Date.now();
+      const threeHoursAgo = new Date(now - 3 * 60 * 60 * 1000);
+      const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+      await db.insert(adnSyncJobs).values([
+        {
+          id: jOld,
+          organizationId: ids.orgOn,
+          companyId: ids.companyOn,
+          status: "completed",
+          trigger: "manual",
+          createdAt: oneDayAgo,
+          updatedAt: oneDayAgo,
+        },
+        {
+          id: jNew,
+          organizationId: ids.orgOn,
+          companyId: ids.companyOn,
+          status: "running",
+          trigger: "manual",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: jFail,
+          organizationId: ids.orgOn,
+          companyId: ids.companyOn,
+          status: "failed",
+          trigger: "manual",
+          summaryJson: { failureCategory: "session" },
+          createdAt: new Date(now - 2 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date(now - 2 * 24 * 60 * 60 * 1000),
+        },
+        {
+          id: jQueued,
+          organizationId: ids.orgOn,
+          companyId: company2,
+          status: "queued",
+          trigger: "manual",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: staleQueued,
+          organizationId: ids.orgOn,
+          companyId: company2,
+          status: "queued",
+          trigger: "manual",
+          createdAt: threeHoursAgo,
+          updatedAt: threeHoursAgo,
+        },
+      ]);
+
+      vi.mocked(getAuthedSession).mockResolvedValue({
+        user: {
+          id: ids.adminOn,
+          email: "a@b",
+          name: "Admin On",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          image: null,
+          isSuperadmin: false,
+        },
+        session: {
+          id: "s-ov-ok",
+          userId: ids.adminOn,
+          expiresAt: new Date(),
+          token: "t",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          activeCompanyId: ids.companyOn,
+          activeOrganizationId: ids.orgOn,
+        },
+      } as Awaited<ReturnType<typeof getAuthedSession>>);
+
+      const res = await getAdnExecutionsOverview(new Request("http://test/"), {
+        params: Promise.resolve({ organizationId: ids.orgOn }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        counts: Record<string, number>;
+        attention: { failedLast7d: number; staleQueued: number };
+        lastJobByCompanyId: Record<string, { jobId: string; status: string }>;
+        recentFailures: Array<{ jobId: string }>;
+      };
+
+      expect(body.counts.running).toBeGreaterThanOrEqual(1);
+      expect(body.counts.queued).toBeGreaterThanOrEqual(2);
+      expect(body.counts.completed).toBeGreaterThanOrEqual(1);
+      expect(body.counts.failed).toBeGreaterThanOrEqual(1);
+      expect(body.attention.failedLast7d).toBeGreaterThanOrEqual(1);
+      expect(body.attention.staleQueued).toBeGreaterThanOrEqual(1);
+      expect(body.lastJobByCompanyId[ids.companyOn]?.jobId).toBe(jNew);
+      expect(body.lastJobByCompanyId[company2]?.status).toBe("queued");
+      expect(body.recentFailures.some((f) => f.jobId === jFail)).toBe(true);
+
+      await db.delete(adnSyncJobs).where(
+        inArray(adnSyncJobs.id, [jOld, jNew, jFail, jQueued, staleQueued]),
+      );
+      await db.delete(companies).where(eq(companies.id, company2));
     });
   });
 

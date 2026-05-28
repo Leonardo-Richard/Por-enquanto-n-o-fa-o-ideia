@@ -49,6 +49,14 @@ export type {
   PortalSettings,
 } from "./portal-types";
 
+export type {
+  AdnExecutionsOverviewResponse,
+  AdnExecutionsOverviewCounts,
+  AdnExecutionsOverviewAttention,
+  AdnExecutionsOverviewLastJob,
+  AdnExecutionsOverviewFailure,
+} from "./adn-executions-overview";
+
 export {
   MONTHLY_RUN_DAY_MIN,
   MONTHLY_RUN_DAY_MAX,

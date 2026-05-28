@@ -9,11 +9,8 @@ import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
 import { isCertUploadUiEnabled } from "@/lib/cert-upload-ui-enabled";
+import { isAdnJobInProgress } from "@/lib/adn-executions-display";
 import { mirrorSummaryFromJobSummary } from "@/lib/adn-job-mirror-summary";
-
-function isAdnJobInProgress(status: string | null | undefined): boolean {
-  return status === "queued" || status === "running";
-}
 
 function isTerminalAdnJobStatus(status: string | null | undefined): boolean {
   return status === "completed" || status === "partial" || status === "failed";

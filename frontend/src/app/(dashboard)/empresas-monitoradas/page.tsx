@@ -1,12 +1,14 @@
 "use client";
 
 import { MonitoredCompaniesSection } from "@/components/monitored-companies-section";
+import { useAdnExecutionsOverview } from "@/hooks/use-adn-executions-overview";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
 import { useMonitoredCompanies } from "@/hooks/use-monitored-companies";
 
 export default function EmpresasMonitoradasPage() {
   const { effectiveOrganizationId } = useMeSummary();
   const monitoredQuery = useMonitoredCompanies(effectiveOrganizationId);
+  const overview = useAdnExecutionsOverview(effectiveOrganizationId);
 
   return (
     <div className="space-y-6">
@@ -20,6 +22,7 @@ export default function EmpresasMonitoradasPage() {
         showSectionHeading={false}
         query={monitoredQuery}
         effectiveOrganizationId={effectiveOrganizationId}
+        adnLastJobsByCompanyId={overview.data?.lastJobByCompanyId}
       />
     </div>
   );

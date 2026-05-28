@@ -1,19 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { displayCnpjLabel } from "@repo/shared";
-import { executionStatusLabel, executionTriggerLabel } from "@/lib/execution-display";
+import { useEffect, useMemo, useState } from "react";
+import { ExecutionsAttentionBanner } from "@/components/executions-attention-banner";
 import { MonitoredCompaniesSection } from "@/components/monitored-companies-section";
 import { usePortal } from "@/context/portal-provider";
+import { useAdnExecutionsOverview } from "@/hooks/use-adn-executions-overview";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
 import { useMonitoredCompanies } from "@/hooks/use-monitored-companies";
+import {
+  adnJobStatusBadgeClass,
+  adnJobStatusLabel,
+  formatAdnJobRelativeTime,
+} from "@/lib/adn-executions-display";
+import { adnJobDetailLabel } from "@/lib/adn-executions-display";
+import { fetchAdnRecentJobs } from "@/lib/adn-recent-jobs-client";
+import { executionTriggerLabel } from "@/lib/execution-display";
 
 export default function DashboardPage() {
-  const { executions, settings } = usePortal();
+  const { settings } = usePortal();
   const { effectiveOrganizationId, loading: orgLoading } = useMeSummary();
   const monitoredQuery = useMonitoredCompanies(effectiveOrganizationId);
+  const overview = useAdnExecutionsOverview(effectiveOrganizationId);
   const [serverMirrorPath, setServerMirrorPath] = useState<string | null | undefined>(undefined);
+  const [latestJob, setLatestJob] = useState<{
+    companyCnpjMasked: string;
+    trigger: string;
+    updatedAt: string;
+    status: string;
+    detailLabel: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!effectiveOrganizationId) {
@@ -57,35 +73,100 @@ export default function DashboardPage() {
     };
   }, [effectiveOrganizationId, orgLoading]);
 
-  const lastRun = executions[0];
-  const successRate =
-    executions.length === 0
-      ? null
-      : Math.round(
-          (executions.filter((e) => e.status === "success").length /
-            executions.length) *
-            100,
-        );
+  useEffect(() => {
+    if (!effectiveOrganizationId || orgLoading) {
+      setLatestJob(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetchAdnRecentJobs(effectiveOrganizationId, { limit: 1 });
+        if (cancelled) {
+          return;
+        }
+        const j = res.jobs[0];
+        if (!j) {
+          setLatestJob(null);
+          return;
+        }
+        setLatestJob({
+          companyCnpjMasked: j.companyCnpjMasked,
+          trigger: j.trigger,
+          updatedAt: j.updatedAt,
+          status: j.status,
+          detailLabel: adnJobDetailLabel({ status: j.status, summary: j.summary }),
+        });
+      } catch {
+        if (!cancelled) {
+          setLatestJob(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveOrganizationId, orgLoading, overview.data]);
 
   const list = monitoredQuery.companies ?? [];
+  const counts = overview.data?.counts;
+  const attention = overview.data?.attention;
+  const totalJobs = counts
+    ? counts.queued + counts.running + counts.failed + counts.completed + counts.partial
+    : null;
+  const successDenom = counts ? counts.completed + counts.partial + counts.failed : 0;
+  const successRate =
+    counts && successDenom > 0
+      ? Math.round(((counts.completed + counts.partial) / successDenom) * 100)
+      : null;
+
+  const summaryCards = useMemo(
+    () =>
+      counts
+        ? [
+            { label: "Na fila", value: counts.queued, href: "/execucoes?status=queued" },
+            { label: "Em execução", value: counts.running, href: "/execucoes?status=running" },
+            {
+              label: "Falhas (7 dias)",
+              value: attention?.failedLast7d ?? 0,
+              href: "/execucoes?status=failed",
+            },
+            {
+              label: "Concluídas",
+              value: counts.completed + counts.partial,
+              href: "/execucoes?status=completed",
+            },
+          ]
+        : [],
+    [counts, attention?.failedLast7d],
+  );
 
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Visão geral das empresas monitoradas, pastas locais e últimas execuções da automação.
+          Visão geral das empresas monitoradas, pastas locais e execuções ADN da organização activa.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {overview.error ? (
+        <p className="text-sm text-red-800 dark:text-red-300" role="alert">
+          {overview.error}{" "}
+          <button type="button" className="underline" onClick={() => void overview.reload()}>
+            Tentar novamente
+          </button>
+        </p>
+      ) : null}
+
+      {attention ? <ExecutionsAttentionBanner attention={attention} /> : null}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-black/5 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/[0.03]">
           <p className="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
             Empresas monitoradas
           </p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums">
-            {list.length}
-          </p>
+          <p className="mt-2 text-3xl font-semibold tabular-nums">{list.length}</p>
           <Link
             href="/empresas/nova"
             className="mt-3 inline-block text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
@@ -93,45 +174,55 @@ export default function DashboardPage() {
             Cadastrar empresa
           </Link>
         </div>
-        <div className="rounded-xl border border-black/5 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/[0.03]">
-          <p className="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-            Execuções (total)
-          </p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums">
-            {executions.length}
-          </p>
-          <p className="mt-3 text-xs text-black/55 dark:text-white/50">
-            Inclui simulações locais até o agente desktop estar ligado.
-          </p>
-        </div>
-        <div className="rounded-xl border border-black/5 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/[0.03]">
-          <p className="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-            Taxa de sucesso
-          </p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums">
-            {successRate === null ? "—" : `${successRate}%`}
-          </p>
-          <p className="mt-3 text-xs text-black/55 dark:text-white/50">
-            Histórico neste navegador (persistido localmente).
-          </p>
-        </div>
+        {overview.loading && !counts ? (
+          <div className="col-span-1 rounded-xl border border-black/5 p-5 dark:border-white/10 sm:col-span-3">
+            <p className="text-sm text-black/55 dark:text-white/50">A carregar resumo de execuções…</p>
+          </div>
+        ) : (
+          summaryCards.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-xl border border-black/5 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/[0.03]"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                {card.label}
+              </p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums">{card.value}</p>
+              <Link
+                href={card.href}
+                className="mt-3 inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              >
+                Ver em Execuções
+              </Link>
+            </div>
+          ))
+        )}
       </div>
+
+      {totalJobs != null ? (
+        <p className="text-xs text-black/55 dark:text-white/50">
+          Total de jobs registados: {totalJobs}
+          {successRate != null ? ` · Taxa de conclusão (com resultado): ${successRate}%` : null}
+        </p>
+      ) : null}
 
       <MonitoredCompaniesSection
         query={monitoredQuery}
         effectiveOrganizationId={effectiveOrganizationId}
+        adnLastJobsByCompanyId={overview.data?.lastJobByCompanyId}
       />
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
         <h2 className="text-sm font-semibold">Rotina mensal</h2>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Cada empresa usa o <strong className="font-medium">dia D</strong> configurado na ficha (1–28), interpretado
-          em <strong className="font-medium">{settings.timezone}</strong>. Quando a organização tem ADN activo na
-          nuvem, o portal pode enfileirar coleta automática nesse dia civil.
+          Cada empresa tem um <strong className="font-medium">dia D</strong> (1–28) na ficha — a coleta
+          automática ADN é enfileirada nesse dia civil, no fuso{" "}
+          <strong className="font-medium">{settings.timezone}</strong>. Não é sempre o dia 1; configure
+          por empresa conforme a sua operação.
         </p>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Na lista acima pode solicitar sincronização ADN (fila no portal) ou abrir a ficha da empresa para testes
-          locais.
+          Na lista acima pode pedir sincronização manual (entra na fila no portal) ou abrir a ficha para
+          certificado, motor de recolha e histórico.
         </p>
       </section>
 
@@ -145,27 +236,36 @@ export default function DashboardPage() {
             Ver todas
           </Link>
         </div>
-        {lastRun ? (
+        {latestJob ? (
           <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] p-4 text-sm dark:border-white/10 dark:bg-white/[0.03]">
             <p className="font-medium text-[var(--foreground)]">
-              {displayCnpjLabel(lastRun.companyCnpjDigits)} ·{" "}
+              {latestJob.companyCnpjMasked} ·{" "}
               <span className="text-black/60 dark:text-white/55">
-                {executionTriggerLabel(lastRun.trigger)}
+                {executionTriggerLabel(latestJob.trigger)}
               </span>
             </p>
-            <p className="mt-1 text-xs text-black/55 dark:text-white/50">
-              {new Date(lastRun.startedAt).toLocaleString("pt-BR")} ·{" "}
-              {executionStatusLabel(lastRun.status)}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55 dark:text-white/50">
+              <span>
+                {new Date(latestJob.updatedAt).toLocaleString("pt-BR")} ·{" "}
+                {formatAdnJobRelativeTime(latestJob.updatedAt)}
+              </span>
+              <span
+                className={`inline-flex rounded-full px-2 py-0.5 font-medium ${adnJobStatusBadgeClass(
+                  latestJob.status,
+                )}`}
+              >
+                {adnJobStatusLabel(latestJob.status)}
+              </span>
             </p>
-            {lastRun.detail ? (
+            {latestJob.detailLabel && latestJob.detailLabel !== "—" ? (
               <p className="mt-2 text-xs leading-relaxed text-black/60 dark:text-white/55">
-                {lastRun.detail}
+                {latestJob.detailLabel}
               </p>
             ) : null}
           </div>
         ) : (
           <p className="mt-3 text-sm text-black/55 dark:text-white/50">
-            Nenhuma execução ainda. Cadastre uma empresa ou abra{" "}
+            Nenhuma execução ADN nesta organização. Cadastre uma empresa ou abra{" "}
             <Link href="/execucoes" className="text-emerald-700 dark:text-emerald-400">
               Execuções
             </Link>
@@ -209,4 +309,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

@@ -96,3 +96,14 @@ export function getAdnPublicRecentJobsLimit(): { max: number; windowMs: number }
 export function adnRecentJobsRateKey(userId: string, organizationId: string): string {
   return `adn:get-recent-jobs:${userId}:${organizationId}`;
 }
+
+export function getAdnPublicExecutionsOverviewLimit(): { max: number; windowMs: number } {
+  const raw = process.env.ADN_PUBLIC_EXECUTIONS_OVERVIEW_RATE_LIMIT_PER_MIN?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : 30;
+  const max = Number.isFinite(n) && n > 0 ? n : 30;
+  return { max, windowMs: 60_000 };
+}
+
+export function adnExecutionsOverviewRateKey(userId: string, organizationId: string): string {
+  return `adn:get-executions-overview:${userId}:${organizationId}`;
+}
