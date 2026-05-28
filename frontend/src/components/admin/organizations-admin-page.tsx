@@ -12,6 +12,7 @@ import {
   type FeApiFailureKind,
 } from "@/lib/fe-api-error";
 import { CreateOrganizationDialog } from "@/components/admin/create-organization-dialog";
+import { apiFetch } from "@/lib/api-client";
 
 type MeIssue = { kind: FeApiFailureKind; message: string } | null;
 
@@ -37,7 +38,7 @@ export function OrganizationsAdminPage() {
     setMeLoading(true);
     setMeIssue(null);
     try {
-      const res = await fetch("/api/v1/me", { credentials: "include" });
+      const res = await apiFetch("/api/v1/me");
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
         const { kind, text } = messageForFailedResponse(res.status, body);
@@ -87,9 +88,8 @@ export function OrganizationsAdminPage() {
   async function accessNow(organizationId: string) {
     setBusyAccessId(organizationId);
     try {
-      const res = await fetch("/api/v1/session/active-organization", {
+      const res = await apiFetch("/api/v1/session/active-organization", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ organizationId }),
       });

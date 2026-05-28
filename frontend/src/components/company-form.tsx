@@ -8,6 +8,7 @@ import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-s
 import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
 import { buildWelcomeExecution, usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
+import { apiFetch } from "@/lib/api-client";
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
@@ -47,9 +48,8 @@ export function CompanyForm() {
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/v1/companies", {
+      const res = await apiFetch("/api/v1/companies", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cnpjDigits: digits,
@@ -71,9 +71,8 @@ export function CompanyForm() {
         return;
       }
       appendExecution(buildWelcomeExecution(company));
-      await fetch("/api/v1/session/active-company", {
+      await apiFetch("/api/v1/session/active-company", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId: company.id }),
       });

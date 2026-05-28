@@ -85,6 +85,25 @@ from download_engine import (
 )
 
 
+PATCH_JOB_MAX_ATTEMPTS = 3
+PATCH_JOB_RETRY_SEC = 2.0
+
+
+def _patch_job_with_retries(**kwargs) -> None:
+    """PATCH HMAC com retentativas antes de fallback SQL (menor privilégio na BD)."""
+    last_err: Exception | None = None
+    for attempt in range(1, PATCH_JOB_MAX_ATTEMPTS + 1):
+        try:
+            patch_job(**kwargs)
+            return
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            if attempt < PATCH_JOB_MAX_ATTEMPTS:
+                time.sleep(PATCH_JOB_RETRY_SEC)
+    if last_err is not None:
+        raise last_err
+
+
 class NoCompanyArtifactsError(RuntimeError):
     """Job sem ficheiros da empresa após execução do downloader."""
 
@@ -614,7 +633,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
 
     job_log(jid, "portal", "PATCH job=completed (a aplicar resumo no portal…)")
     try:
-        patch_job(
+        _patch_job_with_retries(
             base_url=portal_url,
             secret=secret,
             job_id=jid,
@@ -674,7 +693,7 @@ def fail_job(
         summary["failureCategory"] = cat
     if user_safe_detail:
         summary["userSafeDetail"] = sanitize_user_safe_detail(user_safe_detail, max_len=500)
-    patch_job(
+    _patch_job_with_retries(
         base_url=portal_url,
         secret=secret,
         job_id=jid,
@@ -689,6 +708,9 @@ def _force_fail_job_in_db(dsn: str, jid: str, message: str, *, reason: str = "pa
     """
     Fallback de último recurso: se o PATCH ao portal falhar (rede, 503, etc.) e o job ficar
     em «running», marca-o como failed directamente na BD para não ficar preso.
+
+    Em produção prefira `ADN_WORKER_DATABASE_URL` com role `adn_worker` (ver
+    docs/runbooks/adn-worker-postgres-least-privilege.md).
     """
     if not jid:
         return False

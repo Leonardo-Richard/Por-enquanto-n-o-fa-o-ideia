@@ -18,6 +18,7 @@
     "spider:site": "node ./scripts/site-spider.mjs"
   },
   "dependencies": {
+    "@repo/adn-internal": "file:../packages/adn-internal",
     "@repo/db": "file:../packages/db",
     "@repo/scheduling": "file:../packages/scheduling",
     "@repo/shared": "file:../packages/shared",

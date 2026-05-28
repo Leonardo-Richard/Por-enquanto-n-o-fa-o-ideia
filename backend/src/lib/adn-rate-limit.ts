@@ -2,6 +2,11 @@ type Bucket = number[];
 
 const buckets = new Map<string, Bucket>();
 
+/** Apenas testes — evita vazamento de estado entre casos. */
+export function clearAdnRateLimitBucketsForTests(): void {
+  buckets.clear();
+}
+
 function pruneWindow(ts: number[], windowMs: number, now: number): number[] {
   return ts.filter((t) => now - t < windowMs);
 }

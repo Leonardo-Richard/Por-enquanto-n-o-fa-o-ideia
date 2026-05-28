@@ -11,6 +11,7 @@ import {
   messageForFailedResponse,
   type FeApiFailureKind,
 } from "@/lib/fe-api-error";
+import { apiFetch } from "@/lib/api-client";
 
 type MeIssue = { kind: FeApiFailureKind; message: string } | null;
 
@@ -37,7 +38,7 @@ function PickerInner() {
     setMeLoading(true);
     setMeIssue(null);
     try {
-      const res = await fetch("/api/v1/me", { credentials: "include" });
+      const res = await apiFetch("/api/v1/me");
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
         const { kind, text } = messageForFailedResponse(res.status, body);
@@ -99,9 +100,8 @@ function PickerInner() {
     if (organizations.length === 1) {
       const only = organizations[0]!.id;
       void (async () => {
-        await fetch("/api/v1/session/active-organization", {
+        await apiFetch("/api/v1/session/active-organization", {
           method: "POST",
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ organizationId: only }),
         });
@@ -114,9 +114,8 @@ function PickerInner() {
   async function openOrganization(id: string) {
     setBusyId(id);
     try {
-      await fetch("/api/v1/session/active-organization", {
+      await apiFetch("/api/v1/session/active-organization", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ organizationId: id }),
       });

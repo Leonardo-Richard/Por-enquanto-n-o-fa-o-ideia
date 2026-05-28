@@ -4,6 +4,7 @@ import type { Company } from "@repo/shared";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useId, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 type MemberRow = {
   userId: string;
@@ -45,9 +46,7 @@ export default function EmpresaUsuariosPage() {
     if (q.trim()) {
       qs.set("q", q.trim());
     }
-    const res = await fetch(`/api/v1/organizations/${orgId}/members?${qs}`, {
-      credentials: "include",
-    });
+    const res = await apiFetch(`/api/v1/organizations/${orgId}/members?${qs}`);
     if (res.status === 403) {
       setForbidden(true);
       setItems([]);
@@ -72,7 +71,7 @@ export default function EmpresaUsuariosPage() {
     let cancelled = false;
     void (async () => {
       setOrgResolveError(null);
-      const res = await fetch(`/api/v1/companies/${companyId}`, { credentials: "include" });
+      const res = await apiFetch(`/api/v1/companies/${companyId}`);
       if (cancelled) {
         return;
       }
@@ -114,9 +113,8 @@ export default function EmpresaUsuariosPage() {
       setFormError("Organização ainda não carregada.");
       return;
     }
-    const res = await fetch(`/api/v1/organizations/${organizationId}/members`, {
+    const res = await apiFetch(`/api/v1/organizations/${organizationId}/members`, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -135,9 +133,8 @@ export default function EmpresaUsuariosPage() {
     if (!organizationId) {
       return;
     }
-    const res = await fetch(`/api/v1/organizations/${organizationId}/members/${userId}`, {
+    const res = await apiFetch(`/api/v1/organizations/${organizationId}/members/${userId}`, {
       method: "PATCH",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ companyRole }),
     });
@@ -157,9 +154,9 @@ export default function EmpresaUsuariosPage() {
     if (!removeTarget || !organizationId) {
       return;
     }
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/v1/organizations/${organizationId}/members/${removeTarget.userId}`,
-      { method: "DELETE", credentials: "include" },
+      { method: "DELETE" },
     );
     if (res.status === 409) {
       const j = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;

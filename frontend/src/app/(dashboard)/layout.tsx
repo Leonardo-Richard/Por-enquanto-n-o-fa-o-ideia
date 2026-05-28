@@ -2,12 +2,15 @@ import { Suspense } from "react";
 import { SessionAuthGate } from "@/components/session-auth-gate";
 import { WorkspaceGate } from "@/components/workspace-gate";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { enforceDashboardPortalGate } from "@/server/dashboard/dashboard-portal-gate";
 
-export default function DashboardGroupLayout({
+export default async function DashboardGroupLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await enforceDashboardPortalGate();
+
   return (
     <Suspense
       fallback={

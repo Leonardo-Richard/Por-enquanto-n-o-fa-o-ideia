@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export type CreateOrganizationResult =
   | {
@@ -42,9 +43,8 @@ export function CreateOrganizationForm({ onSubmitted, onCancel }: Props) {
         tradeName: tradeName.trim() === "" ? null : tradeName.trim(),
         taxIdDigits: taxIdDigits.trim() === "" ? null : taxIdDigits.trim(),
       };
-      const res = await fetch("/api/v1/organizations", {
+      const res = await apiFetch("/api/v1/organizations", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "x-organization-create-source": "admin_ui",

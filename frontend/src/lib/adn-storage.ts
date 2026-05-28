@@ -79,6 +79,11 @@ export function adnPdfsZipMaxCount(): number {
   return Number.isFinite(n) && n > 0 ? n : 200;
 }
 
+export function adnCommitVerifyStorageSha256(): boolean {
+  const raw = process.env["ADN_COMMIT_VERIFY_STORAGE_SHA256"]?.trim().toLowerCase();
+  return raw !== "false" && raw !== "0";
+}
+
 export function adnPdfsZipMaxTotalBytes(): number {
   const raw = process.env["ADN_PDFS_ZIP_MAX_TOTAL_BYTES"];
   const n = raw ? Number.parseInt(raw, 10) : 150 * 1024 * 1024;

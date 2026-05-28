@@ -37,3 +37,20 @@ export async function createAdnPresignedPutUrl(objectPath: string): Promise<{
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
   return { signedUrl: data.signedUrl, expiresAt, expiresIn };
 }
+
+/** Download de bytes via service role (verificação SHA-256 no commit). */
+export async function downloadAdnObjectBytes(objectPath: string): Promise<Uint8Array> {
+  const supabase = getAdnSupabaseServiceClient();
+  const bucket = adnStorageBucket();
+  const { data, error } = await supabase.storage.from(bucket).download(objectPath);
+  if (error || !data) {
+    throw new Error(error?.message ?? "Falha ao obter ficheiro ADN do storage.");
+  }
+  const buf = await data.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+export function adnCommitVerifyStorageSha256(): boolean {
+  const raw = process.env["ADN_COMMIT_VERIFY_STORAGE_SHA256"]?.trim().toLowerCase();
+  return raw !== "false" && raw !== "0";
+}

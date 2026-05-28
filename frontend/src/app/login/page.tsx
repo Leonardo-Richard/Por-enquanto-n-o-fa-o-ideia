@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useAppSession } from "@/context/app-session";
 import { LegalFooterLinks } from "@/components/legal-footer-links";
+import { apiFetch } from "@/lib/api-client";
 import { signInEmail } from "@/lib/auth-browser";
 
 function safeNext(raw: string | null): string {
@@ -15,9 +16,7 @@ function safeNext(raw: string | null): string {
 }
 
 async function tryAutoSelectSingleOrganization() {
-  const res = await fetch("/api/v1/organizations/accessible?page=1&pageSize=5", {
-    credentials: "include",
-  });
+  const res = await apiFetch("/api/v1/organizations/accessible?page=1&pageSize=5");
   if (!res.ok) {
     return;
   }
@@ -26,9 +25,8 @@ async function tryAutoSelectSingleOrganization() {
     return;
   }
   const only = body.items[0].id;
-  await fetch("/api/v1/session/active-organization", {
+  await apiFetch("/api/v1/session/active-organization", {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ organizationId: only }),
   });

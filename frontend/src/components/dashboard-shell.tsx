@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAppSession } from "@/context/app-session";
 import { signOut } from "@/lib/auth-browser";
 import { isSuperadminOrganizationsNavVisible } from "@/components/dashboard-shell-fr100";
+import { apiFetch } from "@/lib/api-client";
 
 type NavItem = {
   href: string;
@@ -53,7 +54,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/v1/me", { credentials: "include" });
+        const res = await apiFetch("/api/v1/me");
         const j = (await res.json().catch(() => null)) as {
           activeOrganizationName?: string | null;
           isSuperadmin?: boolean;

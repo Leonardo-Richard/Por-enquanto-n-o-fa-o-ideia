@@ -1,0 +1,28 @@
+{
+  "name": "@repo/adn-internal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "npx vitest run"
+  },
+  "dependencies": {
+    "@repo/db": "file:../db",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.8"
+  }
+}

@@ -70,6 +70,7 @@ flowchart TB
 ### 3.2 Paridade dev / staging / prod
 
 - **Recomendação:** um ficheiro `.env.example` completo (FR2); segredos reais em `.env.local` (dev) e secret manager do deploy (Vercel, etc.).  
+- **API separada:** com `NEXT_PUBLIC_API_BASE_URL` definido, a UI deve usar `apiFetch` / `apiUrl` de `frontend/src/lib/api-client.ts` (não `fetch("/api/v1/...")` hardcoded).  
 - **Decisão em aberto (PRD §7):** Postgres local vs remoto em dev — arquitetura **neutra**: ambos válidos desde que migrações em `db/migrations/` sejam a fonte de verdade do schema (CR2).
 
 ---

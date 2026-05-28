@@ -13,6 +13,7 @@ import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-s
 import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
 import { usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
+import { apiFetch } from "@/lib/api-client";
 import { AdnSyncPanel } from "./adn-sync-panel";
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
@@ -45,7 +46,7 @@ export default function EmpresaDetailPage() {
     let cancelled = false;
     void (async () => {
       setLoadError(null);
-      const res = await fetch(`/api/v1/companies/${id}`, { credentials: "include" });
+      const res = await apiFetch(`/api/v1/companies/${id}`);
       if (!res.ok) {
         if (!cancelled) {
           setLoadError("Empresa não encontrada ou sem acesso.");
@@ -119,9 +120,8 @@ export default function EmpresaDetailPage() {
       setFieldError(monthlyErr);
       return;
     }
-    const res = await fetch(`/api/v1/companies/${comp.id}`, {
+    const res = await apiFetch(`/api/v1/companies/${comp.id}`, {
       method: "PATCH",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tradeName,
@@ -152,9 +152,8 @@ export default function EmpresaDetailPage() {
     ) {
       return;
     }
-    const res = await fetch(`/api/v1/companies/${comp.id}`, {
+    const res = await apiFetch(`/api/v1/companies/${comp.id}`, {
       method: "DELETE",
-      credentials: "include",
     });
     if (!res.ok) {
       window.alert("Sem permissão ou erro ao remover.");

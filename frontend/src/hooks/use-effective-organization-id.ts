@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export type MeSummary = {
   effectiveOrganizationId: string | null;
@@ -14,7 +15,7 @@ export function useMeSummary() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/me", { credentials: "include" });
+      const res = await apiFetch("/api/v1/me");
       const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
       if (!res.ok || !body) {
         setData(null);
