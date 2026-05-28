@@ -1,14 +1,15 @@
 {
   "name": "portal-automacao-nf",
   "private": true,
-  "packageManager": "npm@11.9.0",
+  "packageManager": "pnpm@9.15.9",
   "workspaces": [
     "frontend",
     "backend",
     "packages/*"
   ],
   "scripts": {
-    "probe:pooler": "npm run probe:pooler -w frontend",
+    "db:apply-migrations": "node scripts/apply-migrations.mjs",
+    "probe:pooler": "pnpm --filter frontend probe:pooler",
     "vendor:nfse-dist": "node scripts/vendor-nfse-dist.mjs",
     "setup:adn-playwright": "node scripts/setup-adn-playwright.mjs",
     "sync:adn-extension-from-chrome": "node scripts/sync-adn-extension-from-chrome.mjs",
@@ -20,11 +21,11 @@
     "fix:adn-stale-jobs": "node scripts/release-stale-adn-jobs.mjs",
     "fix:adn-all-running": "node scripts/fix-adn-all-running-now.mjs",
     "status:adn-jobs": "node scripts/adn-jobs-status.mjs",
-    "dev:with-adn-bridge": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"npm run dev:frontend\" \"npm run worker:adn-bridge\"",
-    "dev:with-adn-bridge-backend": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run worker:adn-bridge\"",
-    "dev:auto": "npm run dev:auto -w backend",
-    "dev:frontend": "npm run dev -w frontend",
-    "dev:backend": "npm run dev -w backend",
+    "dev:with-adn-bridge": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"pnpm dev:frontend\" \"pnpm worker:adn-bridge\"",
+    "dev:with-adn-bridge-backend": "concurrently -k -n \"portal,adn\" -c \"cyan,magenta\" \"pnpm dev:backend\" \"pnpm worker:adn-bridge\"",
+    "dev:auto": "pnpm --filter backend dev:auto",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "concurrently": "^9.2.1",
     "is-regex": "^1.2.1",
+    "postgres": "^3.4.5",
     "turbo": "^2.4.4",
     "typescript": "^5.7.3"
   },

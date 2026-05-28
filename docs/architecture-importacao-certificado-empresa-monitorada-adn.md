@@ -71,7 +71,7 @@ flowchart TB
 
 - **Fonte única de verdade do `href`:** um helper `getAdnCertRunbookUrl(): string | null` lê `process.env.NEXT_PUBLIC_ADN_CERT_RUNBOOK_URL` em build; **Alert** e modal “Como funciona?” reutilizam o mesmo helper (evita URLs divergentes).  
 - **Links externos:** `target="_blank"` + `rel="noopener noreferrer"`.  
-- **Links internos:** rota opcional `apps/web/src/app/(dashboard)/ajuda/adn-certificado/page.tsx` (ou `app/ajuda/...`) que renderiza MD estático ou `redirect()` para o mesmo URL público — útil se a equipa quiser **same-origin** sem expor `NEXT_PUBLIC_*` a terceiros.
+- **Links internos:** rota opcional `frontend/src/app/(dashboard)/ajuda/adn-certificado/page.tsx` (ou `app/ajuda/...`) que renderiza MD estático ou `redirect()` para o mesmo URL público — útil se a equipa quiser **same-origin** sem expor `NEXT_PUBLIC_*` a terceiros.
 
 ### 3.3 Modal “Como funciona?” (ADN)
 
@@ -173,7 +173,7 @@ Se o manual interno **não** puder estar em URL pública:
 | **CE-FR10** | Mapa `error_code` → mensagem na API; opcionalmente props do bloco ADN |
 | **CE-NFR1** | Ausência de rotas/inputs; revisão de PR |
 | **CE-NFR2** | `.gitignore` + templates com placeholders |
-| **CE-NFR5** | Padrões de logging no worker wrapper e em `apps/web` |
+| **CE-NFR5** | Padrões de logging no worker wrapper e em `frontend` |
 | **CE-FR8** | Copy próximo ao export FR48 (opcional); documentação |
 | **CE-FR1–CE-FR7, CE-FR11–CE-FR12** | Principalmente `docs/briefing-*` + runbooks; sem componente runtime no portal excepto links |
 

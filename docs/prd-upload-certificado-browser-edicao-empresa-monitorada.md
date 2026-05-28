@@ -204,7 +204,7 @@ Quando o **ADR** e a primeira versão **estiverem merged:**
 - `docs/prd-integracao-nfse-dist-adn.md`  
 - `docs/architecture-importacao-certificado-empresa-monitorada-adn.md`  
 - `docs/briefing-importacao-certificado-empresa-monitorada-adn.md`  
-- UI: `apps/web/src/app/(dashboard)/empresas/[id]/`
+- UI: `frontend/src/app/(dashboard)/empresas/[id]/`
 
 ---
 

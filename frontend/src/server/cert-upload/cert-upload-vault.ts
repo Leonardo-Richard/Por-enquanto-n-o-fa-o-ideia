@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { certVaultMockStore, clearCertVaultMockForTests } from "@repo/adn-internal";
 import { getAdnSupabaseServiceClient } from "@/lib/adn-supabase-server";
-
-/** Armazenamento in-memory apenas para testes automatizados. */
-const mockStore = new Map<string, Buffer>();
 
 type CertUploadVaultDriver = "mock" | "supabase-storage";
 type CertificateVaultEnvelopeV1 = {
@@ -12,9 +10,7 @@ type CertificateVaultEnvelopeV1 = {
   password: string;
 };
 
-export function clearCertUploadVaultMockForTests(): void {
-  mockStore.clear();
-}
+export { clearCertVaultMockForTests as clearCertUploadVaultMockForTests };
 
 function certUploadVaultBucket(): string {
   return process.env.CERT_UPLOAD_VAULT_BUCKET?.trim() || "adn-certificates";
@@ -78,7 +74,7 @@ export async function writeCertificateToVault(input: {
   const driver = getCertUploadVaultDriver();
   if (driver === "mock") {
     const vaultRef = `mock:${randomUUID()}`;
-    mockStore.set(vaultRef, payload);
+    certVaultMockStore.set(vaultRef, payload);
     return { vaultRef };
   }
 
@@ -101,7 +97,7 @@ export async function writeCertificateToVault(input: {
 export async function deleteCertificateVaultObject(vaultRef: string): Promise<void> {
   const driver = getCertUploadVaultDriver();
   if (vaultRef.startsWith("mock:")) {
-    mockStore.delete(vaultRef);
+    certVaultMockStore.delete(vaultRef);
     return;
   }
   const parsed = parseSupabaseVaultRef(vaultRef);

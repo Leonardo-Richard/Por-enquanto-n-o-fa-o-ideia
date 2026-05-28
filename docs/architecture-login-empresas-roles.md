@@ -271,7 +271,7 @@ sequenceDiagram
 ## 14. Próximos passos
 
 1. **@data-engineer** — DDL final, índices, RLS opcional (se Postgres RLS for adotado: política `company_id IN (SELECT ... memberships)`).  
-2. **@dev** — Auth adapter + handlers + middleware em `apps/web`.  
+2. **@dev** — Auth adapter + handlers + middleware em `frontend`.  
 3. Atualizar **`docs/architecture.md`** (diagrama auth e “filtra por account_id”) quando o incremento estiver merged.
 
 ---

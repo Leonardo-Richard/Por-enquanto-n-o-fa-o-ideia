@@ -2,7 +2,7 @@
 
 **Produto:** Portal NF  
 **Fontes:** `docs/prd-forcar-busca-notas-ficha-empresa.md`, `docs/architecture-forcar-busca-notas-ficha-empresa.md`, `docs/front-end-spec-forcar-busca-notas-ficha-empresa.md`, `docs/briefing-forcar-busca-notas-ficha-empresa.md`  
-**Pré-requisito técnico:** `apps/web/src/lib/adn-sync-client.ts` e `apps/web/src/hooks/use-adn-sync-for-company.ts` operacionais (épico **EM-01A** / listagem ADN); **`POST`** ADN não deve ser duplicado (**NFR35**).  
+**Pré-requisito técnico:** `frontend/src/lib/adn-sync-client.ts` e `frontend/src/hooks/use-adn-sync-for-company.ts` operacionais (épico **EM-01A** / listagem ADN); **`POST`** ADN não deve ser duplicado (**NFR35**).  
 **Autor:** SM (River / AIOS)  
 **Data:** 2026-04-24  
 **Versão do conjunto:** **1.2** — fecho SM do lembrete PO (**AC10** / `feature_off`): decisão binária **omitir** callout **FR65/FR66** + texto **FR67** quando sync ADN indisponível; **AC9** reservado a **`forbidden`** + callout; **AC11–AC12** defesa multi-tenant e regressão.  
@@ -168,7 +168,7 @@
 
 ### Acceptance Criteria
 
-1. Existe ficheiro **`apps/web/src/hooks/use-organization-adn-sync-settings.ts`** (nome pode ajustar-se no PR) que aceita **`organizationId: string`** e devolve estado explícito: pelo menos **`loading`**, **`data`** (ou `null` quando `!res.ok`), **`error`** (opcional discriminação rede vs HTTP).  
+1. Existe ficheiro **`frontend/src/hooks/use-organization-adn-sync-settings.ts`** (nome pode ajustar-se no PR) que aceita **`organizationId: string`** e devolve estado explícito: pelo menos **`loading`**, **`data`** (ou `null` quando `!res.ok`), **`error`** (opcional discriminação rede vs HTTP).  
 2. O hook executa **`GET /api/v1/organizations/{organizationId}/adn-sync-settings`** com **`credentials: "include"`** e trata **`res.ok`**; em sucesso, faz parse do JSON alinhado ao handler: `localDownloadRoot`, `adnSyncEnabled`, `canManage` (tipos TypeScript partilhados ou inline consistentes com `configuracoes/page.tsx`).  
 3. **Cancelamento:** em `useEffect`, evitar `setState` após unmount (padrão `cancelled` ou `AbortController` — conforme arquitectura BNF §5).  
 4. **NFR38:** o `organizationId` passado ao hook na ficha deve vir **exclusivamente** de **`company.organizationId`** após `GET /api/v1/companies/{id}` com sucesso; documentar no PR que não se usa query string para org.  
@@ -183,7 +183,7 @@
 
 ### Dev Notes
 
-- Reutilizar padrão de `apps/web/src/app/(dashboard)/dashboard/page.tsx` (linhas ~17–50) como referência de parse.  
+- Reutilizar padrão de `frontend/src/app/(dashboard)/dashboard/page.tsx` (linhas ~17–50) como referência de parse.  
 - **Não** estender `GET /api/v1/companies/{id}` com `localDownloadRoot` (**ADR-01**).  
 - A validação **`company.organizationId` vs org activa** fica explicitada em **BNF-01B AC11** (o hook **não** deve ser invocado com id inconsistente — ver **Dev Note** em **BNF-01B**).
 
@@ -195,7 +195,7 @@
 
 **Dependências (DoR):** **BNF-01A** concluído **ou** incluído no mesmo PR antes da UI final.
 
-**Referências:** PRD **FR64–FR68**; spec UX BNF §4–§8, §12; arquitectura BNF §2, §5, §8; `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`, `use-adn-sync-for-company.ts`.
+**Referências:** PRD **FR64–FR68**; spec UX BNF §4–§8, §12; arquitectura BNF §2, §5, §8; `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`, `use-adn-sync-for-company.ts`.
 
 **Riscos:** Dois botões com o mesmo `POST` (spec proíbe); copy a induzir download síncrono no browser.
 
@@ -262,7 +262,7 @@
 
 ### Acceptance Criteria
 
-1. `apps/web/src/app/(dashboard)/dashboard/page.tsx` deixa de implementar inline o `useEffect` de parse de **`adn-sync-settings`** **ou** reduz-se a um thin wrapper que chama o hook.  
+1. `frontend/src/app/(dashboard)/dashboard/page.tsx` deixa de implementar inline o `useEffect` de parse de **`adn-sync-settings`** **ou** reduz-se a um thin wrapper que chama o hook.  
 2. Comportamento observável do Painel (estado `serverMirrorPath` ou equivalente) **equivalente** ao anterior.  
 3. Sem novas chamadas HTTP extra por render (dependências do hook correctas).
 
@@ -292,15 +292,15 @@
 - **AC10:** `GET adn-sync-settings` só com `access === "active" | "forbidden"`; em `feature_off` não há pedido nem UI **FR65/FR66/FR67**.
 - **AC11:** `company.organizationId === effectiveOrganizationId` (`useMeSummary`); caso contrário sem fetch e sem callout; `console.warn` apenas em `development`.
 - Copy de confirmação / sucesso alinhada à spec UX **§5.2**; CTA **«Buscar notas agora»** com `aria-busy` e `aria-label` distinto de **Actualizar**.
-- `npm run typecheck` e `npm run test` em `apps/web` passaram (2026-04-24).
+- `npm run typecheck` e `npm run test` em `frontend` passaram (2026-04-24).
 - **Pós-QA (@qa):** mensagem neutra com `role="status"` quando `GET adn-sync-settings` falha (HTTP/rede); em `access === "active"`, cartão de certificado/readiness renderizado **depois** de último job + acções (alinhamento spec UX §5.1).
 
 ### File List
 
-- `apps/web/src/hooks/use-organization-adn-sync-settings.ts` (novo)
-- `apps/web/src/app/(dashboard)/empresas/[id]/local-download-root-callout.tsx` (novo)
-- `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
-- `apps/web/src/hooks/use-adn-sync-for-company.ts`
+- `frontend/src/hooks/use-organization-adn-sync-settings.ts` (novo)
+- `frontend/src/app/(dashboard)/empresas/[id]/local-download-root-callout.tsx` (novo)
+- `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
+- `frontend/src/hooks/use-adn-sync-for-company.ts`
 
 ### Change Log
 
@@ -318,7 +318,7 @@
 **Revisor:** Quinn (@qa)  
 **Data:** 2026-04-24  
 **Âmbito:** revisão estática do código face a **BNF-01A** (AC1–6), **BNF-01B** (AC1–12), **NFR35–38**, DoD macro (evidência automatizada onde aplicável).  
-**Evidência automatizada citada pelo @dev:** `npm run typecheck` e `npm run test` em `apps/web` — OK (revisão QA não reexecutou a pipeline nesta sessão).
+**Evidência automatizada citada pelo @dev:** `npm run typecheck` e `npm run test` em `frontend` — OK (revisão QA não reexecutou a pipeline nesta sessão).
 
 ### Decisão de gate
 

@@ -51,7 +51,7 @@ flowchart TB
   DB -->|TLS pooler| PG
 ```
 
-**Regra de dependência (FR4, FR5):** `apps/web/src/app/(rotas UI)`, `components/*` e `hooks/*` **não** importam `getDb`, `createDb`, `@repo/db` com side-effect de ligação, nem pacotes que leem `DATABASE_URL`.
+**Regra de dependência (FR4, FR5):** `frontend/src/app/(rotas UI)`, `components/*` e `hooks/*` **não** importam `getDb`, `createDb`, `@repo/db` com side-effect de ligação, nem pacotes que leem `DATABASE_URL`.
 
 ---
 
@@ -61,7 +61,7 @@ flowchart TB
 
 | Variável | Onde corre | Finalidade |
 |----------|------------|--------------|
-| `DATABASE_URL` | Servidor apenas | URI Postgres (pooler transacional); usada por `getDb()` em `apps/web/src/lib/db.ts`. |
+| `DATABASE_URL` | Servidor apenas | URI Postgres (pooler transacional); usada por `getDb()` em `frontend/src/lib/db.ts`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Build + browser | Origem do projeto Supabase; hoje documentação e eventual cliente anon. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Build + browser | Chave anon/publicável; **só** se existir código cliente Supabase com RLS (FR8, NFR2). |
 | `BETTER_AUTH_*`, `BETTER_AUTH_SECRET`, etc. | Servidor | Inalterado (CR1). |
@@ -86,7 +86,7 @@ flowchart TB
 
 ## 5. API e domínio
 
-- **Localização:** `apps/web/src/app/api/v1/**/route.ts`, `apps/web/src/app/api/auth/[...all]/route.ts`, utilitários em `apps/web/src/app/api/v1/_lib/*`.  
+- **Localização:** `frontend/src/app/api/v1/**/route.ts`, `frontend/src/app/api/auth/[...all]/route.ts`, utilitários em `frontend/src/app/api/v1/_lib/*`.  
 - **Responsabilidades:** autenticação de sessão, `authz` por `companyId` / `account_id`, rate limit onde existir, serialização JSON estável.  
 - **Erros:** corpo JSON estruturado com `message` legível; códigos HTTP explícitos (401/403/4xx/5xx) para o cliente mapear UX conforme spec (401 → login, 403 → permissão, 5xx → retry).  
 - **Compatibilidade:** sem alterar paths nem nomes de campos públicos sem bump de versão de API (FR6).
@@ -109,7 +109,7 @@ Isto cumpre NFR4 e a opção UX de health interno sem misturar diagnóstico sens
 ## 7. Front-end e limites de bundle (alinhamento UX)
 
 - **Dados:** hooks e componentes `"use client"` consomem apenas `fetch` para `/api/...` (ou props de RSC).  
-- **Mensagens:** centralizar tratamento de erro com `messageFromApiJson` (`apps/web/src/lib/api-error-message.ts`) e componentes shadcn descritos na spec UX (`Alert`, toast, `Skeleton`).  
+- **Mensagens:** centralizar tratamento de erro com `messageFromApiJson` (`frontend/src/lib/api-error-message.ts`) e componentes shadcn descritos na spec UX (`Alert`, toast, `Skeleton`).  
 - **Componente opcional `ApiErrorBanner`:** props mínimas (`message`, `onRetry?`), `role="alert"` — encaixa na camada de apresentação sem tocar em domínio.  
 - **Realtime (FR8):** se aprovado, módulo dedicado (ex.: `lib/supabase-browser.ts`) instanciado **só** em árvores cliente que precisem de canal; **proibido** inicializar na `layout` raiz sem necessidade (evita subscrições globais e fuga de política RLS).
 

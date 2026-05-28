@@ -26,6 +26,10 @@ workers/nfse-portal-bridge/logs/
 # Lock do motor ADN browser (filelock) — runtime local
 .adn_browser_worker.lock
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Dependencies (AIOS)
 node_modules/
 node_modules

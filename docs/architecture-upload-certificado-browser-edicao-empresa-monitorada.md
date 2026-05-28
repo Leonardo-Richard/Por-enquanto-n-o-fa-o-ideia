@@ -152,7 +152,7 @@ flowchart TB
 | `active` | Readiness pode subir para nível “pronto para verificação” após worker sincronizar — **evitar** falso positivo: opcionalmente exigir *heartbeat* do worker antes de **OK** final. |
 | `revoked` | Equivalente a sem certificado para efeitos ADN. |
 
-**Coordenação:** reutilizar `apps/web/src/lib/adn-certificate-readiness-logic.ts` com novos inputs derivados da tabela de metadados (sem expor `vault_ref` ao cliente).
+**Coordenação:** reutilizar `frontend/src/lib/adn-certificate-readiness-logic.ts` com novos inputs derivados da tabela de metadados (sem expor `vault_ref` ao cliente).
 
 ---
 

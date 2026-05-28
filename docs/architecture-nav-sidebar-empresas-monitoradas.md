@@ -2,7 +2,7 @@
 
 **Fontes:** `docs/prd-nav-sidebar-empresas-monitoradas.md` (**FR49–FR52**, **NFR24–NFR25**), `docs/front-end-spec-nav-sidebar-empresas-monitoradas.md`.  
 **Documentos base:** `docs/architecture.md`, `docs/architecture-dois-niveis-organizacao-vs-empresas-fiscais.md` (contexto de sessão e API por `organizationId`).  
-**Estado do código de referência:** `apps/web/src/app/(dashboard)/layout.tsx`, `WorkspaceGate`, `DashboardShell`, `dashboard/page.tsx`, hook `useMonitoredCompanies`.
+**Estado do código de referência:** `frontend/src/app/(dashboard)/layout.tsx`, `WorkspaceGate`, `DashboardShell`, `dashboard/page.tsx`, hook `useMonitoredCompanies`.
 
 **Normativa:** **sem** novos endpoints, **sem** alterações de schema ou RLS. O incremento é **puramente de encaminhamento, UI partilhada e regras de estado do cliente** dentro do grupo de rotas `(dashboard)`.
 
@@ -19,7 +19,7 @@
 
 | Camada | Decisão |
 | ------ | -------- |
-| **Routing (Next.js App Router)** | Nova rota **`/empresas-monitoradas`** como `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx` (segmento de URL **hífen**, sem colisão com `/empresas/*`). |
+| **Routing (Next.js App Router)** | Nova rota **`/empresas-monitoradas`** como `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx` (segmento de URL **hífen**, sem colisão com `/empresas/*`). |
 | **Layout** | Reutiliza `(dashboard)/layout.tsx` → `SessionAuthGate` → `WorkspaceGate` → `DashboardShell` → `children`. |
 | **Dados** | Mesma stack que o Painel: `useMeSummary` / `useEffectiveOrganizationId` + `useMonitoredCompanies(organizationId)` → `GET /api/v1/organizations/:organizationId/monitored-companies`. |
 | **Portal / jobs locais** | A secção **Empresas monitoradas** no Painel e em `/empresas-monitoradas` usa **GET/POST ADN** partilhados (`adn-sync-client` + `useAdnSyncForCompany`) por linha — **sem** `runSync` na lista (**supersedido por EM-01**). `usePortal` permanece para execuções locais / KPIs onde aplicável. Ver `docs/architecture-empresas-monitoradas-editar-e-forcar-automacao.md`. |
@@ -39,7 +39,7 @@ flowchart TB
     PagePick["/empresas — Picker"]
     Hooks[useMonitoredCompanies + useMeSummary + ADN row hook]
   end
-  subgraph next [apps/web Next.js]
+  subgraph next [frontend Next.js]
     API["Route Handler GET .../monitored-companies"]
   end
   Shell --> PageDash
@@ -56,8 +56,8 @@ flowchart TB
 
 | URL | Ficheiro alvo | Notas |
 | --- | ------------- | ----- |
-| `/empresas-monitoradas` | `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx` | Client Component recomendado (`"use client"`) por paridade com `dashboard/page.tsx` e uso de hooks. |
-| *(inalterado)* `/empresas` | `apps/web/src/app/(dashboard)/empresas/page.tsx` | Picker; **não** mudar contrato `?next=` neste incremento. |
+| `/empresas-monitoradas` | `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx` | Client Component recomendado (`"use client"`) por paridade com `dashboard/page.tsx` e uso de hooks. |
+| *(inalterado)* `/empresas` | `frontend/src/app/(dashboard)/empresas/page.tsx` | Picker; **não** mudar contrato `?next=` neste incremento. |
 | *(inalterado)* `/empresas/nova`, `/empresas/[id]` | Dynamic segments existentes | **Não** entram no `nav`; estado activo do item «Empresas monitoradas» **não** deve usar prefixo `/empresas`. |
 
 **Convenção de pastas:** o segmento `empresas-monitoradas` (com hífen) é válido em App Router e produz pathname canónico sem ambiguidade com `/empresas/...`.
@@ -66,7 +66,7 @@ flowchart TB
 
 ## 4. Gates e sessão
 
-### 4.1 `WorkspaceGate` (`apps/web/src/components/workspace-gate.tsx`)
+### 4.1 `WorkspaceGate` (`frontend/src/components/workspace-gate.tsx`)
 
 Comportamento actual:
 
@@ -128,7 +128,7 @@ Substituir o array plano `href + label` por uma estrutura que permita **estraté
 ### 6.1 Opções (por ordem de preferência arquitectónica)
 
 1. **Extrair organismo partilhado** (recomendado pelo PRD §10):  
-   - Ex.: `apps/web/src/components/monitored-companies-section.tsx` (nome negociável).  
+   - Ex.: `frontend/src/components/monitored-companies-section.tsx` (nome negociável).  
    - Props mínimas: `companies`, `loading`, `issue`, `onRetry`, `onRunSync`, `emptyHref` (`/empresas/nova`).  
    - `dashboard/page.tsx` e `empresas-monitoradas/page.tsx` importam o mesmo organismo; **uma** implementação de `runSync` / labels de botão.
 
@@ -177,7 +177,7 @@ Validação de regressão: garantir que chamadas desde `/empresas-monitoradas` u
 
 ## 9. E2E e regressão
 
-- **Smoke:** se existir `apps/web/e2e/ler-smoke.spec.ts` (ou equivalente), acrescentar navegação `→ /empresas-monitoradas` e assert de título `h1` / lista.  
+- **Smoke:** se existir `frontend/e2e/ler-smoke.spec.ts` (ou equivalente), acrescentar navegação `→ /empresas-monitoradas` e assert de título `h1` / lista.  
 - **Manual:** tab até `nav`, confirmar ordem de foco e `aria-current` único (**spec UX §6**).
 
 ---

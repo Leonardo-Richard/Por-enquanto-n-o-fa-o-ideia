@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Traduzir o brainstorm sobre integração do repositório **[NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist)** (download de XML da distribuição DF-e e PDF DANFSE no Ambiente Nacional) no **Portal de Automação de Notas Fiscais** (`apps/web`, multi-tenant organização / empresas fiscais).
+Traduzir o brainstorm sobre integração do repositório **[NFSE_dist](https://github.com/RafaelOliveiraCf/NFSE_dist)** (download de XML da distribuição DF-e e PDF DANFSE no Ambiente Nacional) no **Portal de Automação de Notas Fiscais** (`frontend`, multi-tenant organização / empresas fiscais).
 
 Este documento é **somente briefing**: fixa âmbito, restrições, direcções de arquitetura e critérios de sucesso. **Não** substitui PRD, story de implementação nem desenho detalhado de API.
 

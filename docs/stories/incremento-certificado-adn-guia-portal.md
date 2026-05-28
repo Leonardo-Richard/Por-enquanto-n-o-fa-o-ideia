@@ -310,14 +310,14 @@ Cada PR que feche **CER-0x** deve satisfazer **todos** os itens aplicáveis:
 
 ### File List
 
-- `apps/web/src/components/ui/alert.tsx` (novo — padrão shadcn-style)  
-- `apps/web/src/lib/adn-cert-runbook-url.ts` (novo)  
-- `apps/web/src/lib/adn-worker-errors.ts` (novo)  
-- `apps/web/src/lib/adn-worker-errors.test.ts` (novo)  
-- `apps/web/src/lib/adn-zod-response.ts`  
-- `apps/web/src/server/api/v1/handlers/adn-failures.ts`  
-- `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`  
-- `apps/web/src/app/api/v1/adn-api.integration.test.ts`  
+- `frontend/src/components/ui/alert.tsx` (novo — padrão shadcn-style)  
+- `frontend/src/lib/adn-cert-runbook-url.ts` (novo)  
+- `frontend/src/lib/adn-worker-errors.ts` (novo)  
+- `frontend/src/lib/adn-worker-errors.test.ts` (novo)  
+- `frontend/src/lib/adn-zod-response.ts`  
+- `frontend/src/server/api/v1/handlers/adn-failures.ts`  
+- `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`  
+- `frontend/src/app/api/v1/adn-api.integration.test.ts`  
 - `.gitignore`  
 - `.env.example`  
 - `README.md`  
@@ -374,7 +374,7 @@ Pré-existentes referenciados em `adn-worker-errors.ts`: `ADN_INVALID_JSON`, `AD
 
 ### Testes automáticos (agente)
 
-- `apps/web`: `npx vitest run` — suíte unitária incl. `adn-worker-errors.test.ts` **passou** nesta revisão; testes de integração `adn-api.integration.test.ts` **skipped** sem `DATABASE_URL` local (o caso **CER-05 AC5** requer CI com Postgres para evidência verde).
+- `frontend`: `npx vitest run` — suíte unitária incl. `adn-worker-errors.test.ts` **passou** nesta revisão; testes de integração `adn-api.integration.test.ts` **skipped** sem `DATABASE_URL` local (o caso **CER-05 AC5** requer CI com Postgres para evidência verde).
 
 ### Próximos passos sugeridos
 

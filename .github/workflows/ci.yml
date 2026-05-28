@@ -51,8 +51,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
       - name: Apply SQL migrations
-        run: |
-          for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
+        run: pnpm db:apply-migrations
 
       - name: Lint
         run: pnpm lint
@@ -68,9 +67,28 @@ jobs:
           pnpm --filter frontend test:without-org-create-integration
           pnpm --filter @repo/shared test
           pnpm --filter @repo/scheduling test
+          pnpm --filter @repo/db test
 
       - name: Build
         run: pnpm build
+
+  python-adn-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install bridge dependencies
+        run: pip install -r workers/nfse-portal-bridge/requirements.txt
+
+      - name: pytest (nfse-portal-bridge)
+        working-directory: workers/nfse-portal-bridge
+        run: python -m pytest tests -q
 
   # MSYS-01 — integração superadmin com Postgres (POST /api/v1/organizations: 201/400/401/403/409).
   integration-superadmin:
@@ -113,8 +131,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
       - name: Apply SQL migrations
-        run: |
-          for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
+        run: pnpm db:apply-migrations
 
       - name: Run integration-superadmin (matriz HTTP)
         run: pnpm --filter frontend test:integration-superadmin
@@ -171,8 +188,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
       - name: Apply SQL migrations
-        run: |
-          for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
+        run: pnpm db:apply-migrations
 
       - name: Build frontend
         run: pnpm --filter frontend build

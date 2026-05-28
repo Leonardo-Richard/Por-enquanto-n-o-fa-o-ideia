@@ -380,9 +380,9 @@ Composer (GPT-5.2) via Cursor.
 - `db/migrations/20260423120000_ler_auth_multitenant.sql`
 - `packages/db/package.json`, `packages/db/tsconfig.json`, `packages/db/src/*`
 - `packages/shared/package.json`, `packages/shared/src/api-v1.ts`, `packages/shared/src/cnpj.ts`, `packages/shared/src/index.ts`
-- `apps/web/package.json`, `apps/web/vitest.config.ts`, `apps/web/playwright.config.ts`, `apps/web/e2e/smoke.spec.ts`, `apps/web/e2e/ler-smoke.spec.ts`
-- `apps/web/src/lib/api-error-message.ts`, `apps/web/src/lib/api-error-message.test.ts`, `apps/web/src/lib/auth-browser.test.ts`, `apps/web/src/app/api/v1/companies-api.integration.test.ts`
-- `apps/web/src/middleware.ts`, `apps/web/src/lib/*`, `apps/web/src/context/*`, `apps/web/src/hooks/*`, `apps/web/src/components/*`, `apps/web/src/app/**/*`
+- `frontend/package.json`, `frontend/vitest.config.ts`, `frontend/playwright.config.ts`, `frontend/e2e/smoke.spec.ts`, `frontend/e2e/ler-smoke.spec.ts`
+- `frontend/src/lib/api-error-message.ts`, `frontend/src/lib/api-error-message.test.ts`, `frontend/src/lib/auth-browser.test.ts`, `frontend/src/app/api/v1/companies-api.integration.test.ts`
+- `frontend/src/middleware.ts`, `frontend/src/lib/*`, `frontend/src/context/*`, `frontend/src/hooks/*`, `frontend/src/components/*`, `frontend/src/app/**/*`
 - `.env.example`, `.github/workflows/ci.yml`
 
 ---
@@ -407,7 +407,7 @@ Composer (GPT-5.2) via Cursor.
 ## QA Results
 
 **Revisão:** Quinn (QA / AIOS) — 2026-04-22  
-**Âmbito:** implementação atual no repositório (migrações, `apps/web`, `packages/db`, `packages/shared`, middleware, testes).  
+**Âmbito:** implementação atual no repositório (migrações, `frontend`, `packages/db`, `packages/shared`, middleware, testes).  
 **Decisão de gate:** **CONCERNS** — funcionalidade base credível e alinhada ao incremento; lacunas em evidência de testes, E2E/CI e alguns detalhes de contrato/segurança impedem **PASS** sem follow-up.
 
 ### Rastreio LER → evidência

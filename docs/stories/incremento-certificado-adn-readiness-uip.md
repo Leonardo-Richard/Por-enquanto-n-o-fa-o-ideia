@@ -120,7 +120,7 @@ Cada bloco **UIP-0x** mantém `**Status:** Draft` até cumprir **todos** os pont
 
 ### Tasks / Subtasks
 
-- [x] Handler em `apps/web/src/server/api/v1/handlers/adn-certificate-readiness.ts` (ou nome equivalente) + `route.ts` espelhando padrão `adn/sync`.  
+- [x] Handler em `frontend/src/server/api/v1/handlers/adn-certificate-readiness.ts` (ou nome equivalente) + `route.ts` espelhando padrão `adn/sync`.  
 - [x] Testes em `adn-api.integration.test.ts` (ou ficheiro dedicado) para GET **incluindo AC7**.
 
 ### Dev Notes
@@ -283,24 +283,24 @@ Cada bloco **UIP-0x** mantém `**Status:** Draft` até cumprir **todos** os pont
 
 ### File List
 
-- `apps/web/src/lib/adn-certificate-readiness-schema.ts`
-- `apps/web/src/lib/adn-certificate-readiness-memory.ts`
-- `apps/web/src/lib/adn-certificate-readiness-logic.ts`
-- `apps/web/src/lib/adn-cert-probe.ts`
-- `apps/web/src/lib/adn-certificate-readiness-client.ts`
-- `apps/web/src/lib/adn-runbook-anchor.ts`
-- `apps/web/src/lib/adn-hmac.ts`
-- `apps/web/src/lib/adn-rate-limit.ts`
-- `apps/web/src/hooks/use-adn-certificate-readiness.ts`
-- `apps/web/src/hooks/use-adn-sync-for-company.ts`
-- `apps/web/src/server/api/v1/handlers/adn-certificate-readiness.ts`
-- `apps/web/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/route.ts`
-- `apps/web/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/verify/route.ts`
-- `apps/web/src/app/(dashboard)/empresas/[id]/adn-certificate-readiness-card.tsx`
-- `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
-- `apps/web/src/app/api/v1/adn-api.integration.test.ts`
-- `apps/web/src/lib/adn-certificate-readiness-logic.test.ts`
-- `apps/web/src/components/ui/alert.tsx`
+- `frontend/src/lib/adn-certificate-readiness-schema.ts`
+- `frontend/src/lib/adn-certificate-readiness-memory.ts`
+- `frontend/src/lib/adn-certificate-readiness-logic.ts`
+- `frontend/src/lib/adn-cert-probe.ts`
+- `frontend/src/lib/adn-certificate-readiness-client.ts`
+- `frontend/src/lib/adn-runbook-anchor.ts`
+- `frontend/src/lib/adn-hmac.ts`
+- `frontend/src/lib/adn-rate-limit.ts`
+- `frontend/src/hooks/use-adn-certificate-readiness.ts`
+- `frontend/src/hooks/use-adn-sync-for-company.ts`
+- `frontend/src/server/api/v1/handlers/adn-certificate-readiness.ts`
+- `frontend/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/route.ts`
+- `frontend/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/verify/route.ts`
+- `frontend/src/app/(dashboard)/empresas/[id]/adn-certificate-readiness-card.tsx`
+- `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
+- `frontend/src/app/api/v1/adn-api.integration.test.ts`
+- `frontend/src/lib/adn-certificate-readiness-logic.test.ts`
+- `frontend/src/components/ui/alert.tsx`
 - `.env.example`
 - `docs/architecture-instalacao-certificado-empresa-monitorada-utilizador.md`
 
@@ -353,7 +353,7 @@ A implementação cobre a maior parte dos AC **UIP-01**, **UIP-02**, **UIP-03** 
 
 #### Evidência @qa (testes automatizados)
 
-- **UIP-01 AC7 / multi-tenant:** `it("GET certificate-readiness com companyId de outra organização no path → 404 (UIP-01 AC7)")` em `apps/web/src/app/api/v1/adn-api.integration.test.ts`.  
+- **UIP-01 AC7 / multi-tenant:** `it("GET certificate-readiness com companyId de outra organização no path → 404 (UIP-01 AC7)")` em `frontend/src/app/api/v1/adn-api.integration.test.ts`.  
 - **UIP-02:** 403 *non-admin*, 429 + `retryAfterSeconds`, AC4 dois POSTs + GET.  
 - **UIP-03 AC5:** teste “UIP-03: resposta pública do verify não contém substrings sensíveis…” (mock `fetch`).
 

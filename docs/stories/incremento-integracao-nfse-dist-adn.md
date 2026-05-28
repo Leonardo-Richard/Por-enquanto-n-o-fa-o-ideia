@@ -344,7 +344,7 @@ Conforme PRD incremento §4: escolha de cloud da VM Windows, reimplementação A
 
 1. Eventos mínimos: `adn_sync_requested`, `adn_sync_completed`, `adn_sync_failed`, `adn_artifact_downloaded` (nomes podem seguir padrão existente em `audit_events`).  
 2. Payload inclui `actor_user_id`, `organization_id`, `company_id`, `adn_sync_job_id` ou `artifact_id` conforme caso; **sem** URL assinada no payload.  
-3. Integração com tabela/helper de auditoria já existente (`apps/web/src/lib/audit.ts` ou equivalente).  
+3. Integração com tabela/helper de auditoria já existente (`frontend/src/lib/audit.ts` ou equivalente).  
 4. Pelo menos um teste de integração que verifica gravação em pedido `POST sync` e `GET download`.
 
 ---

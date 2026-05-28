@@ -22,10 +22,10 @@ Definir experiência, conteúdo, estados de interface, acessibilidade e contrato
 
 | Área | Ficheiro(s) |
 |------|-------------|
-| Cadastro | `apps/web/src/components/company-form.tsx` |
-| Edição / detalhe | `apps/web/src/app/(dashboard)/empresas/[id]/page.tsx` |
-| Modelo e persistência local | `packages/shared/src/portal-types.ts`, `apps/web/src/context/portal-provider.tsx` (`addCompany`, `updateCompany`, serialização `localStorage`) |
-| Lista (opcional) | `apps/web/src/app/(dashboard)/empresas/page.tsx` — coluna ou hint “Dia X” se útil ao operador |
+| Cadastro | `frontend/src/components/company-form.tsx` |
+| Edição / detalhe | `frontend/src/app/(dashboard)/empresas/[id]/page.tsx` |
+| Modelo e persistência local | `packages/shared/src/portal-types.ts`, `frontend/src/context/portal-provider.tsx` (`addCompany`, `updateCompany`, serialização `localStorage`) |
+| Lista (opcional) | `frontend/src/app/(dashboard)/empresas/page.tsx` — coluna ou hint “Dia X” se útil ao operador |
 
 ---
 

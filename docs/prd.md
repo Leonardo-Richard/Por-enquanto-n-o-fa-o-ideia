@@ -1,6 +1,6 @@
 # Portal de Automação de Notas Fiscais (por empresa) — Product Requirements Document (PRD)
 
-**Fontes:** `docs/brief.md` (visão de produto), `docs/briefing-atualizacao-supabase-separacao-fe-be.md` (plataforma de dados e camadas FE/BE). Estado do código: monorepo Next.js (App Router), Drizzle em `packages/db`, APIs em `apps/web/src/app/api/`.
+**Fontes:** `docs/brief.md` (visão de produto), `docs/briefing-atualizacao-supabase-separacao-fe-be.md` (plataforma de dados e camadas FE/BE). Estado do código: monorepo Next.js (App Router), Drizzle em `packages/db`, APIs em `frontend/src/app/api/`.
 
 ## Introdução brownfield (contexto do repositório)
 
@@ -64,7 +64,7 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 20. **FR20 — Variáveis públicas do projeto:** Quando funcionalidades de cliente usarem o SDK do Supabase, `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` devem estar definidas no ambiente de execução do browser; valores reais **não** são versionados no Git — apenas documentados em `.env.example` e configurados em `.env.local` / painel de deploy.
 21. **FR21 — Migrações alinhadas ao remoto:** O schema aplicado ao Postgres do projeto Supabase deve corresponder às migrações versionadas do repositório (ex.: `db/migrations/` ou fluxo acordado pela equipa), antes de apontar utilizadores reais ao ambiente.
 22. **FR22 — Health e diagnóstico:** O endpoint de health (ou equivalente) deve refletir ligação válida à base quando `DATABASE_URL` estiver configurado (comportamento de falha explícito, sem fallback silencioso para outra base salvo flag explícita de desenvolvimento).
-23. **FR23 — Fronteira UI ↔ dados:** Componentes sob `apps/web/src/app/**` (páginas), `components/**` e `hooks/**` **não** importam `getDb()`, `createDb` nem módulos que exijam `DATABASE_URL`. Toda escrita/leitura relacional passa por API servidor, Server Actions que delegam em serviços, ou — se aprovado em ADR — cliente `supabase-js` **apenas** para operações cobertas por RLS e requisito explícito de produto.
+23. **FR23 — Fronteira UI ↔ dados:** Componentes sob `frontend/src/app/**` (páginas), `components/**` e `hooks/**` **não** importam `getDb()`, `createDb` nem módulos que exijam `DATABASE_URL`. Toda escrita/leitura relacional passa por API servidor, Server Actions que delegam em serviços, ou — se aprovado em ADR — cliente `supabase-js` **apenas** para operações cobertas por RLS e requisito explícito de produto.
 24. **FR24 — Autenticação (Supabase vs Better Auth):** O MVP de conta continua a usar o fornecedor de auth já integrado (**Better Auth**), salvo **épico/ADR** explícito que migre para Supabase Auth. É proibido misturar dois fornecedores de sessão sem plano de migração documentado.
 
 ### Non Functional
@@ -87,7 +87,7 @@ O brief registra corretamente que um site “puro” não grava pastas locais: o
 
 ### Compatibility (brownfield)
 
-1. **CR1 — APIs existentes:** Rotas `apps/web/src/app/api/v1/*` e `api/auth/*` mantêm contratos JSON estáveis; alterações que quebrem clientes exigem versionamento ou período de deprecação acordado.
+1. **CR1 — APIs existentes:** Rotas `frontend/src/app/api/v1/*` e `api/auth/*` mantêm contratos JSON estáveis; alterações que quebrem clientes exigem versionamento ou período de deprecação acordado.
 2. **CR2 — Schema:** Migrações não removem colunas usadas por código em produção sem estratégia de deploy em duas fases ou compatibilidade retroativa.
 3. **CR3 — UI:** Padrões de dashboard, formulários e acessibilidade (WCAG AA) permanecem; novas telas seguem o mesmo sistema de componentes.
 4. **CR4 — Integrações:** Agente, filas e workers continuam a consumir as mesmas entidades lógicas (`empresa`, `job`, conta); mudar o host do Postgres não altera o contrato com o agente.

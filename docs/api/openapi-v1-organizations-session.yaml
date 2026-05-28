@@ -3,7 +3,7 @@ info:
   title: Portal NF — API v1 (organizações e sessão)
   version: 0.1.0
   description: |
-    Contrato parcial (ORG-04 / ORG-03). Rotas sob `/api/v1/` com prefixo de deploy real conforme `apps/web`.
+    Contrato parcial (ORG-04 / ORG-03). Rotas sob `/api/v1/` com prefixo de deploy real conforme `frontend`.
 
 servers:
   - url: http://localhost:3000/api/v1

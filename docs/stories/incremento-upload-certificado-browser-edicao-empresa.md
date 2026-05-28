@@ -266,7 +266,7 @@ Cada bloco **UBR-xx** mantém `**Status:** Draft` até cumprir **todos** os pont
 
 ### Tasks / Subtasks
 
-- [x] Zod/OpenAPI + export para consumo em `apps/web`.  
+- [x] Zod/OpenAPI + export para consumo em `frontend`.  
 - [x] Route Handler `GET` + testes.  
 - [x] Módulo validação + testes unitários (fixture).
 

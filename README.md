@@ -23,6 +23,8 @@ pnpm install
 | `pnpm build`       | Build de todos os pacotes (Turbo)  |
 | `pnpm lint`        | ESLint (app web)                   |
 | `pnpm typecheck`   | `tsc --noEmit` nos pacotes TS      |
+| `pnpm db:apply-migrations` | Aplica SQL em `db/migrations/` com registo em `schema_migrations` |
+| `pnpm test`        | Testes Turbo nos workspaces        |
 
 ## Health check
 
@@ -42,7 +44,7 @@ Com o dev server a correr (`pnpm dev`), o endpoint público responde em:
 2. Copiar `.env.example` para `frontend/.env.local` (ou configurar secrets no CI/Vercel) e definir:
    - `DATABASE_URL` — URI do pooler (servidor apenas).
    - `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — **o mesmo projeto** que `DATABASE_URL` (FR1). Ver comentários FR2 em `.env.example`.
-3. Aplicar os ficheiros SQL em `db/migrations/` ao Postgres remoto **por ordem** (SQL editor do Supabase, `psql`, ou pipeline interno). Garantir que o schema remoto corresponde ao repositório antes de smoke em cloud.
+3. Aplicar migrações: `pnpm db:apply-migrations` (requer `DATABASE_URL`) ou `psql` ficheiro a ficheiro em `db/migrations/`. Garantir que o schema remoto corresponde ao repositório antes de smoke em cloud.
 4. Smoke sugerido: login na app, `GET /api/v1/me` com sessão válida, e `GET /api/health` (ver story SB-01 AC3: sem `DATABASE_URL`, `/api/v1/me` não deve devolver 200 de sucesso falso).
 
 ## Estrutura

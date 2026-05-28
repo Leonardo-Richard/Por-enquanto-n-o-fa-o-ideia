@@ -132,7 +132,7 @@ Cada item `nav` define `active` assim:
 
 ### 4.2 Paridade mínima com o Painel (MVP)
 
-Referência de comportamento: secção «Empresas monitoradas» em `apps/web/src/app/(dashboard)/dashboard/page.tsx` e `MonitoredCompaniesSection` (lista em linhas com identificação, **Editar** → `/empresas/{id}`, **Pedir sincronização ADN** quando o estado ADN estiver activo).
+Referência de comportamento: secção «Empresas monitoradas» em `frontend/src/app/(dashboard)/dashboard/page.tsx` e `MonitoredCompaniesSection` (lista em linhas com identificação, **Editar** → `/empresas/{id}`, **Pedir sincronização ADN** quando o estado ADN estiver activo).
 
 **Detalhe de copy, estados ADN e a11y por linha:** `docs/front-end-spec-empresas-monitoradas-editar-e-forcar-automacao.md` (**EM-01**).
 

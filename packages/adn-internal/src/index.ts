@@ -3,10 +3,18 @@ export {
   prepareUploadSchema,
   commitArtifactSchema,
   patchJobSchema,
+  fetchVaultEnvelopeSchema,
   type PrepareUploadInput,
   type CommitArtifactInput,
   type PatchJobInput,
+  type FetchVaultEnvelopeInput,
 } from "./schemas";
+export { handleFetchVaultEnvelope } from "./fetch-vault-envelope";
+export {
+  clearCertVaultMockForTests,
+  certVaultMockStore,
+  type CertificateVaultEnvelopeV1,
+} from "./cert-vault-read";
 export { assertOrgCompanyAdnEnabled } from "./validate-org-company";
 export { handleCommitArtifact, type CommitArtifactDeps } from "./commit-artifact";
 export { handlePrepareUpload, type PrepareUploadDeps } from "./prepare-upload";

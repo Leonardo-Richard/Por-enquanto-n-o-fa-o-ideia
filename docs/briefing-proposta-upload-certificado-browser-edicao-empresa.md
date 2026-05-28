@@ -109,7 +109,7 @@ Este briefing regista a **intenção** de inverter parcialmente essa fronteira: 
 - `docs/prd-importacao-certificado-empresa-monitorada-adn.md` — CE-FR*, CE-NFR1.  
 - `docs/architecture-importacao-certificado-empresa-monitorada-adn.md` — limites browser ↔ worker.  
 - `docs/prd-integracao-nfse-dist-adn.md` — NFR19, FR48.  
-- UI actual: `apps/web/src/app/(dashboard)/empresas/[id]/` (painel ADN + readiness).
+- UI actual: `frontend/src/app/(dashboard)/empresas/[id]/` (painel ADN + readiness).
 
 ---
 

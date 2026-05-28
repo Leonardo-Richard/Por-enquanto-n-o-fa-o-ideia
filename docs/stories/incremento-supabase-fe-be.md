@@ -32,7 +32,7 @@
 
 ### Refinamento v1.2 (reavaliação PO — fechar 9→10)
 
-- **SB-03 AC2:** uma frase normativa para **todo** `apps/web/src/app/**` exceto `app/api/**` (RSC e páginas).  
+- **SB-03 AC2:** uma frase normativa para **todo** `frontend/src/app/**` exceto `app/api/**` (RSC e páginas).  
 - **SB-04:** tabela de **copy PT mínima** por cenário (5xx/rede/401/403); desvios só com **uma linha** de justificativa no PR aprovada por @ux-design-expert ou PO.
 
 ### Refinamento v1.3 (reavaliação PO **9,5/10** → fechar último meio-ponto)
@@ -71,7 +71,7 @@
 
 ### SB-04
 
-- **Duas** superfícies fixas: `apps/web/src/app/(dashboard)/empresas/page.tsx` e `apps/web/src/hooks/use-accessible-companies.ts` com estados de erro conforme [front-end-spec-supabase-fe-be.md](../front-end-spec-supabase-fe-be.md) §4.2 e **tabela de copy PT** da história (5xx/rede/401/403 + retry; `messageFromApiJson` quando AC4).  
+- **Duas** superfícies fixas: `frontend/src/app/(dashboard)/empresas/page.tsx` e `frontend/src/hooks/use-accessible-companies.ts` com estados de erro conforme [front-end-spec-supabase-fe-be.md](../front-end-spec-supabase-fe-be.md) §4.2 e **tabela de copy PT** da história (5xx/rede/401/403 + retry; `messageFromApiJson` quando AC4).  
 - `role="alert"` ou `aria-live` onde a spec exige; sem texto com URLs internas ou secrets.  
 - **AC7:** controlo de retry com **nome acessível** (`aria-label` em PT ou rótulo textual visível); evidência no PR (nota de teste ou captura da árvore de acessibilidade).
 
@@ -216,8 +216,8 @@ Em conformidade com [prd-atualizacao-supabase-separacao-fe-be.md](../prd-atualiz
 
 ### Acceptance Criteria
 
-1. **Âmbito cliente (FR4):** nenhum ficheiro em `apps/web/src/components/**`, `apps/web/src/hooks/**`, nem em `apps/web/src/app/**/*.tsx` que contenha a diretiva `"use client"` importa `getDb`, `createDb`, `@repo/db` ou `@/lib/db`. **Exclusões explícitas** (servidor, permitido): `apps/web/src/app/api/**`, `apps/web/src/lib/db.ts`, ficheiros de teste só servidor.  
-2. **RSC e páginas App Router (FR5):** em **todo** o glob `apps/web/src/app/**` **exceto** `apps/web/src/app/api/**`, nenhum ficheiro importa `getDb`, `createDb` ou `@repo/db` (inclui `app/(dashboard)/**`, `app/login/**`, `app/registo/**`, `app/recuperar/**`, layouts raiz, etc.). Dados de negócio entram via `fetch` a `/api/...`, props de servidor, ou handlers sob `app/api/**`.  
+1. **Âmbito cliente (FR4):** nenhum ficheiro em `frontend/src/components/**`, `frontend/src/hooks/**`, nem em `frontend/src/app/**/*.tsx` que contenha a diretiva `"use client"` importa `getDb`, `createDb`, `@repo/db` ou `@/lib/db`. **Exclusões explícitas** (servidor, permitido): `frontend/src/app/api/**`, `frontend/src/lib/db.ts`, ficheiros de teste só servidor.  
+2. **RSC e páginas App Router (FR5):** em **todo** o glob `frontend/src/app/**` **exceto** `frontend/src/app/api/**`, nenhum ficheiro importa `getDb`, `createDb` ou `@repo/db` (inclui `app/(dashboard)/**`, `app/login/**`, `app/registo/**`, `app/recuperar/**`, layouts raiz, etc.). Dados de negócio entram via `fetch` a `/api/...`, props de servidor, ou handlers sob `app/api/**`.  
 3. *(Opcional mas recomendado)* Regra ESLint `no-restricted-imports` (ou equivalente) com globs alinhados ao AC1 (apenas bundles cliente / caminhos acordados), **ou** documentação no CONTRIBUTING + script em CI que reproduza o `grep` do AC1 (arquitetura §11).
 
 ### Tasks / Subtasks
@@ -228,7 +228,7 @@ Em conformidade com [prd-atualizacao-supabase-separacao-fe-be.md](../prd-atualiz
 
 ### Dev Notes
 
-- `packages/db` pode continuar a ser importado em `apps/web/src/lib/db.ts`, rotas API e testes servidor.
+- `packages/db` pode continuar a ser importado em `frontend/src/lib/db.ts`, rotas API e testes servidor.
 
 ### Testing
 
@@ -259,8 +259,8 @@ Em conformidade com [prd-atualizacao-supabase-separacao-fe-be.md](../prd-atualiz
 
 ### Acceptance Criteria
 
-1. **Superfície A —** `apps/web/src/app/(dashboard)/empresas/page.tsx` (`"use client"`): em resposta **5xx** ou falha de rede aos `fetch` de `/api/v1/me` ou dados dependentes da lista, o utilizador vê mensagem amigável e **Tentar novamente** (reload/refetch) conforme [front-end-spec-supabase-fe-be.md](../front-end-spec-supabase-fe-be.md) §4.2.  
-2. **Superfície B —** `apps/web/src/hooks/use-accessible-companies.ts`: mesmo padrão para falha ao obter `/api/v1/companies/accessible` (mensagem + retry exposto ao consumidor do hook, ex.: `reload`).  
+1. **Superfície A —** `frontend/src/app/(dashboard)/empresas/page.tsx` (`"use client"`): em resposta **5xx** ou falha de rede aos `fetch` de `/api/v1/me` ou dados dependentes da lista, o utilizador vê mensagem amigável e **Tentar novamente** (reload/refetch) conforme [front-end-spec-supabase-fe-be.md](../front-end-spec-supabase-fe-be.md) §4.2.  
+2. **Superfície B —** `frontend/src/hooks/use-accessible-companies.ts`: mesmo padrão para falha ao obter `/api/v1/companies/accessible` (mensagem + retry exposto ao consumidor do hook, ex.: `reload`).  
 3. **401** redireciona ou navega para fluxo de login com mensagem breve; **403** mostra mensagem de permissão sem detalhes internos (em qualquer uma das duas superfícies onde ocorra).  
 4. Mensagens utilizam `messageFromApiJson` quando o corpo JSON trouxer `message` (spec §4.2 tabela).  
 5. Região de erro com `role="alert"` ou `aria-live="polite"` conforme spec §8; foco gerível no retry quando aplicável.  

@@ -246,7 +246,7 @@ Composer (Cursor).
 - **AG-02:** Migração `db/migrations/20260422120000_companies_monthly_run_day.sql` (rollback documentado no ficheiro); validação de corpo JSON em `@repo/shared` (`parseMonthlyRunDayFromRequest`) alinhável a POST/PATCH quando existir API (P04).
 - **AG-03:** Lógica pura `decideMonthlyScheduledEnqueue` + `utcAtZonedWall` em `@repo/scheduling` (fusos via `Intl`, sem dependência extra); runbook com âncoras DoD; testes Vitest; **telemetria** `logStructuredMonthlyEnqueueDuplicateIgnored` / `maybeLogMonthlyEnqueueDecision` para duplicate (worker deve invocar). **Pendente neste repo:** tick HTTP/cron e `INSERT` real (P05).
 - **Smoke manual AG-01:** Nova empresa → dia **15** → guardar → recarregar → confirmar `monthlyRunDay: 15` no `localStorage` (`portal-automacao-nf.data.v1`) e linha “Coleta automática mensal: dia **15**…” no detalhe.
-- **Correcções pós-QA (2026-04-22):** `aria-describedby` dinâmico + `id` no alerta do dia mensal; validação defensiva em `save` via `messageFromMonthlyRunDayParse`; `messageFromMonthlyRunDayParse` + teste JSON round-trip dia 28 em `@repo/shared`; telemetria duplicate + testes em `@repo/scheduling`; nota JSDoc em `monthly-enqueue.ts` sobre limite `Intl`/SP; `is-regex` em `devDependencies` (raiz + `apps/web`) para corrigir cadeia ESLint — executar `pnpm install` / `npm install` no ambiente local se o módulo ainda não resolver.
+- **Correcções pós-QA (2026-04-22):** `aria-describedby` dinâmico + `id` no alerta do dia mensal; validação defensiva em `save` via `messageFromMonthlyRunDayParse`; `messageFromMonthlyRunDayParse` + teste JSON round-trip dia 28 em `@repo/shared`; telemetria duplicate + testes em `@repo/scheduling`; nota JSDoc em `monthly-enqueue.ts` sobre limite `Intl`/SP; `is-regex` em `devDependencies` (raiz + `frontend`) para corrigir cadeia ESLint — executar `pnpm install` / `npm install` no ambiente local se o módulo ainda não resolver.
 
 ### Debug Log References
 
@@ -260,9 +260,9 @@ Composer (Cursor).
 - `packages/shared/src/index.ts`
 - `packages/shared/package.json`
 - `packages/shared/tsconfig.json`
-- `apps/web/src/context/portal-provider.tsx`
-- `apps/web/src/components/company-form.tsx`
-- `apps/web/src/app/(dashboard)/empresas/[id]/page.tsx`
+- `frontend/src/context/portal-provider.tsx`
+- `frontend/src/components/company-form.tsx`
+- `frontend/src/app/(dashboard)/empresas/[id]/page.tsx`
 - `packages/scheduling/package.json`
 - `packages/scheduling/tsconfig.json`
 - `packages/scheduling/src/monthly-enqueue.ts`
@@ -350,7 +350,7 @@ Entrega **máxima no monorepo actual** (sem serviço Postgres/API nem worker). A
 
 1. **Fuso (`utcAtZonedWall`):** busca binária + `Intl` — aceitável para SP sem DST; documentar limitação se o produto alargar fusos com transições.
 2. **`package-lock.json` / turbo:** aviso de lockfile em falta ou ilegível no ambiente de revisão — risco de reprodutibilidade CI; recomenda-se `npm install` + commit do lock saudável.
-3. **Lint `apps/web`:** falha conhecida da cadeia `eslint` (`is-regex`) não foi reexecutada nesta revisão; tratar antes de gate “verde” global.
+3. **Lint `frontend`:** falha conhecida da cadeia `eslint` (`is-regex`) não foi reexecutada nesta revisão; tratar antes de gate “verde” global.
 
 ### Recomendações ao @dev
 

@@ -137,12 +137,12 @@ O **histórico local** de execuções no Painel (se ainda existir) pode permanec
 
 - Briefing: `docs/briefing-empresas-monitoradas-editar-e-forcar-automacao.md`
 - PRD NAV: `docs/prd-nav-sidebar-empresas-monitoradas.md`
-- Componente lista: `apps/web/src/components/monitored-companies-section.tsx`
-- Página: `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx`
-- Hook dados: `apps/web/src/hooks/use-monitored-companies.ts`
-- Ficha + PATCH: `apps/web/src/app/(dashboard)/empresas/[id]/page.tsx`
-- ADN UI referência: `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
-- Contexto simulação: `apps/web/src/context/portal-provider.tsx` (`runSync`)
+- Componente lista: `frontend/src/components/monitored-companies-section.tsx`
+- Página: `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx`
+- Hook dados: `frontend/src/hooks/use-monitored-companies.ts`
+- Ficha + PATCH: `frontend/src/app/(dashboard)/empresas/[id]/page.tsx`
+- ADN UI referência: `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
+- Contexto simulação: `frontend/src/context/portal-provider.tsx` (`runSync`)
 
 ---
 

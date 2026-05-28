@@ -105,7 +105,7 @@ O **NAV-02** AC5 ainda descreve pills **«Job mensal · {cnpjMasked}»** com **`
 
 | ID | DoD mínimo |
 | -- | ----------- |
-| **EM-01A** | `AdnSyncPanel` usa módulo/hook partilhado; **preferencial:** testes unit em `adn-sync-client` (mocks `Response`) a correr em CI em `apps/web`; **fallback:** checklist manual «comportamento idêntico à ficha» no PR **com justificação** se testes não forem viáveis no sprint. |
+| **EM-01A** | `AdnSyncPanel` usa módulo/hook partilhado; **preferencial:** testes unit em `adn-sync-client` (mocks `Response`) a correr em CI em `frontend`; **fallback:** checklist manual «comportamento idêntico à ficha» no PR **com justificação** se testes não forem viáveis no sprint. |
 | **EM-01B** | Lista em linhas com **Editar** + **Pedir sincronização ADN**; screenshots ou vídeo curto opcional; sem regressão em empty/erro/reload. |
 | **EM-01C** | PR de docs ou secção no PR EM com links aos ficheiros actualizados. |
 
@@ -128,7 +128,7 @@ O **NAV-02** AC5 ainda descreve pills **«Job mensal · {cnpjMasked}»** com **`
 
 **Dependências (DoR):** Nenhuma além do pré-requisito NAV.
 
-**Referências:** Arquitectura EM §3.1, §4, §12 passos 1–2; PRD **NFR26**; `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`.
+**Referências:** Arquitectura EM §3.1, §4, §12 passos 1–2; PRD **NFR26**; `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`.
 
 **Riscos:** Regressão sutil de mensagens ou de polling após refactor.
 
@@ -145,7 +145,7 @@ O **NAV-02** AC5 ainda descreve pills **«Job mensal · {cnpjMasked}»** com **`
 
 ### Acceptance Criteria
 
-1. Existe **`apps/web/src/lib/adn-sync-client.ts`** (ou nome equivalente acordado) com funções puras: construir URL `.../organizations/{organizationId}/monitored-companies/{companyId}/adn/sync`, executar **GET** e **POST** com `credentials: "include"`, cabeçalhos exigidos no **POST** (`Content-Type`, `Idempotency-Key`), e tipos/resultados que permitam mapear **404 → feature_off**, **403 → forbidden**, **200 → active**, erros → `error`.  
+1. Existe **`frontend/src/lib/adn-sync-client.ts`** (ou nome equivalente acordado) com funções puras: construir URL `.../organizations/{organizationId}/monitored-companies/{companyId}/adn/sync`, executar **GET** e **POST** com `credentials: "include"`, cabeçalhos exigidos no **POST** (`Content-Type`, `Idempotency-Key`), e tipos/resultados que permitam mapear **404 → feature_off**, **403 → forbidden**, **200 → active**, erros → `error`.  
 2. Existe hook **`useAdnSyncForCompany`** (ou nome equivalente) que expõe pelo menos: `access`, `lastJob` (se aplicável), `busy`, `actionMsg`, `refresh()`, `requestSync()` (inclui confirmação com o texto **«Pedir sincronização ADN agora? (fila no portal)»** salvo substituição acessível aprovada por **@qa**).  
 3. **`AdnSyncPanel`** delega **toda** a lógica de `fetch` e tratamento de status HTTP no módulo/hook; **comportamento observável** da ficha permanece equivalente (mensagens, botões, polling quando `running`).  
 4. **NFR29:** URLs usam `company.organizationId` e `company.id` provenientes da API / props — não aceitar `organizationId` arbitrário de fonte não confiável.
@@ -155,13 +155,13 @@ O **NAV-02** AC5 ainda descreve pills **«Job mensal · {cnpjMasked}»** com **`
 - [x] Criar `adn-sync-client.ts` com **testes unit** (mocks `Response`) cobrindo pelo menos: **200** → estado activo, **404** → `feature_off`, **403** → `forbidden`, **POST 202**, **POST 403**, **POST 429** com `Retry-After` (nomes de funções/casos conforme implementação).  
 - [x] Criar `use-adn-sync-for-company.ts`.  
 - [x] Refactor `AdnSyncPanel` para consumir o hook.  
-- [x] `pnpm` / lint / `tsc` em `apps/web` sem erros; confirmar que os novos testes passam no script de teste do pacote (ex.: `pnpm test` / `vitest` conforme repo).
+- [x] `pnpm` / lint / `tsc` em `frontend` sem erros; confirmar que os novos testes passam no script de teste do pacote (ex.: `pnpm test` / `vitest` conforme repo).
 
 ### Dev Notes
 
 - Não alterar handlers servidor `adn-sync.ts` nesta story salvo bug bloqueante.  
 - Nomes de ficheiros exactos podem ajustar-se no PR desde que **NFR26** seja cumprido (uma fonte de verdade para fetch + mensagens).  
-- **Testes:** localizar o padrão de testes em `apps/web` (ex.: `*.test.ts` junto ao código ou pasta `__tests__`); se não existir runner configurado, **@dev** regista no PR o impedimento e anexa **checklist manual** assinado por **@qa** (excepção rara).
+- **Testes:** localizar o padrão de testes em `frontend` (ex.: `*.test.ts` junto ao código ou pasta `__tests__`); se não existir runner configurado, **@dev** regista no PR o impedimento e anexa **checklist manual** assinado por **@qa** (excepção rara).
 
 ---
 
@@ -171,7 +171,7 @@ O **NAV-02** AC5 ainda descreve pills **«Job mensal · {cnpjMasked}»** com **`
 
 **Dependências (DoR):** **EM-01A** concluído **ou** incluído no mesmo PR de forma revista.
 
-**Referências:** PRD **FR53–FR57**; spec UX EM §3–§7; arquitectura EM §3.2, §5, §6; `apps/web/src/components/monitored-companies-section.tsx`.
+**Referências:** PRD **FR53–FR57**; spec UX EM §3–§7; arquitectura EM §3.2, §5, §6; `frontend/src/components/monitored-companies-section.tsx`.
 
 **Riscos:** Performance com muitas empresas; regressão de empty state; drift de copy vs ficha.
 
@@ -254,21 +254,21 @@ O **NAV-02** AC5 ainda descreve pills **«Job mensal · {cnpjMasked}»** com **`
 - **EM-01A:** `adn-sync-client.ts` com `buildAdnSyncSyncUrl`, `interpretAdnSyncGetResponse`, `interpretAdnSyncPostResponse`, `fetchAdnSyncStatus` (pool **3** GETs concurrentes), `postAdnSyncRequest`; testes em `adn-sync-client.test.ts`; hook `use-adn-sync-for-company.ts`; `AdnSyncPanel` delega ao hook.
 - **EM-01B:** `MonitoredCompanyRow` + `MonitoredCompaniesSection` com `<ul>`/`<li>`, `effectiveOrganizationId` (NFR29 **AC9** — sem ADN se `company.organizationId` ≠ org activa; `console.warn` só em dev); removidos `usePortal`/`runSync` da lista; Painel e `/empresas-monitoradas` passam `effectiveOrganizationId`.
 - **EM-01C:** Actualizados `docs/architecture-nav-sidebar-empresas-monitoradas.md`, `docs/front-end-spec-nav-sidebar-empresas-monitoradas.md`, `docs/stories/incremento-nav-sidebar-empresas-monitoradas.md` (NAV-02 AC5, DoD NAV-02, QA table, riscos).
-- **Validação:** `npm run test`, `npm run typecheck`, `npm run lint` em `apps/web` — OK.
+- **Validação:** `npm run test`, `npm run typecheck`, `npm run lint` em `frontend` — OK.
 - **Pós-QA (CONCERNS):** `useAdnSyncForCompany` expõe `actionTone` (`success` | `error` | `none`) — mensagens pós-POST usam estilo **emerald** vs **âmbar** e `role="status"` vs `role="alert"`. Regra **AC9** extraída para `monitored-company-adn-guard.ts` + testes `monitored-company-adn-guard.test.ts`. **DoD macro + CodeRabbit:** cumprir no PR (smoke manual + scan); não automatizado neste ambiente.
 
 ### File List
 
-- `apps/web/src/lib/adn-sync-client.ts` (novo)
-- `apps/web/src/lib/adn-sync-client.test.ts` (novo)
-- `apps/web/src/lib/monitored-company-adn-guard.ts` (novo)
-- `apps/web/src/lib/monitored-company-adn-guard.test.ts` (novo)
-- `apps/web/src/hooks/use-adn-sync-for-company.ts` (novo)
-- `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
-- `apps/web/src/components/monitored-company-row.tsx` (novo)
-- `apps/web/src/components/monitored-companies-section.tsx`
-- `apps/web/src/app/(dashboard)/dashboard/page.tsx`
-- `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx`
+- `frontend/src/lib/adn-sync-client.ts` (novo)
+- `frontend/src/lib/adn-sync-client.test.ts` (novo)
+- `frontend/src/lib/monitored-company-adn-guard.ts` (novo)
+- `frontend/src/lib/monitored-company-adn-guard.test.ts` (novo)
+- `frontend/src/hooks/use-adn-sync-for-company.ts` (novo)
+- `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
+- `frontend/src/components/monitored-company-row.tsx` (novo)
+- `frontend/src/components/monitored-companies-section.tsx`
+- `frontend/src/app/(dashboard)/dashboard/page.tsx`
+- `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx`
 - `docs/architecture-nav-sidebar-empresas-monitoradas.md`
 - `docs/front-end-spec-nav-sidebar-empresas-monitoradas.md`
 - `docs/stories/incremento-nav-sidebar-empresas-monitoradas.md`

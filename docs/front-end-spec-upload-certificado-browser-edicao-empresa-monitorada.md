@@ -3,7 +3,7 @@
 **Produto:** Portal de Automação de Notas Fiscais.  
 **Fonte de produto:** `docs/prd-upload-certificado-browser-edicao-empresa-monitorada.md` (**CE-BR1–CE-BR8**, **BR-NFR1–BR-NFR8**, §6 UX).  
 **Especificações base:** `docs/front-end-spec.md`, `docs/front-end-spec-integracao-nfse-dist-adn.md`, `docs/front-end-spec-importacao-certificado-empresa-monitorada-adn.md`.  
-**Implementação de referência (layout actual):** `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`, `adn-certificate-readiness-card.tsx`.
+**Implementação de referência (layout actual):** `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`, `adn-certificate-readiness-card.tsx`.
 
 **Autor:** Uma (UX / AIOS)  
 **Data:** 2026-04-24  

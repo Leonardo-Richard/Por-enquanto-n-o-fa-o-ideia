@@ -62,6 +62,48 @@ def _parse_supabase_vault_ref(vault_ref: str) -> tuple[str, str] | None:
     return rest[:i], rest[i + 1 :]
 
 
+def _portal_base_url() -> str | None:
+    for key in ("API_INTERNAL_URL", "PORTAL_INTERNAL_URL", "NEXT_PUBLIC_APP_URL"):
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value.rstrip("/")
+    return None
+
+
+def _download_vault_payload_bytes(
+    *,
+    organization_id: str,
+    company_id: str,
+    vault_ref: str,
+) -> bytes:
+    """
+    Preferência: API interna HMAC (sem SUPABASE_SERVICE_ROLE_KEY no worker).
+    Fallback legado: Storage directo quando ADN_CERT_VAULT_DIRECT_STORAGE=1.
+    """
+    secret = os.environ.get("ADN_WORKER_HMAC_SECRET", "").strip()
+    base = _portal_base_url()
+    use_direct = os.environ.get("ADN_CERT_VAULT_DIRECT_STORAGE", "").strip() == "1"
+    if secret and base and not use_direct:
+        from hmac_client import internal_json_post
+
+        resp = internal_json_post(
+            base,
+            secret,
+            "/api/internal/v1/adn/certificates/fetch-vault-envelope",
+            {"organizationId": organization_id, "companyId": company_id},
+        )
+        envelope = resp.get("envelope") if isinstance(resp, dict) else None
+        if not isinstance(envelope, dict):
+            raise RuntimeError("Resposta inválida de fetch-vault-envelope.")
+        return json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    parsed = _parse_supabase_vault_ref(vault_ref)
+    if not parsed:
+        raise RuntimeError("vault_ref não suportado para leitura directa do Storage.")
+    bucket, object_path = parsed
+    return _download_supabase_object(bucket, object_path)
+
+
 def _download_supabase_object(bucket: str, object_path: str) -> bytes:
     base = _supabase_base_url()
     key = _supabase_service_role_key()
@@ -571,8 +613,11 @@ def materialize_company_certificate_from_vault(
     if not parsed:
         return {"materialized": False, "reason": "unsupported_vault_ref"}
 
-    bucket, object_path = parsed
-    raw = _download_supabase_object(bucket, object_path)
+    raw = _download_vault_payload_bytes(
+        organization_id=organization_id,
+        company_id=company_id,
+        vault_ref=vault_ref,
+    )
     cert_bytes, password = _extract_pkcs12_and_password(raw, nfse_root, cnpj_digits)
 
     cert_dir = nfse_root / "certificates"

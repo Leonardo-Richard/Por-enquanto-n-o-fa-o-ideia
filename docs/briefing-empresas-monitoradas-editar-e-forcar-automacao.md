@@ -27,11 +27,11 @@ Objetivo de UX: **ações visíveis e previsíveis** (ex.: editar, executar agor
 
 | Peça | Comportamento actual |
 |------|----------------------|
-| `apps/web/src/components/monitored-companies-section.tsx` | Lista vinda de `GET /api/v1/organizations/{organizationId}/monitored-companies?...` via `useMonitoredCompanies`. Cada item é um **`<button>`** que chama `runSync(companyId, "monthly", cnpjMasked)`. |
-| `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx` | Reutiliza `MonitoredCompaniesSection` com `showSectionHeading={false}`; copy de página alinhada ao spec NAV. |
-| `apps/web/src/context/portal-provider.tsx` → `runSync` | **Simulação local:** adiciona execução em estado `running` e após ~900 ms marca `success`, persiste em `localStorage`. **Não** chama API de job ADN nem altera servidor. |
-| `apps/web/src/app/(dashboard)/empresas/[id]/page.tsx` | Edição completa (nome, código sistema, dia de corrida mensal) com **`PATCH /api/v1/companies/{id}`**. |
-| `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` | Fluxo **real** de pedido de sync: `GET`/`POST` em `/api/v1/organizations/{organizationId}/monitored-companies/{companyId}/adn/sync` (202, rate limit, perfis admin, etc.). |
+| `frontend/src/components/monitored-companies-section.tsx` | Lista vinda de `GET /api/v1/organizations/{organizationId}/monitored-companies?...` via `useMonitoredCompanies`. Cada item é um **`<button>`** que chama `runSync(companyId, "monthly", cnpjMasked)`. |
+| `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx` | Reutiliza `MonitoredCompaniesSection` com `showSectionHeading={false}`; copy de página alinhada ao spec NAV. |
+| `frontend/src/context/portal-provider.tsx` → `runSync` | **Simulação local:** adiciona execução em estado `running` e após ~900 ms marca `success`, persiste em `localStorage`. **Não** chama API de job ADN nem altera servidor. |
+| `frontend/src/app/(dashboard)/empresas/[id]/page.tsx` | Edição completa (nome, código sistema, dia de corrida mensal) com **`PATCH /api/v1/companies/{id}`**. |
+| `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` | Fluxo **real** de pedido de sync: `GET`/`POST` em `/api/v1/organizations/{organizationId}/monitored-companies/{companyId}/adn/sync` (202, rate limit, perfis admin, etc.). |
 
 Conclusão: a **fonte de verdade** para dados da empresa e para **enfileirar** trabalho ADN já existe; a lista de monitoradas **não expõe** edição nem o POST ADN de forma explícita, e o “job mensal” na lista está ligado ao **mock** do portal.
 

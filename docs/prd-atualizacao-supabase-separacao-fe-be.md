@@ -13,7 +13,7 @@
 
 - **Brief de produto:** `docs/brief.md` (cadastro multi-empresa, automação, agendamento, autenticação, LGPD).
 - **Briefing técnico:** `docs/briefing-atualizacao-supabase-separacao-fe-be.md`.
-- **Análise complementar:** inspeção prévia do repositório (Next.js App Router, Drizzle em `packages/db`, Route Handlers em `apps/web/src/app/api/`, Better Auth).
+- **Análise complementar:** inspeção prévia do repositório (Next.js App Router, Drizzle em `packages/db`, Route Handlers em `frontend/src/app/api/`, Better Auth).
 
 ### 1.2 Estado atual (resumo)
 
@@ -51,7 +51,7 @@ O brief assume utilizadores que confiam no portal para **dados fiscais e empresa
 - **FR1:** O ambiente de execução do servidor deve utilizar uma `DATABASE_URL` válida para o **Postgres do projeto Supabase** alvo (mesmo projeto que `NEXT_PUBLIC_SUPABASE_URL`), com ligação TLS conforme documentação Supabase (ex.: `sslmode=require` na URI quando aplicável).
 - **FR2:** Ficheiros de exemplo de configuração (ex.: `.env.example`) devem listar **todas** as variáveis necessárias para: servidor (`DATABASE_URL`, segredos de auth existentes), e cliente opcional (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), com comentários que indiquem **o que pode** e **o que não pode** ir para o bundle do browser.
 - **FR3:** O arranque da aplicação em modo “cloud alvo” deve falhar de forma **explícita** se `DATABASE_URL` estiver ausente ou inválida (comportamento já desejável; mantém-se e valida-se contra Supabase).
-- **FR4:** Nenhum componente de UI em `apps/web/src/app/**`, `components/**` ou `hooks/**` deve importar `getDb()`, `createDb` ou módulos que exijam `DATABASE_URL` no bundle cliente.
+- **FR4:** Nenhum componente de UI em `frontend/src/app/**`, `components/**` ou `hooks/**` deve importar `getDb()`, `createDb` ou módulos que exijam `DATABASE_URL` no bundle cliente.
 - **FR5:** Toda a persistência de dados de negócio e operações privilegiadas deve ocorrer através de **Route Handlers** (`app/api/**/route.ts`), **Server Actions** que delegam em serviços servidor, ou código em `packages/db` / `src/lib` **apenas** invocado a partir do servidor.
 - **FR6:** Os contratos JSON das rotas existentes sob `api/v1/*` (e rotas de auth) devem manter **compatibilidade** com clientes atuais (mesmos campos obrigatórios e códigos HTTP de sucesso/erro documentados ou já utilizados pelo frontend), salvo versão explícita da API acordada fora deste PRD.
 - **FR7:** Deve existir documentação operacional mínima (README ou secção em `docs/`) descrevendo: obter URI do **pooler** no dashboard Supabase, definir variáveis em `.env.local` e em produção, e **aplicar migrações** ao projeto remoto antes de tráfego real.

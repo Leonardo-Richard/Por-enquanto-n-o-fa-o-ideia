@@ -21,7 +21,7 @@
 
 ## 2. Estado actual (gap)
 
-1. **Configurações — “Pasta raiz no Windows”** (`apps/web/src/app/(dashboard)/configuracoes/page.tsx`): o valor é guardado via `usePortal().updateSettings` → **`localStorage`** (`apps/web/src/context/portal-provider.tsx`). **Não** é persistido em `organizations.local_download_root` (Postgres).
+1. **Configurações — “Pasta raiz no Windows”** (`frontend/src/app/(dashboard)/configuracoes/page.tsx`): o valor é guardado via `usePortal().updateSettings` → **`localStorage`** (`frontend/src/context/portal-provider.tsx`). **Não** é persistido em `organizations.local_download_root` (Postgres).
 2. **Schema:** `organizations.local_download_root` já existe em `packages/db/src/schema.ts` (comentário: espelho `{root}/{CNPJ}/{system_code}/{chave}.xml|.pdf`), mas **não há** API pública/admin que a preencha nem leitura no worker.
 3. **Worker:** após `run_download_workflow`, o fluxo actual envia ficheiros ao portal (`prepare` → PUT → `commit`); **não** copia para `C:\NFs\…`.
 4. **UI de artefactos:** listagem/download no browser pode ser acrescentada (histórico); isso resolve “descarregar pelo site”, **não** o espelho automático em disco sem agente/worker.
@@ -91,11 +91,11 @@
 
 ## 7. Referências no código
 
-- UI pasta raiz: `apps/web/src/app/(dashboard)/configuracoes/page.tsx`  
-- Preferências só cliente: `apps/web/src/context/portal-provider.tsx` (`localRootPath`)  
+- UI pasta raiz: `frontend/src/app/(dashboard)/configuracoes/page.tsx`  
+- Preferências só cliente: `frontend/src/context/portal-provider.tsx` (`localRootPath`)  
 - Coluna org: `packages/db/src/schema.ts` → `organizations.local_download_root`  
 - Ingestão actual: `workers/nfse-portal-bridge/portal_artifacts.py`, `poll_jobs.py`  
-- Download autenticado (bytes no browser): `apps/web/src/server/api/v1/handlers/adn-artifact-download.ts`
+- Download autenticado (bytes no browser): `frontend/src/server/api/v1/handlers/adn-artifact-download.ts`
 
 ---
 

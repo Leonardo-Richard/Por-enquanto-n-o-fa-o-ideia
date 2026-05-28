@@ -94,7 +94,7 @@
 
 ## Baseline código actual (pré-NAV) — `DashboardShell`
 
-Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamentos `nav.map` sobre o mesmo array `nav` (sidebar desktop e navegação horizontal no header móvel). **Não** usar números de linha fixos no PR (o ficheiro pode mudar).
+Referência: `frontend/src/components/dashboard-shell.tsx` — **dois** mapeamentos `nav.map` sobre o mesmo array `nav` (sidebar desktop e navegação horizontal no header móvel). **Não** usar números de linha fixos no PR (o ficheiro pode mudar).
 
 | Item `nav` | `href` actual | Regra `active` actual |
 | ------------ | -------------- | --------------------- |
@@ -147,11 +147,11 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 - [x] Refactor do array `nav`: suportar função `isActive(pathname)` por item (ou equivalente tipado).  
 - [x] Actualizar labels e `href` conforme AC1–AC3.  
 - [x] Aplicar `aria-current` em ambos os blocos de mapeamento (`aside` e header móvel).  
-- [x] Verificar build e lint em `apps/web/src/components/dashboard-shell.tsx`.
+- [x] Verificar build e lint em `frontend/src/components/dashboard-shell.tsx`.
 
 ### Dev Notes
 
-- Ficheiro: `apps/web/src/components/dashboard-shell.tsx`.  
+- Ficheiro: `frontend/src/components/dashboard-shell.tsx`.  
 - **Entrega:** não publicar em `main` só NAV-01 sem a rota **NAV-02** (link quebrado). Combinação mínima aceitável: **um PR** com NAV-01 + NAV-02, ou branch de feature até ambos estarem prontos.  
 - Não alterar `WorkspaceGate` nesta story salvo descoberta de bug (arquitectura §4.1: sem mudança obrigatória).
 
@@ -163,7 +163,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 
 **Dependências (DoR):** **NAV-01** merged ou mesma branch com item de menu funcional.
 
-**Referências:** PRD §6; spec UX §4; arquitectura §3, §6; `apps/web/src/app/(dashboard)/dashboard/page.tsx` (secção «Empresas monitoradas»).
+**Referências:** PRD §6; spec UX §4; arquitectura §3, §6; `frontend/src/app/(dashboard)/dashboard/page.tsx` (secção «Empresas monitoradas»).
 
 **Riscos:** Drift de UI entre Painel e nova página. ~~`usePortal` / `runSync` na lista~~ **supersedido** por **EM-01** (`docs/stories/incremento-empresas-monitoradas-editar-e-forcar-automacao.md`) — lista com Editar + ADN real.
 
@@ -180,7 +180,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 
 ### Acceptance Criteria
 
-1. Existe `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx` (Client Component se necessário para hooks), servindo **`/empresas-monitoradas`**.  
+1. Existe `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx` (Client Component se necessário para hooks), servindo **`/empresas-monitoradas`**.  
 2. Página com **`h1`**: «Empresas monitoradas»; subtítulo: «CNPJs incluídos na automação de notas desta organização.» (spec UX §4.1 / copy deck `fiscal.list.*`).  
 3. Lista alimentada por **`useMonitoredCompanies(effectiveOrganizationId)`** (ou par `useMeSummary` equivalente ao Painel) — mesma API que o Painel (**FR51**, PRD §6).  
 4. Estado vazio: mensagem alinhada a **`fiscal.list.empty`** (**«Ainda não há CNPJs monitorados.»** — `docs/front-end-spec-dois-niveis-organizacao-vs-empresas-fiscais.md` §10) + link CTA para `/empresas/nova` com texto **«Nova empresa monitorada»** (paridade com `dashboard/page.tsx` e `fiscal.new.title`; **não** usar «Adicionar CNPJ» neste incremento salvo mudança explícita de PO).  
@@ -249,7 +249,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 
 **Revisor:** Quinn (@qa)  
 **Data:** 2026-04-24  
-**Âmbito:** revisão estática do código + `tsc --noEmit` em `apps/web` (sem browser/e2e nesta passagem).
+**Âmbito:** revisão estática do código + `tsc --noEmit` em `frontend` (sem browser/e2e nesta passagem).
 
 ### Decisão de gate
 
@@ -297,7 +297,7 @@ Referência: `apps/web/src/components/dashboard-shell.tsx` — **dois** mapeamen
 
 ### Evidência de build
 
-- `npm run typecheck` em `apps/web`: **OK** (execução 2026-04-24).
+- `npm run typecheck` em `frontend`: **OK** (execução 2026-04-24).
 
 ---
 

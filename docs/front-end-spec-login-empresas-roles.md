@@ -33,7 +33,7 @@ Definir **experiência**, **arquitetura da informação**, **fluxos**, **estados
 | Login / registo / recuperar | `/login`, `/registo`, `/recuperar` | Alinhar a **FR19** e Story 1.2 do PRD principal. |
 | Shell autenticado | `(dashboard)/layout.tsx` | Incluir **empresa ativa** (nome truncado), **Trocar empresa**, **Sair**; indicador opcional “Superadmin” só em ambientes internos se política o exigir. |
 
-Ficheiros atuais a evoluir (brownfield): `apps/web/src/context/portal-provider.tsx`, `apps/web/src/components/auth-gate.tsx`, `apps/web/src/app/login/page.tsx`, layouts do dashboard.
+Ficheiros atuais a evoluir (brownfield): `frontend/src/context/portal-provider.tsx`, `frontend/src/components/auth-gate.tsx`, `frontend/src/app/login/page.tsx`, layouts do dashboard.
 
 ---
 

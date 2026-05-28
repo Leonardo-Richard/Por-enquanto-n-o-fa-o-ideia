@@ -105,7 +105,7 @@ Novos identificadores **FR58–FR63** para rastreio. Integração futura no `doc
 
 - **Configurações — Pasta raiz:** label clara (“Pasta raiz no Windows **(servidor / worker)**” ou equivalente aprovado por UX copy); helper text alinhado a **FR63**; botão **Guardar** que persiste na API; feedback de sucesso/erro.
 - **Estado vazio:** se não houver permissão, campo só leitura ou oculto conforme papel.
-- **Dashboard / Agente no computador:** alinhar copy existente (`apps/web/src/app/(dashboard)/dashboard/page.tsx`) com **FR63**, referenciando a nova persistência.
+- **Dashboard / Agente no computador:** alinhar copy existente (`frontend/src/app/(dashboard)/dashboard/page.tsx`) com **FR63**, referenciando a nova persistência.
 - **Erros de path (400):** mensagens legíveis (“caminho demasiado longo”, “caracteres não permitidos”) sem stack trace.
 
 *(Design fino: design system existente; spec UX dedicada opcional.)*
@@ -166,7 +166,7 @@ Novos identificadores **FR58–FR63** para rastreio. Integração futura no `doc
 
 - `docs/briefing-download-automatico-xml-pdf-pasta-raiz-windows.md` — briefing fonte.  
 - `packages/db/src/schema.ts` — `local_download_root`.  
-- `apps/web/src/app/(dashboard)/configuracoes/page.tsx`, `apps/web/src/context/portal-provider.tsx`.  
+- `frontend/src/app/(dashboard)/configuracoes/page.tsx`, `frontend/src/context/portal-provider.tsx`.  
 - `workers/nfse-portal-bridge/poll_jobs.py`, `portal_artifacts.py`.
 
 ---

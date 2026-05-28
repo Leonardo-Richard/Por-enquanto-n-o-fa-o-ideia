@@ -17,9 +17,9 @@ Este documento define **experiência de utilizador**, **arquitectura de informa�
 
 **Implementação de referência (brownfield):**
 
-- `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
-- `apps/web/src/hooks/use-adn-sync-for-company.ts`
-- `apps/web/src/app/(dashboard)/empresas/[id]/page.tsx` (ordem: **AdnSyncPanel** → **Pasta local prevista** → **Dados** → nota explicativa)
+- `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx`
+- `frontend/src/hooks/use-adn-sync-for-company.ts`
+- `frontend/src/app/(dashboard)/empresas/[id]/page.tsx` (ordem: **AdnSyncPanel** → **Pasta local prevista** → **Dados** → nota explicativa)
 
 ---
 

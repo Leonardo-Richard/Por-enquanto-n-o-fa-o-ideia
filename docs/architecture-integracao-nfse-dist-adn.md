@@ -146,7 +146,7 @@ Nomes físicos sugeridos; **@data-engineer** ajusta tipos e migrações em `db/m
 
 ### 5.1 Convenções existentes
 
-Prolongar o padrão actual: `apps/web/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/...`
+Prolongar o padrão actual: `frontend/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/...`
 
 Todas as rotas abaixo exigem **sessão** + **organização activa** coerente com `:organizationId` (igual às rotas actuais de empresas monitoradas), salvo indicação.
 
@@ -193,7 +193,7 @@ Prefixo sugerido: `/api/internal/v1/adn/...` **não** documentado em OpenAPI pú
 | `POST` sync / retry | Não | Sim | Conforme política existente (preferência: **só** com papel admin na org) |
 | `GET` automation-export | Não | Sim | Sim |
 
-Reutilizar helpers em `apps/web/src/server/api/v1/lib/` (ex.: `effective-company-role`, `active-org`) — **não** duplicar matriz de autorização.
+Reutilizar helpers em `frontend/src/server/api/v1/lib/` (ex.: `effective-company-role`, `active-org`) — **não** duplicar matriz de autorização.
 
 ---
 
@@ -241,7 +241,7 @@ Variáveis **só** no ambiente da VM: `ADN_WORKER_HMAC_SECRET`, caminhos de cert
 
 ## 10. Front-end (implementação)
 
-- **Local:** secção no detalhe da empresa monitorada — `apps/web/src/app/(dashboard)/empresas/[id]/` (ou rota `organizations/...` quando existir).  
+- **Local:** secção no detalhe da empresa monitorada — `frontend/src/app/(dashboard)/empresas/[id]/` (ou rota `organizations/...` quando existir).  
 - **Dados:** TanStack Query com chaves do **spec UX**; **polling** apenas quando `status === 'running'` para limitar carga (**NFR21** indirectamente).  
 - **Feature flag:** `GET /api/v1/session/...` ou payload da org deve incluir `adnSyncEnabled` para a UI **não** montar rotas (evitar flash).
 - **Bulk PDF:** `GET /api/v1/organizations/{organizationId}/monitored-companies/{companyId}/adn/artifacts/pdfs.zip` — ZIP só com PDFs (`kind=pdf`), ACL igual às outras rotas ADN; limites `ADN_PDFS_ZIP_MAX_COUNT` (default 200) e `ADN_PDFS_ZIP_MAX_TOTAL_BYTES` (default 150 MB); auditoria `adn_artifacts_bulk_downloaded`.

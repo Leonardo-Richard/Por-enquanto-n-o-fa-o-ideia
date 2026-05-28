@@ -2,7 +2,7 @@
 
 **Fontes:** [`docs/prd-instalacao-certificado-empresa-monitorada-utilizador.md`](prd-instalacao-certificado-empresa-monitorada-utilizador.md), [`docs/front-end-spec-instalacao-certificado-empresa-monitorada-utilizador.md`](front-end-spec-instalacao-certificado-empresa-monitorada-utilizador.md).  
 **Documentos irmãos:** [`docs/architecture-importacao-certificado-empresa-monitorada-adn.md`](architecture-importacao-certificado-empresa-monitorada-adn.md) (**CE-NFR1**, **CE-FR10**, §5.2 códigos), [`docs/architecture-integracao-nfse-dist-adn.md`](architecture-integracao-nfse-dist-adn.md) (**NFR19**, **NFR20**).  
-**Código de referência:** `apps/web/src/server/api/v1/handlers/adn-public-access.ts`, `adn-sync.ts`, `lib/adn-rate-limit.ts`, `lib/adn-worker-errors.ts`.
+**Código de referência:** `frontend/src/server/api/v1/handlers/adn-public-access.ts`, `adn-sync.ts`, `lib/adn-rate-limit.ts`, `lib/adn-worker-errors.ts`.
 
 **Normativa:** **CE-NFR1** e **NFR19** mantêm-se na Fase 1 — **sem** upload de PFX no portal; material criptográfico apenas no worker. Este documento **não** substitui a arquitectura de certificado existente; **estende** o portal com **leitura** e **pedido de verificação** sanitizados.
 
@@ -69,8 +69,8 @@ flowchart TB
 
 | Método | Caminho App Router | Handler |
 | ------ | ------------------- | -------- |
-| `GET` | `apps/web/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/route.ts` | `handleGetAdnCertificateReadiness` |
-| `POST` | `apps/web/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/verify/route.ts` | `handlePostAdnCertificateReadinessVerify` |
+| `GET` | `frontend/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/route.ts` | `handleGetAdnCertificateReadiness` |
+| `POST` | `frontend/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/certificate-readiness/verify/route.ts` | `handlePostAdnCertificateReadinessVerify` |
 
 *Alternativa válida:* um único ficheiro `certificate-readiness/route.ts` com `GET` + `POST` onde `POST` sem subpath actua como *verify* — menos RESTful; subpath **`/verify`** deixa semântica explícita para **UIP-FR2**.
 

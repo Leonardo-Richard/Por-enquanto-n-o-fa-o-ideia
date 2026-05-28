@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@repo/db": "file:../db",
+    "@supabase/supabase-js": "^2.104.0",
     "drizzle-orm": "^0.45.2",
     "zod": "^3.24.2"
   },

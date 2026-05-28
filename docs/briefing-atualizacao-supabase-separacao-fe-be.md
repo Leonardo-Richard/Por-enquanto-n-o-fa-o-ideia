@@ -14,8 +14,8 @@ Este documento é **somente briefing**; não substitui PRD nem inclui implementa
 
 ## 2. Contexto técnico atual (brownfield)
 
-- **Monorepo** com `apps/web` (Next.js App Router) e `packages/db` (**Drizzle** + `postgres` via `DATABASE_URL` em `apps/web/src/lib/db.ts`).
-- **APIs** já organizadas sob `apps/web/src/app/api/` (ex.: `api/v1/...`, `api/auth/[...all]`).
+- **Monorepo** com `frontend` (Next.js App Router) e `packages/db` (**Drizzle** + `postgres` via `DATABASE_URL` em `frontend/src/lib/db.ts`).
+- **APIs** já organizadas sob `frontend/src/app/api/` (ex.: `api/v1/...`, `api/auth/[...all]`).
 - **`.env.example`** já documenta `NEXT_PUBLIC_SUPABASE_URL` apontando ao host `https://bvmjwzjpalkfdgaumlva.supabase.co` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vazio (a preencher localmente).
 
 Conclusão: o produto já trata o “backend” como **Route Handlers** no mesmo app; a atualização é sobretudo **configuração**, **opcional cliente Supabase** e **disciplina de camadas**, não necessariamente um novo repositório.
@@ -73,9 +73,9 @@ Sem `DATABASE_URL` correto para o projeto cloud, o servidor continua a falhar co
 
 | Camada | Local sugerido | Responsabilidade |
 |--------|----------------|-------------------|
-| UI | `apps/web/src/app/**`, `components/**`, `hooks/**` | Sem `DATABASE_URL`; sem service role; opcionalmente cliente Supabase só com operações seguras. |
-| API HTTP | `apps/web/src/app/api/**/route.ts` | Contratos estáveis (JSON), auth, rate limit, orquestração. |
-| Domínio / DB | `packages/db`, `apps/web/src/lib/*.ts` | Queries Drizzle, mapeamentos, auditoria. |
+| UI | `frontend/src/app/**`, `components/**`, `hooks/**` | Sem `DATABASE_URL`; sem service role; opcionalmente cliente Supabase só com operações seguras. |
+| API HTTP | `frontend/src/app/api/**/route.ts` | Contratos estáveis (JSON), auth, rate limit, orquestração. |
+| Domínio / DB | `packages/db`, `frontend/src/lib/*.ts` | Queries Drizzle, mapeamentos, auditoria. |
 
 ### 5.3 Evolução opcional (pacotes)
 

@@ -66,7 +66,7 @@ Novos identificadores para rastreio (**FR49–FR52**). Integração futura no `d
 
 ## 6. Paridade mínima Painel ↔ nova rota
 
-A página em **`/empresas-monitoradas`** deve cumprir **FR51** com **paridade funcional mínima** relativamente à secção «Empresas monitoradas» de `apps/web/src/app/(dashboard)/dashboard/page.tsx`:
+A página em **`/empresas-monitoradas`** deve cumprir **FR51** com **paridade funcional mínima** relativamente à secção «Empresas monitoradas» de `frontend/src/app/(dashboard)/dashboard/page.tsx`:
 
 - Listagem alimentada pela mesma fonte (ex.: `useMonitoredCompanies` + `effectiveOrganizationId`).
 - Atalho/acções de cadastro coerentes com o Painel (`/empresas/nova`).
@@ -128,10 +128,10 @@ A página em **`/empresas-monitoradas`** deve cumprir **FR51** com **paridade fu
 ## 12. Referências de código e documentos
 
 - Briefing: `docs/briefing-nav-sidebar-empresas-monitoradas.md`
-- Shell: `apps/web/src/components/dashboard-shell.tsx`
-- Picker: `apps/web/src/app/(dashboard)/empresas/page.tsx`
-- Painel (secção referência): `apps/web/src/app/(dashboard)/dashboard/page.tsx`
-- Hook: `apps/web/src/hooks/use-monitored-companies.ts`
+- Shell: `frontend/src/components/dashboard-shell.tsx`
+- Picker: `frontend/src/app/(dashboard)/empresas/page.tsx`
+- Painel (secção referência): `frontend/src/app/(dashboard)/dashboard/page.tsx`
+- Hook: `frontend/src/hooks/use-monitored-companies.ts`
 
 ---
 

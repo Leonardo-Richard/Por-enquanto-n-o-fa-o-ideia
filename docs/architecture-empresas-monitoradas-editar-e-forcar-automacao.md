@@ -5,7 +5,7 @@
 
 **Normativa:** **sem** novos endpoints públicos, **sem** migrações de schema. Reutilizar **`GET`/`POST`** existentes sob  
 `/api/v1/organizations/:organizationId/monitored-companies/:companyId/adn/sync`  
-(`apps/web/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/sync/route.ts` + handlers em `apps/web/src/server/api/v1/handlers/adn-sync.ts`). O incremento é **UI cliente + factorização de lógica de fetch** já espelhada em `AdnSyncPanel`.
+(`frontend/src/app/api/v1/organizations/[organizationId]/monitored-companies/[companyId]/adn/sync/route.ts` + handlers em `frontend/src/server/api/v1/handlers/adn-sync.ts`). O incremento é **UI cliente + factorização de lógica de fetch** já espelhada em `AdnSyncPanel`.
 
 ### Change log
 
@@ -44,7 +44,7 @@ flowchart TB
     HookAdn[useAdnSyncForCompany ou adn-sync-client]
     Panel[AdnSyncPanel — ficha]
   end
-  subgraph next [apps/web Route Handlers]
+  subgraph next [frontend Route Handlers]
     GETlist[GET .../monitored-companies]
     GETadn[GET .../adn/sync]
     POSTadn[POST .../adn/sync]
@@ -68,8 +68,8 @@ flowchart TB
 
 | Ficheiro sugerido | Responsabilidade |
 | ----------------- | ----------------- |
-| `apps/web/src/lib/adn-sync-client.ts` | `buildAdnSyncUrl(organizationId, companyId)`, `fetchAdnSyncStatus(url)`, `postAdnSyncRequest(url, options)` — parsing mínimo de JSON, leitura de `Retry-After`, tipos de resultado (`202`, `403`, `429`, erro genérico). **Sem** React. |
-| `apps/web/src/hooks/use-adn-sync-for-company.ts` | Estado por `(organizationId, companyId)`: `access`, `lastJob`, `busy`, `actionMsg`; `refresh()` = GET; `requestSync()` = confirm + POST + mensagens alinhadas à ficha. |
+| `frontend/src/lib/adn-sync-client.ts` | `buildAdnSyncUrl(organizationId, companyId)`, `fetchAdnSyncStatus(url)`, `postAdnSyncRequest(url, options)` — parsing mínimo de JSON, leitura de `Retry-After`, tipos de resultado (`202`, `403`, `429`, erro genérico). **Sem** React. |
+| `frontend/src/hooks/use-adn-sync-for-company.ts` | Estado por `(organizationId, companyId)`: `access`, `lastJob`, `busy`, `actionMsg`; `refresh()` = GET; `requestSync()` = confirm + POST + mensagens alinhadas à ficha. |
 
 **Alternativa mínima:** só `adn-sync-client.ts` + `useReducer` local em cada consumidor — **rejeitada** para NFR26 se duplicar mensagens.
 
@@ -77,15 +77,15 @@ flowchart TB
 
 | Ficheiro | Alteração |
 | -------- | --------- |
-| `apps/web/src/components/monitored-companies-section.tsx` | Deixar de importar `usePortal` / `runSync`; renderizar **linhas** com `Link` Editar + botão ADN condicionado ao estado; opcional extrair `monitored-company-row.tsx`. |
-| `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` | Delegar `refresh` / `requestSync` / tratamento de status no módulo partilhado (refactor mecânico, comportamento idêntico). |
+| `frontend/src/components/monitored-companies-section.tsx` | Deixar de importar `usePortal` / `runSync`; renderizar **linhas** com `Link` Editar + botão ADN condicionado ao estado; opcional extrair `monitored-company-row.tsx`. |
+| `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` | Delegar `refresh` / `requestSync` / tratamento de status no módulo partilhado (refactor mecânico, comportamento idêntico). |
 
 ### 3.3 Páginas consumidoras
 
 | Ficheiro | Notas |
 | -------- | ----- |
-| `apps/web/src/app/(dashboard)/empresas-monitoradas/page.tsx` | Sem mudança estrutural obrigatória se a secção continuar a receber só `query`. |
-| `apps/web/src/app/(dashboard)/dashboard/page.tsx` | Mantém `<MonitoredCompaniesSection query={...} />`; herda novo layout automaticamente. |
+| `frontend/src/app/(dashboard)/empresas-monitoradas/page.tsx` | Sem mudança estrutural obrigatória se a secção continuar a receber só `query`. |
+| `frontend/src/app/(dashboard)/dashboard/page.tsx` | Mantém `<MonitoredCompaniesSection query={...} />`; herda novo layout automaticamente. |
 
 ---
 

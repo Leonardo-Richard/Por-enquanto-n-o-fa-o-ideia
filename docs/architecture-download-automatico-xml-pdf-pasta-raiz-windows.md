@@ -29,7 +29,7 @@ flowchart TB
   subgraph browser [Browser]
     UI[Configurações / Dashboard]
   end
-  subgraph next [Next.js apps/web]
+  subgraph next [Next.js frontend]
     API["GET/PATCH …/adn-sync-settings"]
     AUTH[Session + ACL org]
   end
@@ -85,7 +85,7 @@ sequenceDiagram
 ## 4. Contrato HTTP — recurso único
 
 **Base path:** `/api/v1/organizations/:organizationId/adn-sync-settings`  
-**Handlers:** `apps/web/src/server/api/v1/handlers/organization-adn-sync-settings.ts` (estender; manter ficheiro de rota actual).
+**Handlers:** `frontend/src/server/api/v1/handlers/organization-adn-sync-settings.ts` (estender; manter ficheiro de rota actual).
 
 ### 4.1 `GET`
 
@@ -250,8 +250,8 @@ O handler deve devolver `error_code` estável para o front mapear copy (**front-
 
 ## 13. Referências de código (ponto de extensão)
 
-- `apps/web/src/server/api/v1/handlers/organization-adn-sync-settings.ts`  
-- `apps/web/src/app/api/v1/organizations/[organizationId]/adn-sync-settings/route.ts`  
+- `frontend/src/server/api/v1/handlers/organization-adn-sync-settings.ts`  
+- `frontend/src/app/api/v1/organizations/[organizationId]/adn-sync-settings/route.ts`  
 - `workers/nfse-portal-bridge/poll_jobs.py`, `portal_artifacts.py`  
 - `packages/db/src/schema.ts` → `organizations.localDownloadRoot`
 

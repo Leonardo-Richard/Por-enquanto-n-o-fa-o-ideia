@@ -180,13 +180,13 @@ Estas decisões **substituem** «fechar no PR» onde havia ambiguidade; **@dev**
 3. `PATCH` aceita corpo com `adnSyncEnabled` opcional e/ou `localDownloadRoot` opcional (`null` ou string); pelo menos um campo presente; validação **NFR30** (max 512, sem caracteres de controlo; regras arquitectura §5).  
 4. Respostas **400** com `error_code` ∈ `LOCAL_PATH_TOO_LONG` | `LOCAL_PATH_INVALID_CHARS` | `LOCAL_PATH_TRAVERSAL` | `LOCAL_PATH_INVALID` conforme arquitectura §4.2 / spec UX §5.2.  
 5. **403** em `PATCH` de `localDownloadRoot` (ou `adnSyncEnabled`) quando o utilizador não cumpre `canManageUsers` — paridade com comportamento actual do handler.  
-6. Quando o valor normalizado de `localDownloadRoot` **muda** (incl. `null` ↔ string), `insertAuditEvent` com `eventType` **`organization_local_download_root_updated`**: adicionar este literal ao union `AuditEventType` em `apps/web/src/lib/audit.ts` se ainda não existir. `metadata` conforme **tabela da arquitectura LM §8** (ex.: `previousLength`, `newLength`, `suffixPreview`; **nunca** persistir path completo na linha de auditoria salvo política de privacidade em vigor). *Alternativa documentada na mesma tabela* (`organization_settings_updated` + `metadata.key`) **não** é obrigatória se se adoptar o literal dedicado.  
+6. Quando o valor normalizado de `localDownloadRoot` **muda** (incl. `null` ↔ string), `insertAuditEvent` com `eventType` **`organization_local_download_root_updated`**: adicionar este literal ao union `AuditEventType` em `frontend/src/lib/audit.ts` se ainda não existir. `metadata` conforme **tabela da arquitectura LM §8** (ex.: `previousLength`, `newLength`, `suffixPreview`; **nunca** persistir path completo na linha de auditoria salvo política de privacidade em vigor). *Alternativa documentada na mesma tabela* (`organization_settings_updated` + `metadata.key`) **não** é obrigatória se se adoptar o literal dedicado.  
 7. **D4:** Testes de integração cobrem superadmin e membro: incluir caso explícito no ficheiro de teste com resultado esperado documentado no PR (paridade com regras actuais de `organization-adn-sync-settings`).  
 8. Teste de integração: utilizador org A não consegue `PATCH` org B (**NFR31**).
 
 ### Dev notes
 
-- Ficheiros: `organization-adn-sync-settings.ts`, rota existente em `apps/web/src/app/api/v1/organizations/[organizationId]/adn-sync-settings/route.ts`, `apps/web/src/lib/audit.ts` (novo `eventType`).  
+- Ficheiros: `organization-adn-sync-settings.ts`, rota existente em `frontend/src/app/api/v1/organizations/[organizationId]/adn-sync-settings/route.ts`, `frontend/src/lib/audit.ts` (novo `eventType`).  
 - **D1** e **D4** estão fechados em **§0**; não reabrir sem `@po`.  
 - **Auditoria:** arquitectura LM **§8** é a fonte da forma de `metadata`; o literal **`organization_local_download_root_updated`** fecha a ambiguidade «tipo acordado».
 
@@ -217,7 +217,7 @@ Estas decisões **substituem** «fechar no PR» onde havia ambiguidade; **@dev**
 
 ### Dev notes
 
-- `apps/web/src/app/(dashboard)/configuracoes/page.tsx`; possível extrair subcomponente para testes.  
+- `frontend/src/app/(dashboard)/configuracoes/page.tsx`; possível extrair subcomponente para testes.  
 - Manter `PortalProvider` para fuso/e-mail até existir API.
 
 ### Dependências
@@ -244,7 +244,7 @@ Estas decisões **substituem** «fechar no PR» onde havia ambiguidade; **@dev**
 
 ### Dev notes
 
-- `apps/web/src/app/(dashboard)/dashboard/page.tsx`; pode exigir pequeno hook ou fetch lazy para não bloquear SSR.
+- `frontend/src/app/(dashboard)/dashboard/page.tsx`; pode exigir pequeno hook ou fetch lazy para não bloquear SSR.
 
 ### Dependências
 
@@ -270,7 +270,7 @@ Estas decisões **substituem** «fechar no PR» onde havia ambiguidade; **@dev**
 
 ### Dev notes
 
-- `apps/web/src/app/(dashboard)/empresas/[id]/…` — ponto exacto acordado com UX no PR.  
+- `frontend/src/app/(dashboard)/empresas/[id]/…` — ponto exacto acordado com UX no PR.  
 - **Paridade ACL:** mesma linha de produto que **LM-01B** — quem não pode `PATCH` de definições org **não** deve ver faixa editável; só leitura mascarada para quem pode gerir conforme AC1.
 
 ### Dependências
@@ -371,12 +371,12 @@ flowchart LR
 ### File List (alterações)
 
 - `db/migrations/20260427120000_org_local_download_root.sql` (criado; alinhado a `docs/qa/adn-staging-setup.md`)
-- `apps/web/src/lib/local-download-root.ts` + `apps/web/src/lib/local-download-root.test.ts`
-- `apps/web/src/server/api/v1/handlers/organization-adn-sync-settings.ts`
-- `apps/web/src/lib/audit.ts`
-- `apps/web/src/app/(dashboard)/configuracoes/page.tsx`
-- `apps/web/src/app/(dashboard)/dashboard/page.tsx`
-- `apps/web/src/app/api/v1/organization-adn-sync-settings.integration.test.ts`
+- `frontend/src/lib/local-download-root.ts` + `frontend/src/lib/local-download-root.test.ts`
+- `frontend/src/server/api/v1/handlers/organization-adn-sync-settings.ts`
+- `frontend/src/lib/audit.ts`
+- `frontend/src/app/(dashboard)/configuracoes/page.tsx`
+- `frontend/src/app/(dashboard)/dashboard/page.tsx`
+- `frontend/src/app/api/v1/organization-adn-sync-settings.integration.test.ts`
 - `workers/nfse-portal-bridge/mirror_local.py`
 - `workers/nfse-portal-bridge/poll_jobs.py`
 - `workers/nfse-portal-bridge/README.md`

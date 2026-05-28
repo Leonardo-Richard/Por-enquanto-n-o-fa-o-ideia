@@ -118,8 +118,8 @@ Campos da tabela de utilizadores da UI (**Cargo**, **Departamento**, **Contato**
 
 ## 10. Relação com o código atual
 
-- `apps/web/src/context/portal-provider.tsx` — login mock; evoluir para sessão real + endpoint de memberships.
-- `apps/web/src/components/auth-gate.tsx` — hoje redireciona só por “user existe”; incluir checagens de **empresa ativa** quando o produto exigir contexto obrigatório.
+- `frontend/src/context/portal-provider.tsx` — login mock; evoluir para sessão real + endpoint de memberships.
+- `frontend/src/components/auth-gate.tsx` — hoje redireciona só por “user existe”; incluir checagens de **empresa ativa** quando o produto exigir contexto obrigatório.
 - Nova rota sugerida: `/empresas` ou `/selecionar-empresa` para o ecrã de escolha; `/empresas/:id/usuarios` para a gestão.
 
 ---

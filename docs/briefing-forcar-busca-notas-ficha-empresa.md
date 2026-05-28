@@ -27,8 +27,8 @@ Este documento é **somente briefing**; não substitui user story, PRD nem espec
 
 | Área | Referência / comportamento |
 |------|----------------------------|
-| Ficha de edição da empresa | `apps/web/src/app/(dashboard)/empresas/[id]/page.tsx` — dados via `GET/PATCH /api/v1/companies/{id}`. |
-| Sync ADN na ficha | `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` + `use-adn-sync-for-company.ts` — `fetchAdnSyncStatus` / `postAdnSyncRequest`. |
+| Ficha de edição da empresa | `frontend/src/app/(dashboard)/empresas/[id]/page.tsx` — dados via `GET/PATCH /api/v1/companies/{id}`. |
+| Sync ADN na ficha | `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` + `use-adn-sync-for-company.ts` — `fetchAdnSyncStatus` / `postAdnSyncRequest`. |
 | Raiz de download local (org) | Coluna `organizations.local_download_root`, API/handlers em `organization-adn-sync-settings.ts`, validação em `lib/local-download-root.ts`. |
 | Briefing relacionado | `docs/briefing-empresas-monitoradas-editar-e-forcar-automacao.md` — distinção entre simulação na lista e POST ADN real na ficha. |
 

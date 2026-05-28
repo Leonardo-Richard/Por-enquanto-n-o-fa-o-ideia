@@ -16,7 +16,7 @@ Este directório liga o portal (jobs `adn_sync_jobs` + API interna HMAC) ao clie
 Na raiz do monorepo:
 
 ```bash
-npm run vendor:nfse-dist
+pnpm vendor:nfse-dist
 ```
 
 Isto cria `third_party/NFSE_dist/` (ignorado pelo Git).
@@ -38,8 +38,10 @@ pip install -r requirements.txt
 | `ADN_WORKER_DATABASE_URL` | *(opcional)* | Mesmo valor que `DATABASE_URL` se o host não injectar `DATABASE_URL` (ex.: alguns deploys Easypanel). |
 | `PORTAL_INTERNAL_URL` | `http://localhost:3000` | URL base onde o Next responde. |
 | `ADN_WORKER_HMAC_SECRET` | *(hex forte)* | **O mesmo** valor no `.env` do portal. |
-| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | `https://<ref>.supabase.co` | Necessário para o worker descarregar o certificado do cofre (vault_ref `supabase-storage:`). |
-| `SUPABASE_SERVICE_ROLE_KEY` | *(service role)* | Necessário para leitura privada de `adn-certificates`. |
+| `API_INTERNAL_URL` / `PORTAL_INTERNAL_URL` | `https://portal…` | Obrigatório para `POST …/certificates/fetch-vault-envelope` (HMAC). |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | `https://<ref>.supabase.co` | **Não** necessário no worker se usar fetch-vault-envelope. |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(service role)* | **Legado:** só com `ADN_CERT_VAULT_DIRECT_STORAGE=1` (leitura directa Storage). |
+| `ADN_CERT_VAULT_DIRECT_STORAGE` | `1` | Opt-in: ignora API e lê Storage com service role (transição). |
 | `NFSE_DIST_ROOT` | *(opcional)* | Default: `<repo>/third_party/NFSE_dist`. |
 | `NFSE_DIST_CLIENTS_LOCAL_PATH` | `C:\secrets\clients.local.json` | Opcional: ficheiro com thumbprint / `senha_cert` / PFX (não versionar). |
 | `NFSE_CLEAN_BEFORE_RUN` | `1` | Opcional: limpa XML/PDF antigos do CNPJ antes da recolha (por defeito **não** limpa, melhor para fluxos grandes). |
@@ -55,8 +57,8 @@ pip install -r requirements.txt
 | `NFSE_BRIDGE_SKIP_NFSE_DIST` | `1` | **Smoke/testes:** não executa **nenhum** motor de descarga (nem NFSE_dist nem Playwright); valida fila + `PATCH` + uploads vazios. |
 | `NFSE_LOCAL_MIRROR_ENABLED` | _vazio/1 (default LIGADO)_ | **Default LIGADO** em on-premise. Pôr `0` desliga a cópia para `organizations.local_download_root`. |
 | `NFSE_LOCAL_MIRROR_DISABLED` | `1` | **LM-02A:** desliga mesmo com `ENABLED=1` (cloud / sem disco). Prevalece sobre `ENABLED`. |
-| `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `npm run worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
-| `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `npm run fix:adn-stale-jobs`. |
+| `ADN_CLEAN_STALE_ON_WORKER_START` | `1` | **Órfãos:** ao arrancar `pnpm worker:adn-bridge`, marca `failed` jobs que ficaram em `running` há mais de `ADN_STALE_JOB_HOURS` (default 24). Use `0` para desactivar. |
+| `ADN_STALE_JOB_HOURS` | `24` | Idade mínima (`started_at`) para considerar o job órfão; também usado por `pnpm fix:adn-stale-jobs`. |
 | `ADN_WORKER_INSECURE_SSL` | `1` | **Só diagnóstico:** desliga verificação TLS para pedidos HTTPS do worker (Supabase Storage + API interna). Não usar em produção. Preferir `certifi` (já em `requirements.txt`) e rede sem inspecção SSL quebrada. |
 | `ADN_UPLOAD_DEBUG` | `1` | **Opcional:** antes de cada `uploads/prepare`, imprime uma linha de diagnóstico (`kind`, chave truncada, `sha256`, tamanho). Por defeito **desligado** (não definir ou valor diferente de `1`). |
 | `ADN_UPLOAD_LOG_FULL_ACCESS_KEYS` | `1` | Com `ADN_UPLOAD_DEBUG=1`: mostra a chave de acesso **completa** nos logs; usar só em diagnóstico controlado. |
@@ -82,12 +84,12 @@ O `poll_jobs.py` carrega automaticamente o ficheiro **`.env` na raiz do reposit�
 **Monorepo (recomendado em dev):** na raiz do repositório, com `DATABASE_URL` e `ADN_WORKER_HMAC_SECRET` em `.env`, `frontend/.env.local` ou `backend/.env.local`, e venv Python com `pip install -r workers/nfse-portal-bridge/requirements.txt`:
 
 ```bash
-npm run dev:with-adn-bridge
+pnpm dev:with-adn-bridge
 ```
 
-Isto inicia o Next **frontend** (`npm run dev -w frontend`, porta 3000) e o worker em paralelo. Se trabalha só com o **backend** na porta 3001: `npm run dev:with-adn-bridge-backend`. O script `npm run worker:adn-bridge` tenta automaticamente `http://127.0.0.1:3000` e `:3001` onde `/api/health` responder, se `API_INTERNAL_URL` / `PORTAL_INTERNAL_URL` não estiverem definidos. Só o worker: `npm run worker:adn-bridge`.
+Isto inicia o Next **frontend** (`pnpm dev -w frontend`, porta 3000) e o worker em paralelo. Se trabalha só com o **backend** na porta 3001: `pnpm dev:with-adn-bridge-backend`. O script `pnpm worker:adn-bridge` tenta automaticamente `http://127.0.0.1:3000` e `:3001` onde `/api/health` responder, se `API_INTERNAL_URL` / `PORTAL_INTERNAL_URL` não estiverem definidos. Só o worker: `pnpm worker:adn-bridge`.
 
-**Jobs presos em `running`:** o worker só consome `queued`. Se o processo morrer ou o `PATCH` falhar (ex. 503), o job fica `running` para sempre na base até ser libertado. Por omissão, cada arranque do worker corre a limpeza de órfãos (ver tabela). Limpeza manual: `npm run fix:adn-stale-jobs` ou `ADN_STALE_JOB_HOURS=6 npm run fix:adn-stale-jobs` se precisar de um limiar mais curto. **Reset total** (marca *todos* os `running` como `failed`): `npm run fix:adn-all-running` — só em dev / quando tiver a certeza de que nenhum worker está a meio de um job real. Estado: `npm run status:adn-jobs`.
+**Jobs presos em `running`:** o worker só consome `queued`. Se o processo morrer ou o `PATCH` falhar (ex. 503), o job fica `running` para sempre na base até ser libertado. Por omissão, cada arranque do worker corre a limpeza de órfãos (ver tabela). Limpeza manual: `pnpm fix:adn-stale-jobs` ou `ADN_STALE_JOB_HOURS=6 pnpm fix:adn-stale-jobs` se precisar de um limiar mais curto. **Reset total** (marca *todos* os `running` como `failed`): `pnpm fix:adn-all-running` — só em dev / quando tiver a certeza de que nenhum worker está a meio de um job real. Estado: `pnpm status:adn-jobs`.
 
 **Manual (produção ou depuração):** com o portal e Postgres activos:
 
@@ -115,7 +117,7 @@ Fluxo por job:
 1. Reserva um job `queued` (org com `adn_sync_enabled`).
 2. Escreve `clients.json` no NFSE_dist com o CNPJ da empresa monitorada.
    - Se `summary_json.fetchMode == "all"` no job, reinicia checkpoint para `0` e faz varredura completa (histórico disponível no ADN, não só incremental).
-3. Se existir `company_certificates.vault_ref` activo (`supabase-storage:`), descarrega o PKCS#12 do cofre, materializa `certificates/<CNPJ>.pfx` e actualiza `clients.local.json` com `senha_cert`.
+3. Se existir `company_certificates.vault_ref` activo, obtém o envelope via `POST /api/internal/v1/adn/certificates/fetch-vault-envelope` (HMAC), materializa `certificates/<CNPJ>.pfx` e actualiza `clients.local.json` com `senha_cert`.
 4. Copia `clients.local.json` opcional (`NFSE_DIST_CLIENTS_LOCAL_PATH`) e filtra para o CNPJ do job.
 5. Executa `run_download_workflow()` (XML + PDF como no repositório original).
 6. Limpa XML/PDF antigos em `data/<CNPJ>/` (best-effort) e só envia artefactos com timestamp desta execução, evitando falso positivo com ficheiros antigos (`uploads/prepare` → PUT → `artifacts/commit`).

@@ -115,7 +115,7 @@ flowchart TD
 
 ## 4. Dashboard — bloco «Agente no computador»
 
-**Ficheiro referência:** `apps/web/src/app/(dashboard)/dashboard/page.tsx`.
+**Ficheiro referência:** `frontend/src/app/(dashboard)/dashboard/page.tsx`.
 
 ### 4.1 Objectivo
 
@@ -226,9 +226,9 @@ Quando **LM-02** expuser `mirrorWritten` / `mirrorFailed` no `lastJob.summary`:
 ## 11. Referências cruzadas
 
 - `docs/prd-download-automatico-xml-pdf-pasta-raiz-windows.md`  
-- `apps/web/src/app/(dashboard)/configuracoes/page.tsx`  
-- `apps/web/src/app/(dashboard)/dashboard/page.tsx`  
-- `apps/web/src/context/portal-provider.tsx`
+- `frontend/src/app/(dashboard)/configuracoes/page.tsx`  
+- `frontend/src/app/(dashboard)/dashboard/page.tsx`  
+- `frontend/src/context/portal-provider.tsx`
 
 ---
 

@@ -41,3 +41,12 @@ export const patchJobSchema = z
 export type PrepareUploadInput = z.infer<typeof prepareUploadSchema>;
 export type CommitArtifactInput = z.infer<typeof commitArtifactSchema>;
 export type PatchJobInput = z.infer<typeof patchJobSchema>;
+
+export const fetchVaultEnvelopeSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    companyId: z.string().uuid(),
+  })
+  .strict();
+
+export type FetchVaultEnvelopeInput = z.infer<typeof fetchVaultEnvelopeSchema>;

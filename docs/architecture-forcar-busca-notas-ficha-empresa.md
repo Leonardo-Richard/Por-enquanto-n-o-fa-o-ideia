@@ -20,7 +20,7 @@
 
 | Camada | Decisão |
 | ------ | -------- |
-| **API** | **Nenhum** route handler novo. `localDownloadRoot` continua a ser exposto apenas por `handleGetOrganizationAdnSyncSettings` (`apps/web/src/server/api/v1/handlers/organization-adn-sync-settings.ts`). |
+| **API** | **Nenhum** route handler novo. `localDownloadRoot` continua a ser exposto apenas por `handleGetOrganizationAdnSyncSettings` (`frontend/src/server/api/v1/handlers/organization-adn-sync-settings.ts`). |
 | **Persistência** | Coluna `organizations.local_download_root` já existente; sem alteração de schema. |
 | **Cliente — sync ADN** | Manter `useAdnSyncForCompany` + `adn-sync-client.ts` como **única** implementação de `GET`/`POST` sync (**NFR35**). Renomear rótulo de botão / copy no `AdnSyncPanel` **sem** duplicar `postAdnSyncRequest`. |
 | **Cliente — raiz local** | Nova leitura **`GET .../adn-sync-settings`** na ficha, keyed por `company.organizationId`, com **mesma semântica** que o Painel (`dashboard/page.tsx` já faz fetch semelhante). |
@@ -41,7 +41,7 @@ flowchart TB
     Callout[LocalDownloadRootCallout — molecule]
     ClientLib[adn-sync-client.ts]
   end
-  subgraph next [apps/web Route Handlers]
+  subgraph next [frontend Route Handlers]
     GETsettings[GET .../adn-sync-settings]
     GETsync[GET .../adn/sync]
     POSTsync[POST .../adn/sync]
@@ -102,7 +102,7 @@ flowchart TB
 
 ### 4.2 `GET`/`POST .../monitored-companies/{companyId}/adn/sync`
 
-Inalterados relativamente a **BNF-01**; ver `docs/architecture-empresas-monitoradas-editar-e-forcar-automacao.md` §4 e `apps/web/src/lib/adn-sync-client.ts`.
+Inalterados relativamente a **BNF-01**; ver `docs/architecture-empresas-monitoradas-editar-e-forcar-automacao.md` §4 e `frontend/src/lib/adn-sync-client.ts`.
 
 ---
 
@@ -110,11 +110,11 @@ Inalterados relativamente a **BNF-01**; ver `docs/architecture-empresas-monitora
 
 | Ficheiro | Responsabilidade |
 | -------- | ---------------- |
-| `apps/web/src/hooks/use-organization-adn-sync-settings.ts` (**novo**, recomendado) | `organizationId` → estado `{ data, loading, error }`; `fetch` com `credentials: "include"`, cancelamento com `AbortController` / flag `cancelled`, parsing idêntico ao Painel. Exportar tipo mínimo para o callout. |
-| `apps/web/src/components/local-download-root-callout.tsx` (**novo**, opcional) | Props: `variant: "missing" \| "configured"`, `settingsHref`, `pathPreview?`, `canManage?`. Presentational; sem fetch. |
-| `apps/web/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` | Importar hook + callout; inserir bloco **FR67** (texto) + callout **FR65/FR66**; renomear botão primário / `aria-label` / `aria-busy` (**FR68**); alargar `actionMsg` de sucesso (copy — **NFR36**). |
-| `apps/web/src/hooks/use-adn-sync-for-company.ts` | Opcional: extrair string de `window.confirm` para constante partilhada se o copy for unificado com o PRD; **sem** segunda chamada `POST`. |
-| `apps/web/src/app/(dashboard)/dashboard/page.tsx` | **Opcional:** migrar o `useEffect` de `adn-sync-settings` para o novo hook (reduz duplicação). |
+| `frontend/src/hooks/use-organization-adn-sync-settings.ts` (**novo**, recomendado) | `organizationId` → estado `{ data, loading, error }`; `fetch` com `credentials: "include"`, cancelamento com `AbortController` / flag `cancelled`, parsing idêntico ao Painel. Exportar tipo mínimo para o callout. |
+| `frontend/src/components/local-download-root-callout.tsx` (**novo**, opcional) | Props: `variant: "missing" \| "configured"`, `settingsHref`, `pathPreview?`, `canManage?`. Presentational; sem fetch. |
+| `frontend/src/app/(dashboard)/empresas/[id]/adn-sync-panel.tsx` | Importar hook + callout; inserir bloco **FR67** (texto) + callout **FR65/FR66**; renomear botão primário / `aria-label` / `aria-busy` (**FR68**); alargar `actionMsg` de sucesso (copy — **NFR36**). |
+| `frontend/src/hooks/use-adn-sync-for-company.ts` | Opcional: extrair string de `window.confirm` para constante partilhada se o copy for unificado com o PRD; **sem** segunda chamada `POST`. |
+| `frontend/src/app/(dashboard)/dashboard/page.tsx` | **Opcional:** migrar o `useEffect` de `adn-sync-settings` para o novo hook (reduz duplicação). |
 
 **NFR35:** proibido criar segundo módulo que faça `POST` para `adn/sync` com lógica divergente.
 

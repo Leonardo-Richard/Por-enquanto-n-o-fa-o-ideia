@@ -133,7 +133,7 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 
 ### Acceptance Criteria
 
-1. Monorepo **Turborepo** + **pnpm** workspaces com `apps/web` e `packages/shared` (mínimo) conforme `docs/architecture.md`.
+1. Monorepo **Turborepo** + **pnpm** workspaces com `frontend` e `packages/shared` (mínimo) conforme `docs/architecture.md`.
 2. CI (GitHub Actions) executa **lint**, **typecheck** e **build** em PR para `main`.
 3. Existe rota ou handler **`/api/health`** (ou `/health`) público que devolve 200 e corpo mínimo (ex.: `{ "status": "ok" }`).
 4. `README.md` na raiz descreve como instalar dependências e correr `pnpm dev`.
@@ -167,9 +167,9 @@ Cada secção **Pxx** deve incluir, quando aplicável:
 
 | AC | Resultado | Notas |
 | -- | --------- | ----- |
-| 1 | PASS | Monorepo com Turborepo (`turbo.json`), pnpm (`pnpm-workspace.yaml`, `packageManager`), `apps/web` e `packages/shared` (`@repo/shared`), alinhado a `docs/architecture.md`. |
+| 1 | PASS | Monorepo com Turborepo (`turbo.json`), pnpm (`pnpm-workspace.yaml`, `packageManager`), `frontend` e `packages/shared` (`@repo/shared`), alinhado a `docs/architecture.md`. |
 | 2 | PASS | `.github/workflows/ci.yml` executa `pnpm lint`, `pnpm typecheck` e `pnpm build` em `pull_request` e `push` para `main`. |
-| 3 | PASS | Rota `GET /api/health` em `apps/web/src/app/api/health/route.ts` devolve 200 e JSON com `status: "ok"` (campo extra `app` não viola o critério). |
+| 3 | PASS | Rota `GET /api/health` em `frontend/src/app/api/health/route.ts` devolve 200 e JSON com `status: "ok"` (campo extra `app` não viola o critério). |
 | 4 | PASS | `README.md` na raiz documenta `pnpm install` e `pnpm dev`. |
 | 5 | PASS | Proteção da branch default descrita no README, com nota adequada quando o remoto/GitHub ainda não aplica regra. |
 

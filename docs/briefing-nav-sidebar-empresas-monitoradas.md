@@ -11,7 +11,7 @@ Hoje o item de navegação rotulado **«Organização»** aponta para a rota **`
 
 Referência no código:
 
-```9:14:apps/web/src/components/dashboard-shell.tsx
+```9:14:frontend/src/components/dashboard-shell.tsx
 const nav = [
   { href: "/dashboard", label: "Painel" },
   { href: "/empresas", label: "Organização" },
@@ -42,7 +42,7 @@ O utilizador quer que o **atalho da sidebar** reflita o trabalho quotidiano: abr
 |----------|---------------------|
 | Sidebar `nav` — «Organização» | `href="/empresas"` → picker de organizações |
 | «Trocar organização» | `href="/empresas"` → idem (correto para troca de org) |
-| Lista de CNPJs + ações rápidas | `apps/web/src/app/(dashboard)/dashboard/page.tsx` — secção «Empresas monitoradas», dados via `useMonitoredCompanies` |
+| Lista de CNPJs + ações rápidas | `frontend/src/app/(dashboard)/dashboard/page.tsx` — secção «Empresas monitoradas», dados via `useMonitoredCompanies` |
 | Cadastro nova empresa | `/empresas/nova` (já referenciado no painel) |
 | Detalhe por empresa | `/empresas/[id]` (fiscal / ADN, etc.) |
 
@@ -99,10 +99,10 @@ Sugestões de rótulo para o item de menu (escolher uma e alinhar com `docs/fron
 
 ## 8. Referências de código
 
-- Shell e menu: `apps/web/src/components/dashboard-shell.tsx`
-- Picker de organização: `apps/web/src/app/(dashboard)/empresas/page.tsx`
-- Painel e lista atual: `apps/web/src/app/(dashboard)/dashboard/page.tsx`
-- Hook da lista: `apps/web/src/hooks/use-monitored-companies.ts`
+- Shell e menu: `frontend/src/components/dashboard-shell.tsx`
+- Picker de organização: `frontend/src/app/(dashboard)/empresas/page.tsx`
+- Painel e lista atual: `frontend/src/app/(dashboard)/dashboard/page.tsx`
+- Hook da lista: `frontend/src/hooks/use-monitored-companies.ts`
 
 ---
 
