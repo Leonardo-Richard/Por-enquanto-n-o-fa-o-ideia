@@ -26,6 +26,9 @@ importers:
 
   backend:
     dependencies:
+      '@next/env':
+        specifier: ^15.5.15
+        version: 15.5.18
       '@repo/adn-internal':
         specifier: file:../packages/adn-internal
         version: link:../packages/adn-internal
@@ -84,6 +87,9 @@ importers:
 
   frontend:
     dependencies:
+      '@next/env':
+        specifier: ^15.5.15
+        version: 15.5.18
       '@repo/adn-internal':
         specifier: file:../packages/adn-internal
         version: link:../packages/adn-internal

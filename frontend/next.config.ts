@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 const dev = process.env.NODE_ENV !== "production";
 const cwd = process.cwd();
 // Turbo corre `next dev` com cwd = `frontend`; `import.meta.url` no config + Turbopack pode falhar ao resolver a raiz.
-const monorepoRoot = path.resolve(cwd, "..", "..");
+const monorepoRoot = path.resolve(cwd, "..");
 if (existsSync(path.join(monorepoRoot, ".env"))) {
   loadEnvConfig(monorepoRoot, dev);
 }

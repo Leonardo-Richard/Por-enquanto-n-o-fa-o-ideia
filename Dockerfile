@@ -22,7 +22,7 @@ COPY frontend ./frontend
 COPY backend ./backend
 COPY packages ./packages
 ENV NODE_OPTIONS="--max-old-space-size=8192"
-RUN pnpm --filter frontend exec next build
+RUN pnpm --filter frontend build
 
 FROM base AS runner
 ENV NODE_ENV=production

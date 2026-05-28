@@ -17,6 +17,7 @@
     "@repo/shared": "file:../packages/shared",
     "@supabase/supabase-js": "^2.104.0",
     "drizzle-orm": "^0.45.2",
+    "@next/env": "^15.5.15",
     "next": "^15.5.15",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
