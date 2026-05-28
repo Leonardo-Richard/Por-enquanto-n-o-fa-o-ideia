@@ -32,6 +32,7 @@ Após `succeeded` / `failed` / pendente / retry, a chave `sched_monthly:…:{YYY
 - Validação HTTP / hidratação portal: `@repo/shared` — `parseMonthlyRunDayFromRequest`, `hydrateMonthlyRunDay`.
 - DDL: `db/migrations/20260422120000_companies_monthly_run_day.sql`.
 - **Tick HTTP (produção):** `GET` ou `POST` `/api/internal/v1/adn/cron/monthly-enqueue` com `Authorization: Bearer <CRON_SECRET>`. Vercel Cron (projecto **frontend**): `frontend/vercel.json` — `5 9 * * *` (UTC) ≈ 06:05 `America/Sao_Paulo` (sem DST). Ver `frontend/.env.example` (`CRON_SECRET`, `DATABASE_URL`).
+- **UI (ficha da empresa):** `GET /api/v1/companies/:id` devolve `monthlyCollection` (`scheduledAt`, `adnSyncEnabled`, `alreadyEnqueuedThisMonth`, `isToday`) calculado com `computeNextMonthlyCollection` em `@repo/scheduling` e existência da chave `sched_monthly:*` no mês civil SP.
 
 ### #endpoint-cron-mensal-adn
 

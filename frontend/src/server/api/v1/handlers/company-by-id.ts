@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { companies } from "@repo/db";
+import { companies, organizations } from "@repo/db";
 import { companyPatchBodySchema } from "@repo/shared";
 import { getDb } from "@/lib/db";
 import { canListCompany, canMutateCompanyBusinessData, isSuperadmin } from "@/lib/authz";
 import { loadEffectiveCompanyRole } from "../lib/effective-company-role";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { rowToCompany } from "../lib/company-mapper";
+import { loadMonthlyCollectionPreview } from "../lib/monthly-collection-preview";
 import { getAuthedSession } from "../lib/session";
 import { getEffectiveOrganizationId } from "../lib/active-org";
 
@@ -34,7 +35,22 @@ export async function handleGetCompanyById(request: Request, companyId: string) 
       return jsonError(404, "Empresa não encontrada.");
     }
 
-    return NextResponse.json({ company: rowToCompany(company) });
+    const [org] = await db
+      .select({ adnSyncEnabled: organizations.adnSyncEnabled })
+      .from(organizations)
+      .where(eq(organizations.id, company.organizationId))
+      .limit(1);
+
+    const monthlyCollection = await loadMonthlyCollectionPreview(db, {
+      companyId: company.id,
+      monthlyRunDay: Number(company.monthlyRunDay),
+      adnSyncEnabled: Boolean(org?.adnSyncEnabled),
+    });
+
+    return NextResponse.json({
+      company: rowToCompany(company),
+      monthlyCollection,
+    });
   } catch (e) {
     return toPublicApiError(e);
   }
@@ -98,7 +114,22 @@ export async function handlePatchCompanyById(request: Request, companyId: string
       return jsonError(404, "Empresa não encontrada.");
     }
 
-    return NextResponse.json({ company: rowToCompany(updated) });
+    const [org] = await db
+      .select({ adnSyncEnabled: organizations.adnSyncEnabled })
+      .from(organizations)
+      .where(eq(organizations.id, updated.organizationId))
+      .limit(1);
+
+    const monthlyCollection = await loadMonthlyCollectionPreview(db, {
+      companyId: updated.id,
+      monthlyRunDay: Number(updated.monthlyRunDay),
+      adnSyncEnabled: Boolean(org?.adnSyncEnabled),
+    });
+
+    return NextResponse.json({
+      company: rowToCompany(updated),
+      monthlyCollection,
+    });
   } catch (e) {
     return toPublicApiError(e);
   }

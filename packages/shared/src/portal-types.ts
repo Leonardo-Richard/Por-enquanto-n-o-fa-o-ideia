@@ -14,6 +14,17 @@ export type Company = {
   createdAt: string;
 };
 
+/** Próxima coleta automática mensal (GET /api/v1/companies/:id). */
+export type MonthlyCollectionPreview = {
+  /** Instante nominal 06:00 SP; null se ADN desactivado. */
+  scheduledAt: string | null;
+  adnSyncEnabled: boolean;
+  /** Job `sched_monthly:*` já existe no mês civil SP actual. */
+  alreadyEnqueuedThisMonth: boolean;
+  /** Próximo agendamento é hoje (dia D em SP). */
+  isToday: boolean;
+};
+
 export type Execution = {
   id: string;
   companyId: string;

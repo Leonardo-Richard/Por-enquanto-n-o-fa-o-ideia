@@ -45,6 +45,7 @@ export type {
   Execution,
   ExecutionStatus,
   ExecutionTrigger,
+  MonthlyCollectionPreview,
   PortalSettings,
 } from "./portal-types";
 

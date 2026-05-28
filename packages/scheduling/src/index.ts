@@ -15,3 +15,9 @@ export {
   maybeLogMonthlyEnqueueDecision,
 } from "./enqueue-telemetry";
 export type { EnqueueDuplicateLogLevel } from "./enqueue-telemetry";
+
+export {
+  computeNextMonthlyCollection,
+  toMonthlyCollectionPreview,
+} from "./next-monthly-collection";
+export type { NextMonthlyCollectionPreview } from "./next-monthly-collection";

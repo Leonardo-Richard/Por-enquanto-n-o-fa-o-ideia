@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useId, useMemo, useState } from "react";
 import { formatCnpj, isValidCnpj, sanitizeCnpj } from "@repo/shared";
 import type { Company } from "@repo/shared";
+import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-schedule-hint";
+import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
 import { buildWelcomeExecution, usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
 
@@ -20,6 +22,16 @@ export function CompanyForm() {
   const [monthlyRunDay, setMonthlyRunDay] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const createPreview = useMemo(
+    () =>
+      buildMonthlyCollectionPreview({
+        monthlyRunDay,
+        adnSyncEnabled: true,
+        hasMonthlyJobForCurrentPeriod: false,
+      }),
+    [monthlyRunDay],
+  );
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -157,6 +169,12 @@ export function CompanyForm() {
           <strong>América/São Paulo</strong>. Escolha o dia civil (1 a 28) em que
           quer que o job mensal seja agendado.
         </p>
+        <div className="-mt-2">
+          <MonthlyCollectionScheduleHint
+            monthlyRunDay={monthlyRunDay}
+            preview={createPreview}
+          />
+        </div>
       </div>
 
       {error ? (

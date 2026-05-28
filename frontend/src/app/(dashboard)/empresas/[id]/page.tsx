@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useId, useState } from "react";
-import { formatCnpj, messageFromMonthlyRunDayParse, type Company } from "@repo/shared";
+import { useEffect, useId, useMemo, useState } from "react";
+import {
+  formatCnpj,
+  messageFromMonthlyRunDayParse,
+  type Company,
+  type MonthlyCollectionPreview,
+} from "@repo/shared";
+import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-schedule-hint";
+import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
 import { usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
 import { AdnSyncPanel } from "./adn-sync-panel";
@@ -20,6 +27,9 @@ export default function EmpresaDetailPage() {
   const monthlyRunDayErrorId = useId();
 
   const [company, setCompany] = useState<Company | null>(null);
+  const [monthlyCollection, setMonthlyCollection] = useState<
+    MonthlyCollectionPreview | null | undefined
+  >(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [tradeName, setTradeName] = useState("");
@@ -43,11 +53,15 @@ export default function EmpresaDetailPage() {
         }
         return;
       }
-      const body = (await res.json()) as { company: Company };
+      const body = (await res.json()) as {
+        company: Company;
+        monthlyCollection?: MonthlyCollectionPreview;
+      };
       if (cancelled) {
         return;
       }
       setCompany(body.company);
+      setMonthlyCollection(body.monthlyCollection ?? null);
       setTradeName(body.company.tradeName);
       setSystemCode(body.company.systemCode);
       setMonthlyRunDay(body.company.monthlyRunDay);
@@ -58,6 +72,26 @@ export default function EmpresaDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  const isDraftPreview =
+    company !== null && dirty && monthlyRunDay !== company.monthlyRunDay;
+
+  const displayPreview = useMemo((): MonthlyCollectionPreview | null | undefined => {
+    if (!company || monthlyCollection === undefined) {
+      return undefined;
+    }
+    if (!monthlyCollection || !isDraftPreview) {
+      return monthlyCollection;
+    }
+    return buildMonthlyCollectionPreview({
+      monthlyRunDay,
+      adnSyncEnabled: monthlyCollection.adnSyncEnabled,
+      hasMonthlyJobForCurrentPeriod: monthlyCollection.alreadyEnqueuedThisMonth,
+    });
+  }, [company, monthlyCollection, isDraftPreview, monthlyRunDay]);
+
+  const effectiveMonthlyRunDay =
+    company && isDraftPreview ? monthlyRunDay : (company?.monthlyRunDay ?? monthlyRunDay);
 
   if (loadError || !company) {
     return (
@@ -99,8 +133,13 @@ export default function EmpresaDetailPage() {
       setFieldError("Não foi possível guardar.");
       return;
     }
-    const body = (await res.json()) as { company: Company };
+    const body = (await res.json()) as {
+      company: Company;
+      monthlyCollection?: MonthlyCollectionPreview;
+    };
     setCompany(body.company);
+    setMonthlyCollection(body.monthlyCollection ?? null);
+    setMonthlyRunDay(body.company.monthlyRunDay);
     setDirty(false);
   }
 
@@ -152,10 +191,12 @@ export default function EmpresaDetailPage() {
         <p className="mt-1 text-xs text-black/50 dark:text-white/45">
           Cadastrada em {new Date(comp.createdAt).toLocaleString("pt-BR")}
         </p>
-        <p className="mt-4 max-w-xl text-sm text-black/70 dark:text-white/65">
-          Coleta automática mensal: dia <strong>{comp.monthlyRunDay}</strong>, às
-          06:00 (América/São Paulo).
-        </p>
+        <MonthlyCollectionScheduleHint
+          monthlyRunDay={effectiveMonthlyRunDay}
+          preview={displayPreview}
+          loading={monthlyCollection === undefined}
+          isDraftPreview={isDraftPreview}
+        />
       </div>
 
       <AdnSyncPanel company={comp} />
