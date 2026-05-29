@@ -22,6 +22,7 @@ RUN pnpm install --frozen-lockfile
 COPY frontend ./frontend
 COPY backend ./backend
 COPY packages ./packages
+RUN pnpm install --frozen-lockfile
 ENV NODE_OPTIONS="--max-old-space-size=8192"
 RUN pnpm --filter frontend build
 

@@ -13,7 +13,14 @@ if (existsSync(path.join(monorepoRoot, ".env"))) {
 loadEnvConfig(cwd, dev);
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@repo/shared"],
+  transpilePackages: [
+    "@repo/shared",
+    "@repo/db",
+    "@repo/scheduling",
+    "@repo/adn-internal",
+    "@repo/adn-server",
+  ],
+  outputFileTracingRoot: monorepoRoot,
   /** Ambientes sem árvore ESLint completa (ex.: peer opcional) ainda geram build de produção. */
   eslint: {
     ignoreDuringBuilds: true,

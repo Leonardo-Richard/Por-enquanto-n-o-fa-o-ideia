@@ -85,7 +85,13 @@ for (const p of [
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@repo/shared"],
+  transpilePackages: [
+    "@repo/shared",
+    "@repo/db",
+    "@repo/scheduling",
+    "@repo/adn-internal",
+    "@repo/adn-server",
+  ],
   eslint: {
     ignoreDuringBuilds: true,
   },
