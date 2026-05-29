@@ -36,11 +36,11 @@ export default function RecuperarPage() {
       <div className="mx-auto w-full max-w-sm">
         <h1 className="text-center text-2xl font-semibold tracking-tight">Recuperar senha</h1>
         <p className="mt-2 text-center text-sm text-black/60 dark:text-white/55">
-          Em desenvolvimento, o link de redefinição é impresso no terminal do servidor.
+          Enviaremos instruções para redefinir a senha se o e-mail estiver registado.
         </p>
         {done ? (
           <p className="mt-8 text-center text-sm text-emerald-800 dark:text-emerald-200" role="status">
-            Se o e-mail existir, enviámos instruções (ou verifique o log do servidor em dev).
+            Se o e-mail existir na nossa base, receberá instruções para redefinir a senha em breve.
           </p>
         ) : (
           <form

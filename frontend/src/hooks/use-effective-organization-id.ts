@@ -1,43 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api-client";
+import { useMe } from "@/context/me-provider";
 
 export type MeSummary = {
   effectiveOrganizationId: string | null;
   activeOrganizationName: string | null;
 };
 
+/** @deprecated Prefer `useMe()` — mantido para imports existentes. */
 export function useMeSummary() {
-  const [data, setData] = useState<MeSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/v1/me");
-      const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-      if (!res.ok || !body) {
-        setData(null);
-        return;
-      }
-      setData({
-        effectiveOrganizationId:
-          typeof body.effectiveOrganizationId === "string" ? body.effectiveOrganizationId : null,
-        activeOrganizationName:
-          typeof body.activeOrganizationName === "string" ? body.activeOrganizationName : null,
-      });
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
+  const { data, loading, reload } = useMe();
   return {
     effectiveOrganizationId: data?.effectiveOrganizationId ?? null,
     activeOrganizationName: data?.activeOrganizationName ?? null,

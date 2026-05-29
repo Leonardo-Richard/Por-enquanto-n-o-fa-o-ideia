@@ -14,6 +14,8 @@ export type MonitoredCompaniesSectionProps = {
   effectiveOrganizationId: string | null | undefined;
   /** Último job ADN por empresa (overview) — evita N GET /adn/sync só para rótulo. */
   adnLastJobsByCompanyId?: Record<string, AdnExecutionsOverviewLastJob>;
+  /** Limita linhas visíveis (ex.: resumo no Painel). */
+  maxRows?: number;
 };
 
 export function MonitoredCompaniesSection({
@@ -21,10 +23,13 @@ export function MonitoredCompaniesSection({
   query,
   effectiveOrganizationId,
   adnLastJobsByCompanyId,
+  maxRows,
 }: MonitoredCompaniesSectionProps) {
   const { companies, loading, issue, reload } = query;
 
   const list = companies ?? [];
+  const visible = maxRows != null ? list.slice(0, maxRows) : list;
+  const hiddenCount = maxRows != null ? Math.max(0, list.length - maxRows) : 0;
 
   return (
     <section
@@ -35,7 +40,7 @@ export function MonitoredCompaniesSection({
         <>
           <h2 className="text-base font-semibold tracking-tight">Empresas monitoradas</h2>
           <p className="mt-1 text-xs text-black/55 dark:text-white/50">
-            CNPJs da organização ativa; edite a ficha ou solicite sincronização ADN quando disponível.
+            CNPJs da organização ativa; abra a ficha para sincronização ADN, certificado e falhas.
           </p>
         </>
       ) : null}
@@ -65,16 +70,26 @@ export function MonitoredCompaniesSection({
           </p>
         ) : (
           <ul className="divide-y divide-black/5 dark:divide-white/10">
-            {list.map((c) => (
+            {visible.map((c) => (
               <MonitoredCompanyRow
                 key={c.id}
                 company={c}
-                effectiveOrganizationId={effectiveOrganizationId}
                 lastJobOverview={adnLastJobsByCompanyId?.[c.id]}
               />
             ))}
           </ul>
         )}
+        {hiddenCount > 0 ? (
+          <p className="mt-4 text-sm text-black/60 dark:text-white/55">
+            Mais {hiddenCount} empresa(s) nesta organização.{" "}
+            <Link
+              href="/empresas-monitoradas"
+              className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              Ver lista completa
+            </Link>
+          </p>
+        ) : null}
       </div>
     </section>
   );

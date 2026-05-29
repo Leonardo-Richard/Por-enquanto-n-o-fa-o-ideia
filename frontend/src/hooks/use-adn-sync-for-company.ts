@@ -11,7 +11,7 @@ export type AdnSyncPanelAccess = "loading" | "active" | "feature_off" | "forbidd
 export type AdnSyncActionTone = "none" | "success" | "error";
 
 const CONFIRM_TEXT =
-  "Pedir a busca de notas agora? O pedido entra na fila no portal com recolha incremental (notas novas desde o último checkpoint — mais rápido que varredura completa). O motor efectivo (ex. Playwright) é o definido no ambiente do worker.";
+  "Pedir a busca de notas agora? O pedido entra na fila no portal com recolha incremental (notas novas desde o último checkpoint). O worker da organização processará o job em segundo plano.";
 
 const ADN_ADAPTIVE_POLLING_ENABLED =
   typeof process.env.NEXT_PUBLIC_ADN_ADAPTIVE_POLLING_ENABLED === "string" &&

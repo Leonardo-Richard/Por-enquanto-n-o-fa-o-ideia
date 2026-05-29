@@ -6,15 +6,15 @@ import { formatCnpj, isValidCnpj, sanitizeCnpj } from "@repo/shared";
 import type { Company } from "@repo/shared";
 import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-schedule-hint";
 import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
-import { buildWelcomeExecution, usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
+import { useUiToast } from "@/context/ui-toast";
 import { apiFetch } from "@/lib/api-client";
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export function CompanyForm() {
-  const { appendExecution } = usePortal();
   const { refetch } = useAppSession();
+  const { showToast } = useUiToast();
   const router = useRouter();
   const monthlyHelpId = useId();
   const [cnpj, setCnpj] = useState("");
@@ -70,7 +70,12 @@ export function CompanyForm() {
         setError("Resposta inválida do servidor.");
         return;
       }
-      appendExecution(buildWelcomeExecution(company));
+      showToast({
+        title: "Empresa criada",
+        description:
+          "Abra a ficha para pedir sincronização ADN e configurar o certificado, quando aplicável.",
+        tone: "success",
+      });
       await apiFetch("/api/v1/session/active-company", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

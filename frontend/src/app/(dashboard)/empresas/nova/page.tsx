@@ -14,8 +14,8 @@ export default function NovaEmpresaPage() {
         <h1 className="mt-4 text-2xl font-semibold tracking-tight">Empresas monitoradas</h1>
         <p className="mt-1 text-sm font-medium text-black/70 dark:text-white/65">Cadastro na automação</p>
         <p className="mt-2 max-w-xl text-sm text-black/65 dark:text-white/60">
-          Após salvar, uma execução de boas-vindas é registrada (simulada) e a estrutura de pastas aparece no detalhe
-          da empresa monitorada.
+          Após guardar, abra a ficha da empresa para pedir a primeira sincronização ADN (quando a
+          funcionalidade estiver activa na organização) e configurar o certificado digital.
         </p>
       </div>
       <CompanyForm />

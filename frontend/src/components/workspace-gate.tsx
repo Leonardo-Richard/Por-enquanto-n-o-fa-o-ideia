@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { useAppSession } from "@/context/app-session";
 
 const ALLOW_NO_ACTIVE = new Set(["/empresas", "/empresas/nova"]);
@@ -48,13 +49,22 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
   }, [isPending, data, pathname, router, searchParams]);
 
   if (isPending || !data?.user) {
-    return null;
+    return <DashboardSkeleton />;
   }
 
   if (needsActiveCompany(pathname) && !hasWorkspaceContext(data.session)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-sm text-black/60 dark:text-white/55">
-        A preparar contexto da organização…
+      <div
+        className="flex min-h-screen items-center justify-center bg-[var(--background)]"
+        aria-busy="true"
+        aria-label="A preparar contexto da organização"
+      >
+        <div className="space-y-3 text-center">
+          <div className="mx-auto h-8 w-48 animate-pulse rounded-lg bg-black/[0.08] dark:bg-white/[0.1]" />
+          <p className="text-sm text-black/60 dark:text-white/55">
+            A preparar contexto da organização…
+          </p>
+        </div>
       </div>
     );
   }

@@ -9,15 +9,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Company, Execution, PortalSettings } from "@repo/shared";
+import type { Company, PortalSettings } from "@repo/shared";
 import { mirrorDestinationFolderName } from "@/lib/mirror-destination-preview";
 
-const STORAGE_KEY = "portal-automacao-nf.data.v1";
-
-type Persisted = {
-  executions: Execution[];
-  settings: PortalSettings;
-};
+const STORAGE_KEY = "portal-automacao-nf.settings.v1";
 
 const defaultSettings: PortalSettings = {
   localRootPath: "C:\\NFs",
@@ -25,31 +20,27 @@ const defaultSettings: PortalSettings = {
   timezone: "America/Sao_Paulo",
 };
 
-function loadPersisted(): Persisted {
+function loadSettings(): PortalSettings {
   if (typeof window === "undefined") {
-    return { executions: [], settings: defaultSettings };
+    return defaultSettings;
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { executions: [], settings: defaultSettings };
+      return defaultSettings;
     }
-    const parsed = JSON.parse(raw) as Persisted & { companies?: unknown };
-    return {
-      executions: Array.isArray(parsed.executions) ? parsed.executions : [],
-      settings: { ...defaultSettings, ...parsed.settings },
-    };
+    const parsed = JSON.parse(raw) as Partial<PortalSettings>;
+    return { ...defaultSettings, ...parsed };
   } catch {
-    return { executions: [], settings: defaultSettings };
+    return defaultSettings;
   }
 }
 
 type PortalContextValue = {
   hydrated: boolean;
-  executions: Execution[];
   settings: PortalSettings;
-  appendExecution: (execution: Execution) => void;
   updateSettings: (patch: Partial<PortalSettings>) => void;
+  /** Pré-visualização local no browser — o caminho efectivo do worker vem do servidor (Configurações). */
   pathForCompany: (company: Pick<Company, "cnpjDigits" | "systemCode" | "tradeName">) => string;
 };
 
@@ -57,13 +48,10 @@ const PortalContext = createContext<PortalContextValue | null>(null);
 
 export function PortalProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
-  const [executions, setExecutions] = useState<Execution[]>([]);
   const [settings, setSettings] = useState<PortalSettings>(defaultSettings);
 
   useEffect(() => {
-    const data = loadPersisted();
-    setExecutions(data.executions);
-    setSettings(data.settings);
+    setSettings(loadSettings());
     setHydrated(true);
   }, []);
 
@@ -71,9 +59,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     if (!hydrated || typeof window === "undefined") {
       return;
     }
-    const payload: Persisted = { executions, settings };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [hydrated, executions, settings]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  }, [hydrated, settings]);
 
   const pathForCompany = useCallback(
     (company: Pick<Company, "cnpjDigits" | "systemCode" | "tradeName">) => {
@@ -88,10 +75,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     [settings.localRootPath],
   );
 
-  const appendExecution = useCallback((execution: Execution) => {
-    setExecutions((prev) => [execution, ...prev]);
-  }, []);
-
   const updateSettings = useCallback((patch: Partial<PortalSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -99,18 +82,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const value = useMemo<PortalContextValue>(
     () => ({
       hydrated,
-      executions,
       settings,
-      appendExecution,
       updateSettings,
       pathForCompany,
     }),
-    [hydrated, executions, settings, appendExecution, updateSettings, pathForCompany],
+    [hydrated, settings, updateSettings, pathForCompany],
   );
 
-  return (
-    <PortalContext.Provider value={value}>{children}</PortalContext.Provider>
-  );
+  return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>;
 }
 
 export function usePortal() {
@@ -119,22 +98,4 @@ export function usePortal() {
     throw new Error("usePortal must be used within PortalProvider");
   }
   return ctx;
-}
-
-export function buildWelcomeExecution(company: Company): Execution {
-  const startedAt = new Date().toISOString();
-  return {
-    id:
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `ex-${Date.now()}`,
-    companyId: company.id,
-    companyCnpjDigits: company.cnpjDigits,
-    status: "success",
-    trigger: "signup",
-    startedAt,
-    finishedAt: startedAt,
-    detail: "Primeira coleta após cadastro (simulada).",
-    filesCount: 0,
-  };
 }

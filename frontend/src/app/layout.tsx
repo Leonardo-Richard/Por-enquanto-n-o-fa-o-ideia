@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Portal de Automação de NF",
   description:
-    "Cadastre empresas (CNPJ), defina o código do sistema de origem e organize as notas fiscais no seu computador — com automação no cadastro e todo dia 1º do mês.",
+    "Cadastre empresas (CNPJ), sincronize notas fiscais com o Ambiente Nacional e organize ficheiros com automação mensal configurável (dia 1 a 28, fuso América/São Paulo).",
 };
 
 export default function RootLayout({

@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { useAppSession } from "@/context/app-session";
+import { useMe } from "@/context/me-provider";
 import { signOut } from "@/lib/auth-browser";
 import { isSuperadminOrganizationsNavVisible } from "@/components/dashboard-shell-fr100";
-import { apiFetch } from "@/lib/api-client";
 
 type NavItem = {
   href: string;
@@ -38,6 +37,11 @@ const navItems: NavItem[] = [
     isActive: (p) => p.startsWith("/execucoes"),
   },
   {
+    href: "/agente",
+    label: "Agente",
+    isActive: (p) => p.startsWith("/agente"),
+  },
+  {
     href: "/configuracoes",
     label: "Configurações",
     isActive: (p) => p.startsWith("/configuracoes"),
@@ -46,38 +50,17 @@ const navItems: NavItem[] = [
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
-  const { data } = useAppSession();
-  const [orgName, setOrgName] = useState<string | null>(null);
-  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const { data: sessionData } = useAppSession();
+  const { data: meData } = useMe();
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await apiFetch("/api/v1/me");
-        const j = (await res.json().catch(() => null)) as {
-          activeOrganizationName?: string | null;
-          isSuperadmin?: boolean;
-        } | null;
-        if (!cancelled && res.ok && j) {
-          setOrgName(j.activeOrganizationName ?? null);
-          setIsSuperadmin(Boolean(j.isSuperadmin));
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, data?.user?.id]);
+  const orgName = meData?.activeOrganizationName ?? null;
+  const isSuperadmin = meData?.isSuperadmin ?? false;
+  const email = sessionData?.user?.email ?? "";
 
   async function logout() {
     await signOut();
     window.location.href = "/login";
   }
-
-  const email = data?.user?.email ?? "";
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -155,13 +138,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <header className="border-b border-black/5 md:hidden dark:border-white/10">
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm font-semibold">Portal NF</span>
-              <button
-                type="button"
-                onClick={() => void logout()}
-                className="text-xs text-emerald-700 dark:text-emerald-400"
-              >
-                Sair
-              </button>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/empresas"
+                  className="text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                >
+                  Trocar org.
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="text-xs text-emerald-700 dark:text-emerald-400"
+                >
+                  Sair
+                </button>
+              </div>
             </div>
             <nav className="flex gap-1 overflow-x-auto px-2 pb-2">
               {navItems.map((item) => {

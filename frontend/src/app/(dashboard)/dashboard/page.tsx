@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ExecutionsAttentionBanner } from "@/components/executions-attention-banner";
 import { MonitoredCompaniesSection } from "@/components/monitored-companies-section";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 import { usePortal } from "@/context/portal-provider";
 import { useAdnExecutionsOverview } from "@/hooks/use-adn-executions-overview";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
 import { useMonitoredCompanies } from "@/hooks/use-monitored-companies";
+import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import {
   adnJobStatusBadgeClass,
   adnJobStatusLabel,
@@ -22,7 +24,11 @@ export default function DashboardPage() {
   const { effectiveOrganizationId, loading: orgLoading } = useMeSummary();
   const monitoredQuery = useMonitoredCompanies(effectiveOrganizationId);
   const overview = useAdnExecutionsOverview(effectiveOrganizationId);
-  const [serverMirrorPath, setServerMirrorPath] = useState<string | null | undefined>(undefined);
+  const orgSettings = useOrganizationAdnSyncSettings({
+    organizationId: effectiveOrganizationId ?? "",
+    fetchEnabled: Boolean(effectiveOrganizationId) && !orgLoading,
+  });
+  const serverMirrorPath = orgSettings.data?.localDownloadRoot ?? null;
   const [latestJob, setLatestJob] = useState<{
     companyCnpjMasked: string;
     trigger: string;
@@ -30,48 +36,6 @@ export default function DashboardPage() {
     status: string;
     detailLabel: string;
   } | null>(null);
-
-  useEffect(() => {
-    if (!effectiveOrganizationId) {
-      setServerMirrorPath(undefined);
-      return;
-    }
-    if (orgLoading) {
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const r = await fetch(
-          `/api/v1/organizations/${effectiveOrganizationId}/adn-sync-settings`,
-          { credentials: "include", cache: "no-store" },
-        );
-        if (!r.ok || cancelled) {
-          if (!cancelled) {
-            setServerMirrorPath(null);
-          }
-          return;
-        }
-        const j = (await r.json()) as { localDownloadRoot?: string | null };
-        if (cancelled) {
-          return;
-        }
-        const raw = j.localDownloadRoot;
-        if (typeof raw === "string" && raw.trim().length > 0) {
-          setServerMirrorPath(raw.trim());
-        } else {
-          setServerMirrorPath(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setServerMirrorPath(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveOrganizationId, orgLoading]);
 
   useEffect(() => {
     if (!effectiveOrganizationId || orgLoading) {
@@ -146,9 +110,16 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Visão geral das empresas monitoradas, pastas locais e execuções ADN da organização activa.
+          Resumo da organização activa: alertas, métricas de execução e atalhos. A lista completa de
+          CNPJs está em{" "}
+          <Link href="/empresas-monitoradas" className="font-medium text-emerald-700 dark:text-emerald-400">
+            Empresas monitoradas
+          </Link>
+          .
         </p>
       </div>
+
+      <OnboardingBanner />
 
       {overview.error ? (
         <p className="text-sm text-red-800 dark:text-red-300" role="alert">
@@ -210,6 +181,7 @@ export default function DashboardPage() {
         query={monitoredQuery}
         effectiveOrganizationId={effectiveOrganizationId}
         adnLastJobsByCompanyId={overview.data?.lastJobByCompanyId}
+        maxRows={5}
       />
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
@@ -221,8 +193,8 @@ export default function DashboardPage() {
           por empresa conforme a sua operação.
         </p>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          Na lista acima pode pedir sincronização manual (entra na fila no portal) ou abrir a ficha para
-          certificado, motor de recolha e histórico.
+          Na ficha de cada empresa pode pedir sincronização manual, configurar certificado e rever
+          falhas de ingestão.
         </p>
       </section>
 
@@ -302,7 +274,7 @@ export default function DashboardPage() {
           → <strong className="font-medium">Pasta raiz no disco (servidor)</strong>. Para arquivo noutro PC,
           será necessário o <strong className="font-medium">agente local</strong> (fase posterior).
         </p>
-        {serverMirrorPath === undefined && effectiveOrganizationId ? (
+        {orgSettings.loading && effectiveOrganizationId ? (
           <p className="mt-2 text-xs text-emerald-900/70 dark:text-emerald-100/70">A carregar caminho do servidor…</p>
         ) : null}
       </section>

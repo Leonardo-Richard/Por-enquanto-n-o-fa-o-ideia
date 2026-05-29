@@ -4,10 +4,12 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Company } from "@repo/shared";
 import { AdnPortalDownloadLinks } from "@/app/(dashboard)/empresas/[id]/adn-portal-download-links";
 import { AdnCertificateReadinessCard } from "@/app/(dashboard)/empresas/[id]/adn-certificate-readiness-card";
+import { AdnFailuresPanel } from "@/components/adn-failures-panel";
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 import { useAdnSyncForCompany } from "@/hooks/use-adn-sync-for-company";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
+import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import { isCertUploadUiEnabled } from "@/lib/cert-upload-ui-enabled";
 import { isAdnJobInProgress } from "@/lib/adn-executions-display";
 import { mirrorSummaryFromJobSummary } from "@/lib/adn-job-mirror-summary";
@@ -48,6 +50,13 @@ export function AdnSyncPanel({ company }: { company: Company }) {
     Boolean(company.organizationId) &&
     Boolean(effectiveOrganizationId) &&
     company.organizationId === effectiveOrganizationId;
+
+  const orgSettings = useOrganizationAdnSyncSettings({
+    organizationId: company.organizationId,
+    fetchEnabled: orgAligned && access !== "forbidden",
+  });
+
+  const exportHref = `/api/v1/organizations/${company.organizationId}/monitored-companies/${company.id}/adn/automation-export.json`;
 
   useEffect(() => {
     if (
@@ -127,6 +136,7 @@ export function AdnSyncPanel({ company }: { company: Company }) {
 
   return (
     <section
+      id="adn"
       aria-labelledby={`adn-h2-${liveId}`}
       className="rounded-xl border border-black/5 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/[0.03]"
     >
@@ -309,7 +319,23 @@ export function AdnSyncPanel({ company }: { company: Company }) {
             >
               Actualizar
             </button>
+            {orgSettings.data?.canManage ? (
+              <a
+                href={exportHref}
+                download
+                className="rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/15"
+                title="Export JSON para automação (não inclui certificados)"
+              >
+                Exportar JSON
+              </a>
+            ) : null}
           </div>
+          {orgSettings.data?.canManage ? (
+            <p className="mt-2 text-[11px] text-black/50 dark:text-white/45">
+              O ficheiro de exportação lista empresas monitoradas da organização e{" "}
+              <strong className="font-medium">não inclui certificados</strong> nem segredos.
+            </p>
+          ) : null}
           <div className="mt-3">
             <button
               ref={helpTriggerRef}
@@ -343,6 +369,14 @@ export function AdnSyncPanel({ company }: { company: Company }) {
           companyId={company.id}
           cnpjDigits={company.cnpjDigits}
           onCertificateRegistered={bumpReadiness}
+          refreshSignal={readinessKick}
+        />
+      ) : null}
+      {access === "active" ? (
+        <AdnFailuresPanel
+          organizationId={company.organizationId}
+          companyId={company.id}
+          canManage={orgSettings.data?.canManage ?? false}
           refreshSignal={readinessKick}
         />
       ) : null}

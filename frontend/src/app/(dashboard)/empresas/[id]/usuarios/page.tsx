@@ -208,10 +208,11 @@ export default function EmpresaUsuariosPage() {
         >
           ← Empresa
         </Link>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Utilizadores da organização</h1>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Membros da organização</h1>
         <p className="mt-2 text-sm text-black/65 dark:text-white/60">
-          A conta global do utilizador permanece na plataforma; aqui remove apenas o vínculo com esta organização
-          (empresa monitorada: contexto fiscal).
+          Gestão de quem tem acesso à organização (não membros só desta empresa monitorada). A conta
+          global do utilizador permanece na plataforma; remover aqui só desliga o vínculo com a
+          organização.
         </p>
       </div>
 

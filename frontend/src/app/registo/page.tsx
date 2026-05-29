@@ -40,6 +40,9 @@ export default function RegistoPage() {
         return;
       }
       router.replace("/empresas");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("portal-nf.show-onboarding", "1");
+      }
     } catch {
       setError("Erro ao registar. Tente novamente.");
     } finally {

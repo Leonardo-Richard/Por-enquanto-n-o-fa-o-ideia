@@ -11,8 +11,9 @@ import {
 } from "@repo/shared";
 import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-schedule-hint";
 import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
-import { usePortal } from "@/context/portal-provider";
+import { mirrorDestinationPathPreview } from "@/lib/mirror-destination-preview";
 import { useAppSession } from "@/context/app-session";
+import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import { apiFetch } from "@/lib/api-client";
 import { AdnSyncPanel } from "./adn-sync-panel";
 
@@ -21,7 +22,6 @@ const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 export default function EmpresaDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const { pathForCompany } = usePortal();
   const { refetch } = useAppSession();
   const router = useRouter();
   const monthlyHelpId = useId();
@@ -94,6 +94,11 @@ export default function EmpresaDetailPage() {
   const effectiveMonthlyRunDay =
     company && isDraftPreview ? monthlyRunDay : (company?.monthlyRunDay ?? monthlyRunDay);
 
+  const orgSettings = useOrganizationAdnSyncSettings({
+    organizationId: company?.organizationId ?? "",
+    fetchEnabled: Boolean(company?.organizationId),
+  });
+
   if (loadError || !company) {
     return (
       <div className="space-y-4">
@@ -111,7 +116,15 @@ export default function EmpresaDetailPage() {
   }
 
   const comp = company;
-  const path = pathForCompany(comp);
+  const serverPath =
+    orgSettings.data?.localDownloadRoot?.trim() ?
+      mirrorDestinationPathPreview(
+        orgSettings.data.localDownloadRoot.trim(),
+        comp.systemCode,
+        comp.tradeName,
+        comp.cnpjDigits,
+      )
+    : null;
 
   async function save() {
     setFieldError(null);
@@ -184,7 +197,7 @@ export default function EmpresaDetailPage() {
             href={`/empresas/${comp.id}/usuarios`}
             className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
           >
-            Utilizadores →
+            Membros da organização →
           </Link>
         </div>
         <p className="mt-1 text-xs text-black/50 dark:text-white/45">
@@ -201,14 +214,25 @@ export default function EmpresaDetailPage() {
       <AdnSyncPanel company={comp} />
 
       <section className="rounded-xl border border-black/5 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/[0.03]">
-        <h2 className="text-sm font-semibold">Pasta local prevista</h2>
-        <p className="mt-2 break-all font-mono text-xs leading-relaxed text-black/75 dark:text-white/70">
-          {path}
-        </p>
+        <h2 className="text-sm font-semibold">Pasta no servidor (worker)</h2>
+        {orgSettings.loading ? (
+          <p className="mt-2 text-xs text-black/50 dark:text-white/45">A carregar caminho…</p>
+        ) : serverPath ? (
+          <p className="mt-2 break-all font-mono text-xs leading-relaxed text-black/75 dark:text-white/70">
+            {serverPath}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-black/55 dark:text-white/50">
+            Defina a pasta raiz em{" "}
+            <Link href="/configuracoes" className="font-medium text-emerald-700 dark:text-emerald-400">
+              Configurações
+            </Link>{" "}
+            → Pasta raiz no disco (servidor).
+          </p>
+        )}
         <p className="mt-3 text-xs text-black/55 dark:text-white/50">
-          Raiz configurável em Configurações. Formato do destino:{" "}
-          <span className="font-mono">codigo - cnpj</span>. Caracteres inválidos no
-          código do sistema são normalizados para o caminho.
+          Caminho efectivo usado pelo worker quando o espelho local está activo. Formato:{" "}
+          <span className="font-mono">raiz\codigo-apelido</span>.
         </p>
       </section>
 
@@ -310,8 +334,8 @@ export default function EmpresaDetailPage() {
           <strong className="font-medium text-black/80 dark:text-white/75">worker</strong> (fora do browser) deve
           processá-lo. Um administrador da organização pode activar a funcionalidade em{" "}
           <strong className="font-medium text-black/80 dark:text-white/75">Configurações</strong>. O separador{" "}
-          <strong className="font-medium text-black/80 dark:text-white/75">Execuções</strong> continua a mostrar só
-          histórico local de demonstração (agente / protótipo), não o estado da fila ADN.
+          <strong className="font-medium text-black/80 dark:text-white/75">Execuções</strong> mostra o
+          histórico real dos jobs ADN na fila (estado, gatilho e detalhe).
         </p>
       </section>
 

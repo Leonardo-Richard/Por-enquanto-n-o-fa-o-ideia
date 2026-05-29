@@ -17,10 +17,10 @@ export default function Home() {
               Entrar
             </Link>
             <Link
-              href="/dashboard"
+              href="/registo"
               className="rounded-full bg-[var(--foreground)] px-3 py-1.5 text-xs font-medium text-[var(--background)] transition-opacity hover:opacity-90"
             >
-              Abrir painel
+              Criar conta
             </Link>
           </div>
         </div>
@@ -44,16 +44,16 @@ export default function Home() {
             NF e grava em pastas previsíveis — com gatilho ao concluir o
             cadastro e{" "}
             <strong className="font-medium text-[var(--foreground)]">
-              no dia 1º de cada mês
+              num dia do mês que escolher (1 a 28)
             </strong>
-            , sem depender só de lembrete manual.
+            , às 06:00 em América/São Paulo.
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
             <Link
-              href="/empresas/nova"
+              href="/registo"
               className="inline-flex h-11 items-center justify-center rounded-lg bg-[var(--foreground)] px-5 text-sm font-medium text-[var(--background)] transition-opacity hover:opacity-90"
             >
-              Começar cadastro
+              Criar conta gratuita
             </Link>
             <Link
               href="#como-funciona"
@@ -104,7 +104,7 @@ export default function Home() {
                 <h3 className="font-medium">Automação nos momentos certos</h3>
                 <p className="mt-2 text-sm leading-relaxed text-black/70 dark:text-white/65">
                   Primeira coleta após cadastrar a empresa e rotina mensal no dia
-                  1º — alinhada ao fechamento e às obrigações recorrentes.
+                  configurado — alinhada ao fechamento e às obrigações recorrentes.
                 </p>
               </li>
             </ul>
@@ -119,19 +119,17 @@ export default function Home() {
             O que o produto cobre além do núcleo
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/70 dark:text-white/65">
-            O site inclui painel com métricas locais, lista e detalhe de empresas
-            com caminho de pasta, histórico de execuções (simulado),
-            configuração de raiz e fuso, preferência de alertas por e-mail e
-            fluxos de sincronização manual ou “dia 1º”. O download real no disco
-            continua exigindo o agente local — a UI já reflete pastas, gatilhos e
-            responsabilidades.
+            O portal inclui painel com visão das empresas monitoradas, sincronização
+            com o Ambiente Nacional (ADN), histórico de execuções na fila, certificado
+            digital e configuração da pasta raiz no servidor. A cópia automática para o
+            disco local depende do worker de recolha configurado pela sua equipa.
           </p>
           <ul className="mt-8 grid gap-4 sm:grid-cols-2">
             {[
-              "Autenticação com sessão persistida no navegador (demo)",
-              "CRUD de empresas com validação de CNPJ",
-              "Execuções com status, origem do gatilho e detalhe",
-              "Configurações de pasta, timezone e notificações",
+              "Conta com sessão segura e organizações multi-empresa",
+              "Cadastro de CNPJs com validação e dia de coleta mensal",
+              "Execuções ADN com estado, gatilho e detalhe de falhas",
+              "Configurações de pasta raiz, certificado e sincronização",
             ].map((item) => (
               <li
                 key={item}
