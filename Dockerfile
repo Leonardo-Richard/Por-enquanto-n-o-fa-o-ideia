@@ -17,6 +17,7 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/scheduling/package.json ./packages/scheduling/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/adn-internal/package.json ./packages/adn-internal/
+COPY packages/adn-server/package.json ./packages/adn-server/
 RUN pnpm install --frozen-lockfile
 COPY frontend ./frontend
 COPY backend ./backend
