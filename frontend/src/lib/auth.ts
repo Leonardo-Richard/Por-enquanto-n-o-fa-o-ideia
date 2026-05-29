@@ -5,15 +5,13 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { ALLOWED_LEGAL_DOCUMENT_VERSIONS } from "./legal-documents";
 import { getDb } from "./db";
+import { getServerEnv, requireBetterAuthSecretInProduction } from "./env";
 
 const allowedLegalDocumentVersions = new Set<string>(ALLOWED_LEGAL_DOCUMENT_VERSIONS);
 
 function getBaseUrl(): string {
-  return (
-    process.env.BETTER_AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
+  const env = getServerEnv();
+  return env.BETTER_AUTH_URL ?? env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
 /** Origem normalizada (scheme + host + port) para `trustedOrigins` do Better Auth. */
@@ -34,10 +32,11 @@ function toTrustedOrigin(raw: string): string | null {
  * coincide com o domínio real (ex.: EasyPanel vs URL antiga).
  */
 function getTrustedOrigins(): string[] {
-  const extra = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.trim() ?? "";
+  const env = getServerEnv();
+  const extra = env.BETTER_AUTH_TRUSTED_ORIGINS?.trim() ?? "";
   const pieces: string[] = [
-    process.env.BETTER_AUTH_URL?.trim() ?? "",
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "",
+    env.BETTER_AUTH_URL?.trim() ?? "",
+    env.NEXT_PUBLIC_APP_URL?.trim() ?? "",
     ...(extra ? extra.split(",").map((s) => s.trim()) : []),
   ];
   const origins = new Set<string>();
@@ -51,14 +50,7 @@ function getTrustedOrigins(): string[] {
 }
 
 function getSecret(): string {
-  const s = process.env.BETTER_AUTH_SECRET;
-  if (process.env.NODE_ENV === "production") {
-    if (!s || s.length < 32) {
-      throw new Error("BETTER_AUTH_SECRET deve ter pelo menos 32 caracteres");
-    }
-    return s;
-  }
-  return s ?? "dev-dev-dev-dev-dev-dev-dev-dev-12-3456-7890-abcd";
+  return requireBetterAuthSecretInProduction();
 }
 
 function buildAuth() {
@@ -79,7 +71,7 @@ function buildAuth() {
       enabled: true,
       minPasswordLength: 8,
       sendResetPassword: async ({ user, url }) => {
-        if (process.env.NODE_ENV === "development") {
+        if (getServerEnv().NODE_ENV === "development") {
           console.info("[recuperar-senha]", user.email, url);
         }
       },

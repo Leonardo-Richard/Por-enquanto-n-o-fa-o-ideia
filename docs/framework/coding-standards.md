@@ -9,12 +9,18 @@ Fonte viva derivada de `docs/architecture.md` (v0.7) e práticas do monorepo.
 - Dados sensíveis e Drizzle só em Route Handlers, Server Actions e `server/*`.
 - Erros de API: preferir `jsonError` / códigos estáveis em rotas públicas; rotas internas ADN usam `@repo/adn-internal` + `adnHandlerToResponse`.
 
+## Variáveis de ambiente
+
+- Validar no servidor via `@repo/shared/server-env` (`getServerEnv`, `requireBetterAuthSecretInProduction`).
+- Re-export por app: `frontend/src/lib/env.ts` (e `backend/src/lib/env.ts`).
+- `DATABASE_URL`: resolução partilhada em `@repo/db/portal-db` (`createPortalDbAccessor`); apps expõem `getDb` em `src/lib/db.ts`.
+
 ## Pacotes
 
 | Pacote | Uso |
 |--------|-----|
-| `@repo/db` | Schema Drizzle + cliente Postgres |
-| `@repo/shared` | Tipos e constantes partilhados |
+| `@repo/db` | Schema Drizzle + cliente Postgres; `./portal-db` para singleton |
+| `@repo/shared` | Tipos, constantes e `server-env` |
 | `@repo/adn-internal` | Handlers internos ADN (HMAC) |
 | `@repo/scheduling` | Agendamento mensal |
 

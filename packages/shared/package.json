@@ -9,6 +9,11 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./server-env": {
+      "types": "./src/server-env.ts",
+      "import": "./src/server-env.ts",
+      "default": "./src/server-env.ts"
     }
   },
   "scripts": {

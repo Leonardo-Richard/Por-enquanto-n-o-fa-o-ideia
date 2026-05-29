@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
+import { getServerEnv } from "@/lib/env";
 
 function normalizeBase(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
 export function resolveInternalApiBaseUrl(): string | null {
-  const apiInternal = process.env.API_INTERNAL_URL?.trim();
+  const env = getServerEnv();
+  const apiInternal = env.API_INTERNAL_URL?.trim();
   if (apiInternal) return normalizeBase(apiInternal);
-  const apiBase = process.env.API_BASE_URL?.trim();
+  const apiBase = env.API_BASE_URL?.trim();
   if (apiBase) return normalizeBase(apiBase);
   return null;
 }

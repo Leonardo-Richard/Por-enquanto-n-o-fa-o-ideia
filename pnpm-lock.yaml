@@ -246,6 +246,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@next/env':
+        specifier: ^15.5.15
+        version: 15.5.18
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -3988,6 +3991,7 @@ snapshots:
 
   '@repo/db@file:packages/db(@upstash/redis@1.38.0)(kysely@0.28.17)':
     dependencies:
+      '@next/env': 15.5.18
       drizzle-orm: 0.45.2(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)
       postgres: 3.4.9
     transitivePeerDependencies:

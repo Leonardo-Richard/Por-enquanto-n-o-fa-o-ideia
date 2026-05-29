@@ -12,7 +12,7 @@ Este documento descreve a arquitetura técnica unificada (web, API, workers, age
 
 ### Starter Template ou Projeto Existente
 
-**Estado:** *Greenfield* no PRD; **implementação actual** — monorepo **Turborepo** + **npm workspaces** com app **Next.js** em `frontend/` (App Router, TypeScript), pacote opcional `backend/`, pacotes partilhados em `packages/*` e worker Python ADN em `workers/nfse-portal-bridge/`. O preset AIOS `nextjs-react` alinha com esta linha.
+**Estado:** *Greenfield* no PRD; **implementação actual** — monorepo **Turborepo** + **pnpm workspaces** com app **Next.js 15** em `frontend/` (App Router, TypeScript), pacote opcional `backend/`, pacotes partilhados em `packages/*` e worker Python ADN em `workers/nfse-portal-bridge/`. O preset AIOS `nextjs-react` alinha com esta linha.
 
 ### Change Log
 
@@ -53,7 +53,7 @@ O sistema segue um modelo **web SaaS + cliente local**: a aplicação **Next.js*
 ### Repository Structure
 
 - **Structure:** **Monorepo** (repositório único para web, API, pacotes partilhados e worker ADN).
-- **Monorepo tool:** **Turborepo** + **npm workspaces** (`package.json` na raiz com `workspaces: ["frontend", "backend", "packages/*"]`).
+- **Monorepo tool:** **Turborepo** + **pnpm workspaces** (`packageManager`: `pnpm@9` na raiz).
 - **Package organization (código actual):**
   - `frontend/` — Next.js (UI + REST API / route handlers em `src/app/api/`).
   - `backend/` — Next.js opcional (API separada em desenvolvimento, p.ex. porta 3001).
@@ -116,9 +116,9 @@ Tabela de referência para o MVP (versões a fixar no bootstrap do repositório)
 | Category | Technology | Version (pin no lockfile) | Purpose | Rationale |
 | -------- | ---------- | ------------------------- | ------- | --------- |
 | Frontend Language | TypeScript | 5.x | Tipagem partilhada | Consistência com backend |
-| Frontend Framework | Next.js | 15.x / 16.x | App Router, SSR, API | PRD + preset nextjs-react |
+| Frontend Framework | Next.js | 15.x (pin no lockfile) | App Router, SSR, API | PRD + preset nextjs-react |
 | UI Component Library | shadcn/ui + Radix | latest compatível | Acessível, tematização | front-end-spec |
-| State Management | TanStack Query + React context mínimo | 5.x | Dados servidor; UI local | Evita store global desnecessário |
+| State Management | Hooks custom + React context mínimo | — | Dados servidor (fetch em hooks); UI local | TanStack Query não está no lockfile actual; pode ser adoptado depois |
 | Backend Language | TypeScript | 5.x | Mesma stack | DX e tipos partilhados |
 | Backend Framework | Next.js Route Handlers + Node runtime | (mesmo app) | REST, auth, WS upgrade | Deploy unificado |
 | API Style | REST (JSON) | OpenAPI 3 gerado ou manual | CRUD + jobs | Simplicidade e caching HTTP |
@@ -129,7 +129,7 @@ Tabela de referência para o MVP (versões a fixar no bootstrap do repositório)
 | Frontend Testing | Vitest + Testing Library | latest | Unit/component | Pirâmide PRD |
 | Backend Testing | Vitest + supertest / hono fetch | latest | Integração API | — |
 | E2E Testing | Playwright | latest | Smoke login → empresa → job | PRD testing |
-| Build Tool | Turborepo + npm workspaces | latest | Monorepo | `npm` na raiz + `turbo` |
+| Build Tool | Turborepo + pnpm workspaces | latest | Monorepo | `pnpm` na raiz + `turbo` |
 | Bundler | Turbopack (Next) | integrado | Dev/build | Default Next |
 | IaC Tool | Terraform ou Pulumi *(fase 2)* | — | Infra reprodutível | Opcional no MVP |
 | CI/CD | GitHub Actions | — | Lint, test, deploy Vercel | Standard |
@@ -441,14 +441,14 @@ frontend/src/
 
 ### State Management
 
-- **Server state:** TanStack Query (`companies`, `jobs`, `agentStatus`) com **staleTime** curto para lista (ex.: 15s) e refetch ao focar janela — alinha com “polling leve” da spec UX.
+- **Server state:** hooks dedicados (`useMonitoredCompanies`, `useAdnSyncForCompany`, etc.) com refetch/polling leve onde necessário.
 - **Client UI:** `useState` local; contexto só para **toaster** e tema.
 
 ### Routing
 
 - Rotas públicas: `/login`, `/register`, `/forgot-password`.
-- Rotas autenticadas: layout `(app)` com guard (middleware Next.js verificando sessão).
-- **Middleware:** redirecionar não autenticados para `/login`; cookie HttpOnly + Secure + SameSite=Lax.
+- Rotas autenticadas: layouts `(dashboard)` / `admin` com **gates server-side** (`enforceDashboardPortalGate`, `enforceAdminPortalGate`).
+- **Middleware:** injecta `x-dashboard-pathname` / `x-admin-pathname` para redirects pós-login; **não** substitui verificação de sessão (feita nos layouts e em cada Route Handler API).
 
 ### Frontend Services Layer
 
@@ -534,7 +534,7 @@ portal-automacao-nf/        # nome do pacote na raiz conforme package.json
 ├── scripts/                # npm run worker:adn-bridge, smoke, fix jobs
 ├── docs/
 ├── turbo.json
-├── package.json            # workspaces npm
+├── package.json            # workspaces pnpm
 └── README.md
 ```
 
@@ -544,12 +544,12 @@ portal-automacao-nf/        # nome do pacote na raiz conforme package.json
 
 ### Prerequisites
 
-- **Node.js** 22 LTS (ou a versão alinhada ao monorepo), **npm** 11+ (ver `packageManager` na raiz), Git.
+- **Node.js** 22 LTS (ou a versão alinhada ao monorepo), **pnpm** 9.x (ver `packageManager` na raiz), Git.
 
 ### Initial Setup
 
 ```bash
-npm install
+pnpm install
 # Variáveis: copiar ou criar .env na raiz e frontend/.env.local conforme docs/qa e README do worker
 # Migrações: seguir pacote @repo/db / Drizzle do repositório
 ```
@@ -557,11 +557,11 @@ npm install
 ### Development Commands
 
 ```bash
-npm run dev              # turbo dev — todos os workspaces em dev
-npm run dev:frontend     # só Next em frontend/ (porta 3000)
-npm run dev:with-adn-bridge   # frontend + worker Python ADN
-npm test
-npm run test:e2e -w frontend   # se configurado Playwright no workspace frontend
+pnpm dev              # turbo dev — todos os workspaces em dev
+pnpm dev:frontend     # só Next em frontend/ (porta 3000)
+pnpm dev:with-adn-bridge   # frontend + worker Python ADN
+pnpm test
+pnpm --filter frontend test:e2e   # Playwright no workspace frontend
 ```
 
 ### Required Environment Variables
@@ -635,7 +635,7 @@ Frontend unit (Vitest)   Backend unit (Vitest)
 ## Coding Standards (crítico para agentes)
 
 - **Tipos partilhados:** importar de `packages/shared`; não duplicar interfaces de API.
-- **Sem `process.env` espalhado:** objeto `env` validado com Zod em `lib/env.ts`.
+- **Env no servidor:** `@repo/shared/server-env` (Zod); re-export em `frontend/src/lib/env.ts` e `backend/src/lib/env.ts`. Resolução de `DATABASE_URL` em `@repo/db/portal-db`.
 - **Jobs:** sempre atualizar estado em transação quando ligado a `Company`.
 - **Logs:** nunca logar corpo de credenciais nem tokens completos.
 - **CNPJ:** validar no servidor mesmo que o cliente valide (defesa em profundidade).

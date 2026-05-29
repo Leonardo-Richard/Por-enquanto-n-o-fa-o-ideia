@@ -9,6 +9,11 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./portal-db": {
+      "types": "./src/portal-db.ts",
+      "import": "./src/portal-db.ts",
+      "default": "./src/portal-db.ts"
     }
   },
   "scripts": {
@@ -16,6 +21,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@next/env": "^15.5.15",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.5"
   },
