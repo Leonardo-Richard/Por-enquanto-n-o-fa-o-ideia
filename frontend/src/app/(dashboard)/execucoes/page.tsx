@@ -12,6 +12,7 @@ import {
   isAdnJobInProgress,
 } from "@/lib/adn-executions-display";
 import { fetchAdnRecentJobs, type AdnRecentJobRow } from "@/lib/adn-recent-jobs-client";
+import { TableLoadingSkeleton } from "@/components/page-loading-skeleton";
 import { executionTriggerLabel } from "@/lib/execution-display";
 
 type StatusFilter =
@@ -161,7 +162,7 @@ export default function ExecucoesPage() {
     return (
       <div className="space-y-8">
         <h1 className="text-2xl font-semibold tracking-tight">Execuções</h1>
-        <p className="text-sm text-black/55 dark:text-white/50">A carregar…</p>
+        <TableLoadingSkeleton rows={5} />
       </div>
     );
   }
@@ -249,11 +250,7 @@ export default function ExecucoesPage() {
         {liveRegionMessage(loadState, filteredJobs.length)}
       </p>
 
-      {loadState === "loading" ? (
-        <p className="text-sm text-black/55 dark:text-white/50" aria-hidden="true">
-          A carregar execuções…
-        </p>
-      ) : null}
+      {loadState === "loading" ? <TableLoadingSkeleton rows={6} /> : null}
 
       {loadState === "error" ? (
         <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-900 dark:text-red-100">

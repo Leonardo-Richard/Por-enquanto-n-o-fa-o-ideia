@@ -10,9 +10,11 @@ import {
   type MonthlyCollectionPreview,
 } from "@repo/shared";
 import { MonthlyCollectionScheduleHint } from "@/components/monthly-collection-schedule-hint";
+import { PageLoadingSkeleton } from "@/components/page-loading-skeleton";
 import { buildMonthlyCollectionPreview } from "@/lib/monthly-collection-schedule";
 import { mirrorDestinationPathPreview } from "@/lib/mirror-destination-preview";
 import { useAppSession } from "@/context/app-session";
+import { useConfirmDialog } from "@/context/confirm-dialog";
 import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import { apiFetch } from "@/lib/api-client";
 import { AdnSyncPanel } from "./adn-sync-panel";
@@ -23,6 +25,7 @@ export default function EmpresaDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
   const { refetch } = useAppSession();
+  const { confirm } = useConfirmDialog();
   const router = useRouter();
   const monthlyHelpId = useId();
   const monthlyRunDayErrorId = useId();
@@ -32,6 +35,7 @@ export default function EmpresaDetailPage() {
     MonthlyCollectionPreview | null | undefined
   >(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [tradeName, setTradeName] = useState("");
   const [systemCode, setSystemCode] = useState("");
@@ -45,12 +49,14 @@ export default function EmpresaDetailPage() {
     }
     let cancelled = false;
     void (async () => {
+      setLoading(true);
       setLoadError(null);
       const res = await apiFetch(`/api/v1/companies/${id}`);
       if (!res.ok) {
         if (!cancelled) {
           setLoadError("Empresa não encontrada ou sem acesso.");
           setCompany(null);
+          setLoading(false);
         }
         return;
       }
@@ -68,6 +74,7 @@ export default function EmpresaDetailPage() {
       setMonthlyRunDay(body.company.monthlyRunDay);
       setDirty(false);
       setFieldError(null);
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -98,6 +105,10 @@ export default function EmpresaDetailPage() {
     organizationId: company?.organizationId ?? "",
     fetchEnabled: Boolean(company?.organizationId),
   });
+
+  if (loading && !company && !loadError) {
+    return <PageLoadingSkeleton label="A carregar ficha da empresa" />;
+  }
 
   if (loadError || !company) {
     return (
@@ -157,12 +168,14 @@ export default function EmpresaDetailPage() {
   }
 
   async function remove() {
-    if (
-      typeof window === "undefined" ||
-      !window.confirm(
-        "Remover esta empresa da plataforma? Os vínculos de membros serão removidos.",
-      )
-    ) {
+    const ok = await confirm({
+      title: "Excluir empresa?",
+      description:
+        "Remover esta empresa da plataforma? Os vínculos de membros serão removidos. Esta acção não pode ser desfeita pelo portal.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) {
       return;
     }
     const res = await apiFetch(`/api/v1/companies/${comp.id}`, {
@@ -197,7 +210,7 @@ export default function EmpresaDetailPage() {
             href={`/empresas/${comp.id}/usuarios`}
             className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
           >
-            Membros da organização →
+            Membros e acesso →
           </Link>
         </div>
         <p className="mt-1 text-xs text-black/50 dark:text-white/45">

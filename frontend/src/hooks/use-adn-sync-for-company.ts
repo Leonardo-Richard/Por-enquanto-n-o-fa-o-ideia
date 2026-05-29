@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdnSyncLastJob, AdnSyncRecentJob } from "@/lib/adn-sync-client";
 import { fetchAdnSyncStatus, postAdnSyncRequest } from "@/lib/adn-sync-client";
+import { useConfirmDialog } from "@/context/confirm-dialog";
 import { useUiToast } from "@/context/ui-toast";
 
 export type AdnSyncPanelAccess = "loading" | "active" | "feature_off" | "forbidden" | "error";
@@ -60,6 +61,7 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
   const [actionTone, setActionTone] = useState<AdnSyncActionTone>("none");
   const [busy, setBusy] = useState(false);
   const { showToast } = useUiToast();
+  const { confirm } = useConfirmDialog();
   /** Evita toasts repetidos para o mesmo tipo de erro de limite (MSYS-04 AC5). */
   const lastRateToastRef = useRef<{ key: string; at: number } | null>(null);
 
@@ -128,7 +130,12 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
       });
       return;
     }
-    if (!window.confirm(CONFIRM_TEXT)) {
+    const ok = await confirm({
+      title: "Pedir busca de notas agora?",
+      description: CONFIRM_TEXT,
+      confirmLabel: "Enfileirar pedido",
+    });
+    if (!ok) {
       return;
     }
     setBusy(true);
@@ -188,7 +195,7 @@ export function useAdnSyncForCompany({ companyId, organizationId, onSyncAccepted
     } finally {
       setBusy(false);
     }
-  }, [companyId, lastJob, organizationId, onSyncAccepted, refresh, showToast]);
+  }, [companyId, confirm, lastJob, organizationId, onSyncAccepted, refresh, showToast]);
 
   const requestRemirror = useCallback(
     async (sourceJobId: string) => {

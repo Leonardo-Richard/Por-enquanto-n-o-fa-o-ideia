@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useAppSession } from "@/context/app-session";
 import { LegalFooterLinks } from "@/components/legal-footer-links";
 import { apiFetch } from "@/lib/api-client";
@@ -44,6 +44,13 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+    }
+  }, [error]);
 
   useEffect(() => {
     if (!isPending && data?.user) {
@@ -77,8 +84,12 @@ function LoginForm() {
 
   if (isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-black/60 dark:text-white/55">
-        Carregando…
+      <div
+        className="flex min-h-screen items-center justify-center text-sm text-black/60 dark:text-white/55"
+        aria-busy="true"
+        aria-label="A verificar sessão"
+      >
+        A verificar sessão…
       </div>
     );
   }
@@ -103,9 +114,15 @@ function LoginForm() {
         <form
           onSubmit={(ev) => void onSubmit(ev)}
           className="mt-10 space-y-4 rounded-xl border border-black/5 bg-black/[0.02] p-6 dark:border-white/10 dark:bg-white/[0.03]"
+          aria-busy={busy ? true : undefined}
         >
           {error ? (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+            <p
+              ref={errorRef}
+              tabIndex={-1}
+              className="text-sm text-red-600 outline-none dark:text-red-400"
+              role="alert"
+            >
               {error}
             </p>
           ) : null}
@@ -142,6 +159,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={busy}
+            aria-busy={busy}
             className="flex h-11 w-full items-center justify-center rounded-lg bg-[var(--foreground)] text-sm font-medium text-[var(--background)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "A entrar…" : "Continuar"}

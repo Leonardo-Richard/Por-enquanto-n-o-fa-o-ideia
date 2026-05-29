@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { usePortal } from "@/context/portal-provider";
 import { useAppSession } from "@/context/app-session";
+import { useOrganizationAdnSyncSettings } from "@/hooks/use-organization-adn-sync-settings";
 import { MAX_LOCAL_DOWNLOAD_ROOT_LENGTH } from "@/lib/local-download-root";
 import { apiFetch } from "@/lib/api-client";
 
@@ -17,11 +18,6 @@ const ZONES = [
 const HELPER_SERVER_PATH_ID = "helper-server-path-ab";
 const HELPER_SERVER_PATH_B_ID = "helper-server-path-b";
 
-type AdnSettingsJson = {
-  adnSyncEnabled: boolean;
-  canManage: boolean;
-  localDownloadRoot: string | null;
-};
 
 function messageForLocalPathErrorCode(code: string | undefined): string {
   switch (code) {
@@ -43,19 +39,30 @@ export default function ConfiguracoesPage() {
   const { data: sessionData } = useAppSession();
   const activeOrgId = sessionData?.session.activeOrganizationId ?? null;
 
+  const orgSettings = useOrganizationAdnSyncSettings({
+    organizationId: activeOrgId ?? "",
+    fetchEnabled: Boolean(activeOrgId),
+  });
+
   const [notifyEmailOnFailure, setNotifyEmailOnFailure] = useState(
     settings.notifyEmailOnFailure,
   );
   const [timezone, setTimezone] = useState(settings.timezone);
   const [saved, setSaved] = useState(false);
 
-  const [adnLoading, setAdnLoading] = useState(false);
-  const [adnErr, setAdnErr] = useState<string | null>(null);
-  const [adnEnabled, setAdnEnabled] = useState(false);
+  const adnLoading = orgSettings.loading;
+  const adnErr =
+    orgSettings.error?.kind === "http"
+      ? "Não foi possível carregar o estado da sincronização ADN."
+      : orgSettings.error?.kind === "network"
+        ? "Não foi possível carregar o estado da sincronização ADN."
+        : null;
+  const adnEnabled = orgSettings.data?.adnSyncEnabled ?? false;
   const [adnDraft, setAdnDraft] = useState(false);
-  const [adnCanManage, setAdnCanManage] = useState(false);
+  const adnCanManage = orgSettings.data?.canManage ?? false;
   const [adnBusy, setAdnBusy] = useState(false);
   const [adnSaved, setAdnSaved] = useState(false);
+  const [adnSaveErr, setAdnSaveErr] = useState<string | null>(null);
 
   const [serverPathDraft, setServerPathDraft] = useState("");
   const [serverPathSaved, setServerPathSaved] = useState<string | null>(null);
@@ -63,48 +70,22 @@ export default function ConfiguracoesPage() {
   const [serverPathErr, setServerPathErr] = useState<string | null>(null);
   const [serverPathOk, setServerPathOk] = useState(false);
 
-  const loadAdn = useCallback(async () => {
-    if (!activeOrgId) {
-      setAdnLoading(false);
-      setAdnErr(null);
+  useEffect(() => {
+    if (!orgSettings.data) {
       return;
     }
-    setAdnLoading(true);
-    setAdnErr(null);
-    setServerPathErr(null);
-    try {
-      const r = await apiFetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!r.ok) {
-        setAdnErr("Não foi possível carregar o estado da sincronização ADN.");
-        return;
-      }
-      const j = (await r.json()) as AdnSettingsJson;
-      setAdnEnabled(j.adnSyncEnabled);
-      setAdnDraft(j.adnSyncEnabled);
-      setAdnCanManage(j.canManage);
-      const p = j.localDownloadRoot ?? "";
-      setServerPathDraft(p);
-      setServerPathSaved(j.localDownloadRoot ?? null);
-    } catch {
-      setAdnErr("Não foi possível carregar o estado da sincronização ADN.");
-    } finally {
-      setAdnLoading(false);
-    }
-  }, [activeOrgId]);
-
-  useEffect(() => {
-    void loadAdn();
-  }, [loadAdn]);
+    setAdnDraft(orgSettings.data.adnSyncEnabled);
+    const p = orgSettings.data.localDownloadRoot ?? "";
+    setServerPathDraft(p);
+    setServerPathSaved(orgSettings.data.localDownloadRoot ?? null);
+  }, [orgSettings.data]);
 
   async function saveAdn() {
     if (!activeOrgId || !adnCanManage) {
       return;
     }
     setAdnBusy(true);
-    setAdnErr(null);
+    setAdnSaveErr(null);
     try {
       const r = await apiFetch(`/api/v1/organizations/${activeOrgId}/adn-sync-settings`, {
         method: "PATCH",
@@ -114,16 +95,16 @@ export default function ConfiguracoesPage() {
       });
       if (!r.ok) {
         const j = (await r.json().catch(() => null)) as { message?: string } | null;
-        setAdnErr(j?.message ?? "Não foi possível guardar.");
+        setAdnSaveErr(j?.message ?? "Não foi possível guardar.");
         return;
       }
       const j = (await r.json()) as { adnSyncEnabled: boolean };
-      setAdnEnabled(j.adnSyncEnabled);
       setAdnDraft(j.adnSyncEnabled);
       setAdnSaved(true);
+      await orgSettings.reload();
       window.setTimeout(() => setAdnSaved(false), 2500);
     } catch {
-      setAdnErr("Não foi possível guardar.");
+      setAdnSaveErr("Não foi possível guardar.");
     } finally {
       setAdnBusy(false);
     }
@@ -161,6 +142,7 @@ export default function ConfiguracoesPage() {
       setServerPathSaved(root);
       setServerPathDraft(root ?? "");
       setServerPathOk(true);
+      await orgSettings.reload();
       window.setTimeout(() => setServerPathOk(false), 2500);
       updateSettings({
         localRootPath: root && root.length > 0 ? root : settings.localRootPath,
@@ -222,7 +204,9 @@ export default function ConfiguracoesPage() {
             Escolha uma organização na sessão para ver e editar esta definição.
           </p>
         ) : adnLoading ? (
-          <p className="text-xs text-black/50 dark:text-white/45">A carregar…</p>
+          <p className="text-xs text-black/50 dark:text-white/45" aria-busy="true">
+            A carregar…
+          </p>
         ) : adnErr ? (
           <p className="text-sm text-red-700 dark:text-red-300" role="alert">
             {adnErr}
@@ -262,6 +246,11 @@ export default function ConfiguracoesPage() {
                 {adnSaved ? (
                   <span className="text-xs text-emerald-700 dark:text-emerald-400">Definição guardada.</span>
                 ) : null}
+                {adnSaveErr ? (
+                  <span className="text-xs text-red-700 dark:text-red-300" role="alert">
+                    {adnSaveErr}
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </>
@@ -294,7 +283,9 @@ export default function ConfiguracoesPage() {
             Escolha uma organização na sessão para ver e editar esta definição.
           </p>
         ) : adnLoading ? (
-          <p className="text-xs text-black/50 dark:text-white/45">A carregar…</p>
+          <p className="text-xs text-black/50 dark:text-white/45" aria-busy="true">
+            A carregar…
+          </p>
         ) : (
           <>
             <div>

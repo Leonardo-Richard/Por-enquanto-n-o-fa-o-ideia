@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
+import { useConfirmDialog } from "@/context/confirm-dialog";
 import { apiFetch } from "@/lib/api-client";
 
 type AdnFailureRow = {
@@ -27,6 +28,7 @@ export function AdnFailuresPanel({
   refreshSignal = 0,
 }: AdnFailuresPanelProps) {
   const liveId = useId();
+  const { confirm } = useConfirmDialog();
   const [items, setItems] = useState<AdnFailureRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,12 +65,12 @@ export function AdnFailuresPanel({
   }, [load, refreshSignal]);
 
   async function retryOne(failure: AdnFailureRow) {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        `Reprocessar esta falha (${failure.errorCode})? O pedido será enfileirado novamente.`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Reprocessar falha?",
+      description: `Reprocessar esta falha (${failure.errorCode})? O pedido será enfileirado novamente quando o worker estiver activo.`,
+      confirmLabel: "Reprocessar",
+    });
+    if (!ok) {
       return;
     }
     setBusyId(failure.id);
@@ -97,12 +99,12 @@ export function AdnFailuresPanel({
     if (retryable.length === 0) {
       return;
     }
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        `Reprocessar ${retryable.length} falha(s) em lote? Os pedidos serão enfileirados novamente.`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Reprocessar em lote?",
+      description: `Reprocessar ${retryable.length} falha(s) em lote? Os pedidos serão enfileirados novamente.`,
+      confirmLabel: "Reprocessar em lote",
+    });
+    if (!ok) {
       return;
     }
     setBulkBusy(true);

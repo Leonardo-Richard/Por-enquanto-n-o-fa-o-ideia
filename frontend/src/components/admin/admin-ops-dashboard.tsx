@@ -23,6 +23,67 @@ type AlertsJson = {
   generatedAt?: string;
 };
 
+function OpsDataPanel({
+  title,
+  data,
+  partial,
+}: {
+  title: string;
+  data: Record<string, unknown> | null;
+  partial: boolean;
+}) {
+  const [showRaw, setShowRaw] = useState(false);
+
+  if (!data) {
+    return null;
+  }
+
+  return (
+    <section className="space-y-3 rounded-xl border border-black/5 p-4 dark:border-white/10">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      {partial ? (
+        <div
+          className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/[0.06] p-4 dark:bg-amber-500/[0.08]"
+          role="status"
+        >
+          <p className="text-sm font-medium text-amber-950 dark:text-amber-50">Em construção</p>
+          <p className="mt-2 text-xs leading-relaxed text-amber-950/85 dark:text-amber-50/85">
+            Os indicadores agregados (fila ADN, falhas 7 dias, certificados) serão mostrados aqui quando
+            a instrumentação backend estiver ligada. Enquanto isso, use{" "}
+            <Link href="/execucoes" className="font-medium underline-offset-2 hover:underline">
+              Execuções
+            </Link>{" "}
+            e a ficha de cada empresa para operação diária.
+          </p>
+          <p className="mt-2 text-xs text-amber-950/70 dark:text-amber-50/70">
+            Documentação:{" "}
+            <code className="rounded bg-black/10 px-1 font-mono text-[10px] dark:bg-white/10">
+              docs/qa/ops-alerts-runbook.md
+            </code>
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-black/55 dark:text-white/50">
+          Dados agregados disponíveis para a janela seleccionada.
+        </p>
+      )}
+      <button
+        type="button"
+        className="text-xs font-medium text-emerald-800 underline decoration-emerald-800/40 underline-offset-2 dark:text-emerald-300"
+        aria-expanded={showRaw}
+        onClick={() => setShowRaw((v) => !v)}
+      >
+        {showRaw ? "Ocultar resposta técnica" : "Ver resposta técnica (JSON)"}
+      </button>
+      {showRaw ? (
+        <pre className="max-h-96 overflow-auto rounded-lg bg-black/[0.03] p-3 text-xs dark:bg-white/[0.05]">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      ) : null}
+    </section>
+  );
+}
+
 export function AdminOpsDashboard() {
   const formId = useId();
   const [windowMinutes, setWindowMinutes] = useState(60);
@@ -76,11 +137,10 @@ export function AdminOpsDashboard() {
       </nav>
 
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Operação (MVP)</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Operação</h1>
         <p className="text-sm text-black/65 dark:text-white/60">
-          Vista mínima dos endpoints <code className="rounded bg-black/[0.06] px-1 dark:bg-white/10">/api/v1/ops/metrics</code> e{" "}
-          <code className="rounded bg-black/[0.06] px-1 dark:bg-white/10">/api/v1/ops/alerts</code>. Indicadores numéricos serão preenchidos quando a
-          fonte agregada estiver ligada.
+          Vista operacional para superadmin. Métricas e alertas agregados dependem de instrumentação no
+          backend (MSYS-07).
         </p>
       </header>
 
@@ -103,6 +163,7 @@ export function AdminOpsDashboard() {
           type="button"
           onClick={() => void load()}
           disabled={loading}
+          aria-busy={loading}
           className="h-10 rounded-lg bg-[var(--foreground)] px-4 text-sm font-medium text-[var(--background)] disabled:opacity-50"
         >
           Atualizar
@@ -120,21 +181,11 @@ export function AdminOpsDashboard() {
       ) : null}
 
       {metrics ? (
-        <section className="space-y-2 rounded-xl border border-black/5 p-4 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Métricas</h2>
-          <pre className="max-h-96 overflow-auto rounded-lg bg-black/[0.03] p-3 text-xs dark:bg-white/[0.05]">
-            {JSON.stringify(metrics, null, 2)}
-          </pre>
-        </section>
+        <OpsDataPanel title="Métricas" data={metrics as Record<string, unknown>} partial={metrics.partial !== false} />
       ) : null}
 
       {alerts ? (
-        <section className="space-y-2 rounded-xl border border-black/5 p-4 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Alertas</h2>
-          <pre className="max-h-96 overflow-auto rounded-lg bg-black/[0.03] p-3 text-xs dark:bg-white/[0.05]">
-            {JSON.stringify(alerts, null, 2)}
-          </pre>
-        </section>
+        <OpsDataPanel title="Alertas" data={alerts as Record<string, unknown>} partial={alerts.partial !== false} />
       ) : null}
     </div>
   );

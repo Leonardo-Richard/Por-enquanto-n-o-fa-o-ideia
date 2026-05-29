@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMeSummary } from "@/hooks/use-effective-organization-id";
+import { AgenteReadinessChecklist } from "@/components/agente-readiness-checklist";
 import { getAdnCertRunbookUrl } from "@/lib/adn-cert-runbook-url";
 import { runbookAnchorProps } from "@/lib/adn-runbook-anchor";
 
@@ -45,6 +46,8 @@ export default function AgentePage() {
           «queued» na página de execuções.
         </p>
       </section>
+
+      <AgenteReadinessChecklist />
 
       <section className="rounded-xl border border-black/5 p-6 dark:border-white/10">
         <h2 className="text-sm font-semibold">Instalação (resumo)</h2>

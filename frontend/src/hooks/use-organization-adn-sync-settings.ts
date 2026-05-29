@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 
 /** Alinhado a `AdnSettingsJson` em `configuracoes/page.tsx` e ao handler GET. */
@@ -24,6 +24,7 @@ export type UseOrganizationAdnSyncSettingsResult = {
   loading: boolean;
   data: OrganizationAdnSyncSettingsData | null;
   error: { kind: OrganizationAdnSyncSettingsErrorKind } | null;
+  reload: () => Promise<void>;
 };
 
 export function useOrganizationAdnSyncSettings({
@@ -33,6 +34,11 @@ export function useOrganizationAdnSyncSettings({
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<OrganizationAdnSyncSettingsData | null>(null);
   const [error, setError] = useState<{ kind: OrganizationAdnSyncSettingsErrorKind } | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const reload = useCallback(async () => {
+    setTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     if (!fetchEnabled || !organizationId) {
@@ -89,7 +95,7 @@ export function useOrganizationAdnSyncSettings({
     return () => {
       cancelled = true;
     };
-  }, [organizationId, fetchEnabled]);
+  }, [organizationId, fetchEnabled, tick]);
 
-  return { loading, data, error };
+  return { loading, data, error, reload };
 }
