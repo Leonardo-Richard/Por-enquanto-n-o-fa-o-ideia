@@ -15,8 +15,8 @@ export type AdnExecutionsOverviewAttention = {
 
 export type AdnExecutionsOverviewLastJob = {
   jobId: string;
-  status: string;
-  trigger: string;
+  status: import("./adn-job-types").AdnSyncJobStatus;
+  trigger: import("./adn-job-types").AdnSyncJobTrigger;
   updatedAt: string;
   detailLabel: string;
 };

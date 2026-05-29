@@ -5,6 +5,7 @@ import type { CommitArtifactInput } from "./schemas";
 import { assertOrgCompanyAdnEnabled } from "./validate-org-company";
 import { sha256Hex } from "./sha256";
 import type { AdnHandlerResult } from "./types";
+import { mergeAdnJobSummary } from "./merge-job-summary";
 
 export type CommitArtifactDeps = {
   /** Quando definido, verifica SHA-256 do objecto no storage antes do commit. */
@@ -82,60 +83,78 @@ export async function handleCommitArtifact(
   const issued = new Date(issuedAt);
   const { prefix, suffix } = maskAccessKey(draft.accessKey);
 
-  const inserted = await db
-    .insert(adnArtifacts)
-    .values({
-      organizationId: draft.organizationId,
-      companyId: draft.companyId,
-      adnSyncJobId: adnSyncJobId ?? null,
-      accessKey: draft.accessKey,
-      accessKeyPrefix: prefix || null,
-      accessKeySuffix: suffix || null,
-      kind: draft.kind,
-      contentSha256: draft.contentSha256,
-      storageBucket: draft.storageBucket,
-      storageObjectKey: draft.storageObjectKey,
-      contentType: contentType ?? null,
-      issuedAt: issued,
-      byteSize: byteSize ?? null,
-    })
-    .onConflictDoNothing({ target: [adnArtifacts.companyId, adnArtifacts.accessKey, adnArtifacts.kind] })
-    .returning({ id: adnArtifacts.id });
+  const txResult = await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(adnArtifacts)
+      .values({
+        organizationId: draft.organizationId,
+        companyId: draft.companyId,
+        adnSyncJobId: adnSyncJobId ?? null,
+        accessKey: draft.accessKey,
+        accessKeyPrefix: prefix || null,
+        accessKeySuffix: suffix || null,
+        kind: draft.kind,
+        contentSha256: draft.contentSha256,
+        storageBucket: draft.storageBucket,
+        storageObjectKey: draft.storageObjectKey,
+        contentType: contentType ?? null,
+        issuedAt: issued,
+        byteSize: byteSize ?? null,
+      })
+      .onConflictDoNothing({ target: [adnArtifacts.companyId, adnArtifacts.accessKey, adnArtifacts.kind] })
+      .returning({ id: adnArtifacts.id });
 
-  let artifactId: string;
-  if (inserted.length > 0 && inserted[0]) {
-    artifactId = inserted[0].id;
-  } else {
-    const [existing] = await db
-      .select({ id: adnArtifacts.id })
-      .from(adnArtifacts)
-      .where(
-        and(
-          eq(adnArtifacts.companyId, draft.companyId),
-          eq(adnArtifacts.accessKey, draft.accessKey),
-          eq(adnArtifacts.kind, draft.kind),
-        ),
-      )
-      .limit(1);
-    if (!existing) {
-      return {
-        ok: false,
-        error: { status: 500, message: "Falha idempotente inesperada." },
-      };
+    let artifactId: string;
+    if (inserted.length > 0 && inserted[0]) {
+      artifactId = inserted[0].id;
+    } else {
+      const [existing] = await tx
+        .select({ id: adnArtifacts.id })
+        .from(adnArtifacts)
+        .where(
+          and(
+            eq(adnArtifacts.companyId, draft.companyId),
+            eq(adnArtifacts.accessKey, draft.accessKey),
+            eq(adnArtifacts.kind, draft.kind),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        return { ok: false as const, error: { status: 500, message: "Falha idempotente inesperada." } };
+      }
+      artifactId = existing.id;
     }
-    artifactId = existing.id;
+
+    await tx.delete(adnArtifactDrafts).where(eq(adnArtifactDrafts.id, artifactDraftId));
+
+    if (adnSyncJobId) {
+      const [job] = await tx
+        .select({ summaryJson: adnSyncJobs.summaryJson })
+        .from(adnSyncJobs)
+        .where(
+          and(eq(adnSyncJobs.id, adnSyncJobId), eq(adnSyncJobs.organizationId, draft.organizationId)),
+        )
+        .limit(1);
+
+      const priorSummary = mergeAdnJobSummary(job?.summaryJson, {});
+
+      await tx
+        .update(adnSyncJobs)
+        .set({
+          updatedAt: new Date(),
+          summaryJson: { ...priorSummary, lastArtifactId: artifactId },
+        })
+        .where(
+          and(eq(adnSyncJobs.id, adnSyncJobId), eq(adnSyncJobs.organizationId, draft.organizationId)),
+        );
+    }
+
+    return { ok: true as const, artifactId, deduplicated: inserted.length === 0 };
+  });
+
+  if (!txResult.ok) {
+    return { ok: false, error: txResult.error };
   }
 
-  await db.delete(adnArtifactDrafts).where(eq(adnArtifactDrafts.id, artifactDraftId));
-
-  if (adnSyncJobId) {
-    await db
-      .update(adnSyncJobs)
-      .set({ updatedAt: new Date(), summaryJson: { lastArtifactId: artifactId } })
-      .where(
-        and(eq(adnSyncJobs.id, adnSyncJobId), eq(adnSyncJobs.organizationId, draft.organizationId)),
-      );
-  }
-
-  return { ok: true, data: { artifactId, deduplicated: inserted.length === 0 } };
+  return { ok: true, data: { artifactId: txResult.artifactId, deduplicated: txResult.deduplicated } };
 }

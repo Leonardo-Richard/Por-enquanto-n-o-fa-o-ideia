@@ -62,6 +62,7 @@ jobs:
       # Exclui organizations-create: gate dedicado em integration-superadmin (feedback QA — evitar duplicação).
       - name: Unit and integration tests
         run: |
+          pnpm --filter @repo/adn-server typecheck
           pnpm --filter @repo/adn-internal test
           pnpm --filter backend test
           pnpm --filter frontend test:without-org-create-integration

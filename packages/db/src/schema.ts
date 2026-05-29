@@ -18,6 +18,22 @@ import {
 
 export const companyRoleEnum = pgEnum("company_role", ["user", "admin"]);
 
+export const adnSyncJobStatusEnum = pgEnum("adn_sync_job_status", [
+  "queued",
+  "running",
+  "completed",
+  "partial",
+  "failed",
+]);
+
+export const adnSyncJobTriggerEnum = pgEnum("adn_sync_job_trigger", [
+  "manual",
+  "scheduled",
+  "retry",
+  "worker",
+  "monthly",
+]);
+
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -168,9 +184,9 @@ export const adnSyncJobs = pgTable(
     companyId: uuid("company_id")
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
-    status: text("status").notNull().default("queued"),
+    status: adnSyncJobStatusEnum("status").notNull().default("queued"),
     /** Valores DB incluem `monthly` (cron) — ver migração CM-01. */
-    trigger: text("trigger").notNull().default("manual"),
+    trigger: adnSyncJobTriggerEnum("trigger").notNull().default("manual"),
     requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
     idempotencyKey: text("idempotency_key"),
     idempotencyBodyFingerprint: char("idempotency_body_fingerprint", { length: 64 }),

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@repo/adn-internal": "file:../packages/adn-internal",
+    "@repo/adn-server": "file:../packages/adn-server",
     "@repo/db": "file:../packages/db",
     "@repo/scheduling": "file:../packages/scheduling",
     "@repo/shared": "file:../packages/shared",

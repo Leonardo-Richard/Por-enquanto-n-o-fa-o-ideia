@@ -6,24 +6,14 @@ import { companiesAccessibleQuerySchema, maskCnpjDigits } from "@repo/shared";
 import { getDb } from "@/lib/db";
 import { canManageUsers, isSuperadmin } from "@/lib/authz";
 import { jsonError, toPublicApiError } from "../lib/errors";
-import { getAuthedSession } from "../lib/session";
-
-function strongerRole(
-  a: "user" | "admin" | null | undefined,
-  b: "user" | "admin" | null | undefined,
-): "user" | "admin" | null {
-  const x = a ?? null;
-  const y = b ?? null;
-  if (x === "admin" || y === "admin") return "admin";
-  if (x === "user" || y === "user") return "user";
-  return null;
-}
+import { requireAuthedSession, isAuthedSession } from "../lib/require-session";
+import { sanitizeIlikeFragment, strongerRole } from "../lib/search-utils";
 
 export async function handleGetCompaniesAccessible(request: Request) {
   try {
-    const session = await getAuthedSession(request);
-    if (!session) {
-      return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
+    const session = await requireAuthedSession(request);
+    if (!isAuthedSession(session)) {
+      return session;
     }
 
     const url = new URL(request.url);
@@ -39,11 +29,15 @@ export async function handleGetCompaniesAccessible(request: Request) {
     const superUser = isSuperadmin(session.user);
 
     const searchCond = q?.trim()
-      ? or(
-          ilike(companies.tradeName, `%${q.trim()}%`),
-          ilike(companies.cnpjDigits, `%${q.trim()}%`),
-          ilike(companies.systemCode, `%${q.trim()}%`),
-        )
+      ? (() => {
+          const safeQ = sanitizeIlikeFragment(q);
+          if (!safeQ) return undefined;
+          return or(
+            ilike(companies.tradeName, `%${safeQ}%`),
+            ilike(companies.cnpjDigits, `%${safeQ}%`),
+            ilike(companies.systemCode, `%${safeQ}%`),
+          );
+        })()
       : undefined;
 
     type CompanyRow = InferSelectModel<typeof companies>;

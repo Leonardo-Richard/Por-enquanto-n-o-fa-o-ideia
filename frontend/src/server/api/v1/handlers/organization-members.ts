@@ -20,7 +20,8 @@ import { ORG_ADMIN_PROVISIONED_VERSION } from "@/lib/legal-documents";
 import { isSuperadmin } from "@/lib/authz";
 import { insertAuditEvent } from "@/lib/audit";
 import { jsonError, toPublicApiError } from "../lib/errors";
-import { getAuthedSession } from "../lib/session";
+import { requireAuthedSession, isAuthedSession } from "../lib/require-session";
+import { sanitizeIlikeFragment } from "../lib/search-utils";
 import { jsonOrganizationMembersError } from "../lib/org-members-json";
 import { consumeOrgMembersSearchSlot, ORG_MEMBERS_SEARCH_RATE } from "../lib/organization-members-search-rate-limit";
 
@@ -32,10 +33,6 @@ function isPgUniqueViolation(e: unknown): boolean {
 
 function logMembers(entry: Record<string, unknown>) {
   console.info(JSON.stringify({ scope: "organization_members", ...entry }));
-}
-
-function sanitizeIlikeFragment(raw: string): string {
-  return raw.trim().replace(/[%_\\]/g, "");
 }
 
 export function toMemberListItem(row: {
@@ -71,11 +68,11 @@ export async function handleGetOrganizationMembers(request: Request, organizatio
   let organizationId: string | null = null;
 
   try {
-    const session = await getAuthedSession(request);
-    if (!session) {
+    const session = await requireAuthedSession(request);
+    if (!isAuthedSession(session)) {
       outcome = "unauthorized";
       logMembers({ requestId, outcome, organizationId: organizationIdParam });
-      return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
+      return session;
     }
     if (!isSuperadmin(session.user)) {
       outcome = "forbidden";
@@ -103,7 +100,8 @@ export async function handleGetOrganizationMembers(request: Request, organizatio
     const qTrim = q?.trim() ?? "";
     if (qTrim.length > 0) {
       const rateKey = `${session.user.id}:${organizationId}`;
-      if (!consumeOrgMembersSearchSlot(rateKey)) {
+      const rate = await consumeOrgMembersSearchSlot(rateKey);
+      if (!rate.ok) {
         outcome = "rate_limited";
         logMembers({
           requestId,
@@ -112,10 +110,12 @@ export async function handleGetOrganizationMembers(request: Request, organizatio
           organizationId,
           rateLimit: ORG_MEMBERS_SEARCH_RATE,
         });
-        return jsonOrganizationMembersError(
+        const res = jsonOrganizationMembersError(
           429,
           "Demasiadas pesquisas. Aguarde um momento antes de tentar novamente.",
         );
+        res.headers.set("Retry-After", String(rate.retryAfterSec));
+        return res;
       }
     }
 
@@ -186,11 +186,11 @@ export async function handlePostOrganizationMembers(request: Request, organizati
   let outcome: "success" | "validation_error" | "unauthorized" | "forbidden" | "not_found" | "error" = "error";
 
   try {
-    const session = await getAuthedSession(request);
-    if (!session) {
+    const session = await requireAuthedSession(request);
+    if (!isAuthedSession(session)) {
       outcome = "unauthorized";
       logMembers({ requestId, outcome, organizationId: organizationIdParam });
-      return jsonError(401, "Sessão expirada. Inicie sessão novamente.");
+      return session;
     }
     if (!isSuperadmin(session.user)) {
       outcome = "forbidden";

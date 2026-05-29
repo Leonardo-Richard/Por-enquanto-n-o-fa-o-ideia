@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { adnSyncJobStatusSchema, adnSyncJobTriggerSchema } from "@repo/shared";
 
 export const prepareUploadSchema = z
   .object({
@@ -28,7 +29,7 @@ export const commitArtifactSchema = z
 export const patchJobSchema = z
   .object({
     organizationId: z.string().uuid(),
-    status: z.enum(["queued", "running", "completed", "partial", "failed"]).optional(),
+    status: adnSyncJobStatusSchema.optional(),
     summaryJson: z.record(z.string(), z.unknown()).optional(),
     workerCorrelationId: z.string().max(500).optional(),
     http429Count: z.number().int().nonnegative().optional(),

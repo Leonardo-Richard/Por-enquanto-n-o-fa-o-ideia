@@ -74,6 +74,9 @@ from portal_artifacts import patch_job, sync_data_directory
 from job_logging import job_log
 from job_summary import summary_as_dict
 from remirror_job import process_remirror_job
+from stale_reclaim import reclaim_stale_running_jobs
+from job_claim import claim_next_job, load_company
+from db_fallback import force_complete_job_in_db, force_fail_job_in_db
 from download_engine import (
     MotorExecutionError,
     get_download_engine,
@@ -145,133 +148,7 @@ def _resolve_database_url() -> str:
 def _reclaim_stale_running_jobs_if_configured(
     conn: psycopg.Connection,
 ) -> tuple[int, int, int]:
-    """
-    Recupera jobs em «running» órfãos (started_at anterior ao corte):
-
-    - Se ainda restam tentativas (ADN_STALE_MAX_RECLAIMS), repõe para queued (incrementando
-      summary_json.reclaimAttempts) para o worker tentar a recolha de novo.
-    - Se já atingiu o máximo, marca failed com motivo claro (evita loop infinito).
-
-    Retorna (n_requeued, n_failed, hours).
-    """
-    if os.environ.get("ADN_CLEAN_STALE_ON_WORKER_START", "1").strip() == "0":
-        return (0, 0, 24)
-    try:
-        hours = max(1, int(os.environ.get("ADN_STALE_JOB_HOURS", "24") or "24"))
-    except ValueError:
-        hours = 24
-    try:
-        max_reclaims = max(1, int(os.environ.get("ADN_STALE_MAX_RECLAIMS", "3") or "3"))
-    except ValueError:
-        max_reclaims = 3
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-
-    n_requeued = 0
-    n_failed = 0
-    with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            """
-            SELECT id::text AS id,
-                   COALESCE((summary_json->>'reclaimAttempts')::int, 0) AS attempts
-            FROM adn_sync_jobs
-            WHERE status = 'running'
-              AND completed_at IS NULL
-              AND started_at IS NOT NULL
-              AND started_at < %s::timestamptz
-            FOR UPDATE SKIP LOCKED
-            """,
-            (cutoff,),
-        )
-        rows = cur.fetchall() or []
-        for row in rows:
-            jid = str(row["id"])
-            attempts = int(row.get("attempts") or 0)
-            if attempts >= max_reclaims:
-                payload = {
-                    "phase": "error",
-                    "message": (
-                        f"Job permaneceu em running sem conclusão após {max_reclaims} "
-                        "tentativas — marcado como failed para evitar loop."
-                    ),
-                    "reclaimAttempts": attempts,
-                    "reclaimExhausted": True,
-                }
-                cur.execute(
-                    """
-                    UPDATE adn_sync_jobs
-                    SET status = 'failed',
-                        completed_at = NOW(),
-                        updated_at = NOW(),
-                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
-                    WHERE id = %s::uuid
-                    """,
-                    (json.dumps(payload, ensure_ascii=False), jid),
-                )
-                n_failed += 1
-            else:
-                next_attempt = attempts + 1
-                payload = {
-                    "phase": "queued",
-                    "reclaimAttempts": next_attempt,
-                    "reclaimMaxAttempts": max_reclaims,
-                    "reclaimMessage": (
-                        f"Worker repôs job em queued (tentativa {next_attempt}/{max_reclaims}) "
-                        f"após {hours}h em running sem conclusão — vai tentar nova recolha."
-                    ),
-                }
-                cur.execute(
-                    """
-                    UPDATE adn_sync_jobs
-                    SET status = 'queued',
-                        started_at = NULL,
-                        completed_at = NULL,
-                        updated_at = NOW(),
-                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
-                    WHERE id = %s::uuid
-                    """,
-                    (json.dumps(payload, ensure_ascii=False), jid),
-                )
-                n_requeued += 1
-    conn.commit()
-    return (n_requeued, n_failed, hours)
-
-
-def claim_next_job(conn: psycopg.Connection) -> dict | None:
-    sql = """
-    WITH picked AS (
-      SELECT j.id
-      FROM adn_sync_jobs j
-      INNER JOIN organizations o ON o.id = j.organization_id
-      WHERE j.status = 'queued' AND o.adn_sync_enabled = true
-      ORDER BY j.created_at ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    )
-    UPDATE adn_sync_jobs j
-    SET status = 'running',
-        started_at = now(),
-        updated_at = now()
-    FROM picked
-    WHERE j.id = picked.id
-    RETURNING j.id, j.organization_id, j.company_id, j.summary_json;
-    """
-    with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(sql)
-        row = cur.fetchone()
-    conn.commit()
-    return row
-
-
-def load_company(conn: psycopg.Connection, company_id: str) -> dict:
-    with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            "SELECT cnpj_digits, trade_name FROM companies WHERE id = %s LIMIT 1;",
-            (company_id,),
-        )
-        row = cur.fetchone()
-    if not row:
-        raise RuntimeError(f"Empresa não encontrada: {company_id}")
-    return row
+    return reclaim_stale_running_jobs(conn)
 
 
 def _fetch_mode_from_job(job: dict) -> str:
@@ -653,7 +530,7 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
             file=sys.stderr,
             flush=True,
         )
-        applied = _force_complete_job_in_db(
+        applied = force_complete_job_in_db(
             dsn,
             jid,
             completed_summary,
@@ -704,92 +581,6 @@ def fail_job(
     job_log(jid, "portal", "PATCH job=failed gravado no portal (pode actualizar a UI).")
 
 
-def _force_fail_job_in_db(dsn: str, jid: str, message: str, *, reason: str = "patch_failed") -> bool:
-    """
-    Fallback de último recurso: se o PATCH ao portal falhar (rede, 503, etc.) e o job ficar
-    em «running», marca-o como failed directamente na BD para não ficar preso.
-
-    Em produção prefira `ADN_WORKER_DATABASE_URL` com role `adn_worker` (ver
-    docs/runbooks/adn-worker-postgres-least-privilege.md).
-    """
-    if not jid:
-        return False
-    safe = sanitize_user_safe_detail(message or "", max_len=2000)
-    summary = {
-        "phase": "error",
-        "message": safe or "Job marcado como failed pelo worker (fallback BD após falha de PATCH).",
-        "fallback": reason,
-    }
-    try:
-        with psycopg.connect(dsn) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE adn_sync_jobs
-                    SET status = 'failed',
-                        completed_at = NOW(),
-                        updated_at = NOW(),
-                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
-                    WHERE id = %s::uuid AND status = 'running'
-                    """,
-                    (json.dumps(summary, ensure_ascii=False), jid),
-                )
-            conn.commit()
-        return True
-    except Exception as e:  # noqa: BLE001
-        print(
-            f"[nfse-portal-bridge] Fallback BD para failed também falhou: {e}",
-            file=sys.stderr,
-            flush=True,
-        )
-        return False
-
-
-def _force_complete_job_in_db(
-    dsn: str,
-    jid: str,
-    summary: dict,
-    *,
-    reason: str = "patch_completed_failed",
-) -> bool:
-    """
-    Fallback de recuperação quando o motor TERMINOU COM SUCESSO (artefactos subidos,
-    espelho gravado) mas o PATCH «completed» falhou (ex.: 500/503 transitórios do portal).
-
-    Marca directamente na BD `status='completed'` com o resumo já calculado, evitando
-    perder a corrida do motor. Se não fosse este fallback, o catch genérico do main loop
-    chamaria `_try_fail_job` e o utilizador veria FALHA mesmo com as notas baixadas.
-    """
-    if not jid:
-        return False
-    payload = dict(summary or {})
-    payload.setdefault("phase", "completed")
-    payload["fallback"] = reason
-    try:
-        with psycopg.connect(dsn) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE adn_sync_jobs
-                    SET status = 'completed',
-                        completed_at = NOW(),
-                        updated_at = NOW(),
-                        summary_json = COALESCE(summary_json, '{}'::jsonb) || %s::jsonb
-                    WHERE id = %s::uuid AND status = 'running'
-                    """,
-                    (json.dumps(payload, ensure_ascii=False, default=str), jid),
-                )
-            conn.commit()
-        return True
-    except Exception as e:  # noqa: BLE001
-        print(
-            f"[nfse-portal-bridge] Fallback BD para completed falhou: {e}",
-            file=sys.stderr,
-            flush=True,
-        )
-        return False
-
-
 def _try_fail_job(
     dsn: str,
     portal_url: str,
@@ -819,7 +610,7 @@ def _try_fail_job(
             file=sys.stderr,
             flush=True,
         )
-    if _force_fail_job_in_db(dsn, jid, msg, reason="patch_failed"):
+    if force_fail_job_in_db(dsn, jid, msg, reason="patch_failed"):
         print(
             f"[nfse-portal-bridge] Job {jid} marcado como failed via fallback BD.",
             flush=True,

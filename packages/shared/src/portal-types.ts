@@ -1,5 +1,6 @@
 export type ExecutionStatus = "running" | "success" | "failed";
 
+/** @deprecated Preferir `ExecutionDisplayTrigger` de `adn-job-types` para UI. */
 export type ExecutionTrigger = "signup" | "monthly" | "manual";
 
 export type Company = {

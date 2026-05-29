@@ -1,15 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { companies, companyMemberships, organizationMemberships } from "@repo/db";
 import type { Db } from "@repo/db";
-
-function strongerRole(
-  a: "user" | "admin" | null,
-  b: "user" | "admin" | null,
-): "user" | "admin" | null {
-  if (a === "admin" || b === "admin") return "admin";
-  if (a === "user" || b === "user") return "user";
-  return null;
-}
+import { strongerRole } from "./search-utils";
 
 /**
  * Papel efectivo na empresa: membresia directa na empresa ou na organização dona (ORG-09).

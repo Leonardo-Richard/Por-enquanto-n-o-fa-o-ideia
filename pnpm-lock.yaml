@@ -32,6 +32,9 @@ importers:
       '@repo/adn-internal':
         specifier: file:../packages/adn-internal
         version: link:../packages/adn-internal
+      '@repo/adn-server':
+        specifier: file:../packages/adn-server
+        version: link:../packages/adn-server
       '@repo/db':
         specifier: file:../packages/db
         version: link:../packages/db
@@ -93,6 +96,9 @@ importers:
       '@repo/adn-internal':
         specifier: file:../packages/adn-internal
         version: link:../packages/adn-internal
+      '@repo/adn-server':
+        specifier: file:../packages/adn-server
+        version: file:packages/adn-server(@babel/core@7.29.7)(@playwright/test@1.60.0)(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@repo/db':
         specifier: file:../packages/db
         version: link:../packages/db
@@ -196,12 +202,37 @@ importers:
       '@repo/db':
         specifier: file:../db
         version: link:../db
+      '@repo/shared':
+        specifier: file:../shared
+        version: link:../shared
       '@supabase/supabase-js':
         specifier: ^2.104.0
         version: 2.106.2
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.8
+        version: 3.2.4(@types/node@20.19.39)(jiti@2.6.1)(lightningcss@1.32.0)
+
+  packages/adn-server:
+    dependencies:
+      '@repo/adn-internal':
+        specifier: file:../adn-internal
+        version: link:../adn-internal
+      '@supabase/supabase-js':
+        specifier: ^2.104.0
+        version: 2.106.2
+      next:
+        specifier: ^15.5.15
+        version: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       zod:
         specifier: ^3.24.2
         version: 3.25.76
@@ -892,6 +923,18 @@ packages:
     resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
     engines: {node: '>=18'}
     hasBin: true
+
+  '@repo/adn-internal@file:packages/adn-internal':
+    resolution: {directory: packages/adn-internal, type: directory}
+
+  '@repo/adn-server@file:packages/adn-server':
+    resolution: {directory: packages/adn-server, type: directory}
+
+  '@repo/db@file:packages/db':
+    resolution: {directory: packages/db, type: directory}
+
+  '@repo/shared@file:packages/shared':
+    resolution: {directory: packages/shared, type: directory}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -3860,6 +3903,126 @@ snapshots:
   '@playwright/test@1.60.0':
     dependencies:
       playwright: 1.60.0
+
+  '@repo/adn-internal@file:packages/adn-internal(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)':
+    dependencies:
+      '@repo/db': file:packages/db(@upstash/redis@1.38.0)(kysely@0.28.17)
+      '@repo/shared': file:packages/shared
+      '@supabase/supabase-js': 2.106.2
+      drizzle-orm: 0.45.2(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@opentelemetry/api'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+
+  '@repo/adn-server@file:packages/adn-server(@babel/core@7.29.7)(@playwright/test@1.60.0)(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@repo/adn-internal': file:packages/adn-internal(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)
+      '@supabase/supabase-js': 2.106.2
+      next: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@babel/core'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@opentelemetry/api'
+      - '@planetscale/database'
+      - '@playwright/test'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - babel-plugin-macros
+      - babel-plugin-react-compiler
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - react
+      - react-dom
+      - sass
+      - sql.js
+      - sqlite3
+
+  '@repo/db@file:packages/db(@upstash/redis@1.38.0)(kysely@0.28.17)':
+    dependencies:
+      drizzle-orm: 0.45.2(@upstash/redis@1.38.0)(kysely@0.28.17)(postgres@3.4.9)
+      postgres: 3.4.9
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@opentelemetry/api'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - prisma
+      - sql.js
+      - sqlite3
+
+  '@repo/shared@file:packages/shared':
+    dependencies:
+      zod: 3.25.76
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 

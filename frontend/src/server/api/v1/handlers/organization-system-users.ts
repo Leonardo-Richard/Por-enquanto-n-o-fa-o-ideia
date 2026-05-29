@@ -9,13 +9,10 @@ import { getDb } from "@/lib/db";
 import { isSuperadmin } from "@/lib/authz";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
+import { sanitizeIlikeFragment } from "../lib/search-utils";
 
 function logSystemUsers(entry: Record<string, unknown>) {
   console.info(JSON.stringify({ scope: "organization_system_users", ...entry }));
-}
-
-function sanitizeIlikeFragment(raw: string): string {
-  return raw.trim().replace(/[%_\\]/g, "");
 }
 
 function toMemberListItem(row: {

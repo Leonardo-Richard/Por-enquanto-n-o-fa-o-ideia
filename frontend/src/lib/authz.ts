@@ -7,7 +7,7 @@ export function isSuperadmin(user: Pick<AuthUserRow, "isSuperadmin"> | { isSuper
   return user.isSuperadmin === true;
 }
 
-type AuthzUser = Pick<AuthUserRow, "isSuperadmin" | "id"> | { id: string; isSuperadmin?: boolean | null };
+export type AuthzUser = Pick<AuthUserRow, "isSuperadmin" | "id"> | { id: string; isSuperadmin?: boolean | null };
 
 export function canListCompany(user: AuthzUser, hasMembership: boolean): boolean {
   return isSuperadmin(user) || hasMembership;

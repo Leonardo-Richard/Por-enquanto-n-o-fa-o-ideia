@@ -2,7 +2,7 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { adnSyncJobs, companies } from "@repo/db";
 import type { AdnExecutionsOverviewResponse } from "@repo/shared";
-import { maskCnpjDigits } from "@repo/shared";
+import { adnSyncJobStatusSchema, adnSyncJobTriggerSchema, maskCnpjDigits } from "@repo/shared";
 import {
   adnExecutionsOverviewRateKey,
   getAdnPublicExecutionsOverviewLimit,
@@ -133,8 +133,12 @@ export async function handleGetAdnExecutionsOverview(request: Request, organizat
         row.summary_json && typeof row.summary_json === "object" ? row.summary_json : null;
       lastJobByCompanyId[row.company_id] = {
         jobId: row.id,
-        status: row.status,
-        trigger: row.trigger,
+        status: adnSyncJobStatusSchema.safeParse(row.status).success
+          ? adnSyncJobStatusSchema.parse(row.status)
+          : "failed",
+        trigger: adnSyncJobTriggerSchema.safeParse(row.trigger).success
+          ? adnSyncJobTriggerSchema.parse(row.trigger)
+          : "manual",
         updatedAt: new Date(row.updated_at).toISOString(),
         detailLabel: adnJobDetailLabel({ status: row.status, summary }),
       };

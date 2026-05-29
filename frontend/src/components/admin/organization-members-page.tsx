@@ -7,67 +7,11 @@ import { apiFetch } from "@/lib/api-client";
 import { fetchOrganizationSystemUserCatalog } from "@/lib/fetch-organization-system-user-catalog";
 import { FE_API_COPY, messageForFailedResponse, type FeApiFailureKind } from "@/lib/fe-api-error";
 import type { OrganizationDirectoryUserItem, OrganizationMemberListItem } from "@repo/shared";
-
-/** Copy PT-BR (spec UX §10 — chaves `mem.catalog.*` para rastreio i18n). */
-const mem = {
-  backToOrganizations: "Voltar às organizações",
-  listTitle: "Membros",
-  listSubtitle: (name: string) => `Organização: ${name}`,
-  searchLabel: "Filtrar por nome ou e-mail",
-  searchPlaceholder: "Filtra à medida que escreve…",
-  emptySystem: "Ainda não há utilizadores no sistema.",
-  emptyFilter: "Nenhum utilizador corresponde ao filtro.",
-  paginationStatus: (pageNum: number, visibleTotal: number) =>
-    `Página ${pageNum} · ${visibleTotal} utilizador(es) visíveis`,
-  truncationWarning: (maxLoaded: number) =>
-    `Lista truncada: foram carregados no máximo ${maxLoaded} utilizadores. Refine operações ou contacte suporte.`,
-  catalogRefetchRetry: "Tentar novamente",
-  liveRegionResults: (count: number) => `${count} resultados`,
-  tableSuperadmin: "Superadmin",
-  tableInOrg: "Nesta organização",
-  inOrgYes: "Membro",
-  inOrgNo: "—",
-  rowAddToOrg: "Adicionar à organização",
-  ctaAddExisting: "Adicionar membro existente",
-  ctaCreateUser: "Criar utilizador e adicionar",
-  roleAdmin: "Administrador da organização",
-  roleUser: "Utilizador da organização",
-  tableUser: "Utilizador",
-  tableRole: "Papel",
-  tableJob: "Cargo",
-  tableDept: "Departamento",
-  tablePhone: "Contato",
-  tableActions: "Acções",
-  rowEdit: "Editar",
-  rowRemove: "Remover vínculo",
-  superadminYes: "Sim",
-  superadminNo: "Não",
-  addExistingTitle: "Adicionar membro existente",
-  addExistingSubmit: "Adicionar à organização",
-  createUserTitle: "Criar utilizador e adicionar",
-  createUserSubmit: "Criar e associar",
-  editTitle: "Editar membro",
-  editSubmit: "Guardar alterações",
-  removeTitle: "Remover vínculo com esta organização?",
-  removeBody:
-    "O utilizador deixa de ter acesso a esta organização. A conta global não é eliminada.",
-  removeCta: "Remover vínculo",
-  errorLastAdmin: "É necessário pelo menos um administrador da organização. Promova outro membro a administrador antes de continuar.",
-  errorDuplicate: "Este utilizador já é membro desta organização.",
-  errorGeneric: "Não foi possível concluir a operação. Tente novamente.",
-  searching: "A procurar…",
-} as const;
-
-const MEMBERS_SERVER_SEARCH_ENABLED =
-  process.env.NEXT_PUBLIC_MEMBERS_SERVER_SEARCH_ENABLED === "1" ||
-  process.env.NEXT_PUBLIC_MEMBERS_SERVER_SEARCH_ENABLED === "true";
-
-function mapApiCodeToMessage(code: string | undefined): string | undefined {
-  if (code === "LAST_ORG_ADMIN") return mem.errorLastAdmin;
-  if (code === "MEMBERSHIP_DUPLICATE") return mem.errorDuplicate;
-  if (code === "USER_EMAIL_CONFLICT") return "Já existe uma conta com este e-mail.";
-  return undefined;
-}
+import {
+  MEMBERS_SERVER_SEARCH_ENABLED,
+  mapOrganizationMemberApiCodeToMessage,
+  organizationMembersCopy as mem,
+} from "./organization-members-copy";
 
 type Issue = { kind: FeApiFailureKind; message: string } | null;
 
@@ -143,7 +87,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
           let msg: string;
           if (result.code === "http") {
             const body = result.body as { code?: string; error?: string };
-            const mapped = mapApiCodeToMessage(body.code);
+            const mapped = mapOrganizationMemberApiCodeToMessage(body.code);
             const parsed = messageForFailedResponse(result.status, body);
             kind = parsed.kind;
             msg = mapped ?? parsed.text;
@@ -230,7 +174,7 @@ export function OrganizationMembersPage({ organizationId }: { organizationId: st
         if (!res.ok) {
           let kind: FeApiFailureKind;
           let msg: string;
-          const mapped = mapApiCodeToMessage((body as { code?: string })?.code);
+          const mapped = mapOrganizationMemberApiCodeToMessage((body as { code?: string })?.code);
           const parsed = messageForFailedResponse(res.status, body);
           kind = parsed.kind;
           msg = mapped ?? parsed.text;
@@ -647,7 +591,7 @@ function AddExistingModal(props: {
         return;
       }
       if (!res.ok) {
-        setAlert(mapApiCodeToMessage(body.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric);
+        setAlert(mapOrganizationMemberApiCodeToMessage(body.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric);
         return;
       }
       props.onDone();
@@ -780,7 +724,7 @@ function CreateUserModal(props: {
         return;
       }
       if (!res.ok) {
-        setAlert(mapApiCodeToMessage(body.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric);
+        setAlert(mapOrganizationMemberApiCodeToMessage(body.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric);
         return;
       }
       props.onDone();
@@ -928,7 +872,7 @@ function EditMemberModal(props: {
         return;
       }
       if (!res.ok) {
-        setAlert(mapApiCodeToMessage(body.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric);
+        setAlert(mapOrganizationMemberApiCodeToMessage(body.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric);
         return;
       }
       props.onDone();
@@ -1059,7 +1003,7 @@ function RemoveMemberModal(props: {
       }
       if (!res.ok && res.status !== 204) {
         setAlert(
-          mapApiCodeToMessage(body?.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric,
+          mapOrganizationMemberApiCodeToMessage(body?.code) ?? messageForFailedResponse(res.status, body).text ?? mem.errorGeneric,
         );
         return;
       }

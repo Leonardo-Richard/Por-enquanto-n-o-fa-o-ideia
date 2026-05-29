@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { canManageUsers, isSuperadmin } from "@/lib/authz";
 import { jsonError, toPublicApiError } from "../lib/errors";
 import { getAuthedSession } from "../lib/session";
+import { sanitizeIlikeFragment } from "../lib/search-utils";
 import { getEffectiveOrganizationId } from "../lib/active-org";
 
 export async function handleGetOrganizationsAccessible(request: Request) {
@@ -29,7 +30,11 @@ export async function handleGetOrganizationsAccessible(request: Request) {
     const superUser = isSuperadmin(session.user);
 
     const searchCond = q?.trim()
-      ? ilike(organizations.name, `%${q.trim()}%`)
+      ? (() => {
+          const safeQ = sanitizeIlikeFragment(q);
+          if (!safeQ) return undefined;
+          return ilike(organizations.name, `%${safeQ}%`);
+        })()
       : undefined;
 
     type OrgRow = InferSelectModel<typeof organizations>;

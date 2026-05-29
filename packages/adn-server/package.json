@@ -1,5 +1,5 @@
 {
-  "name": "@repo/adn-internal",
+  "name": "@repo/adn-server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,10 +17,9 @@
     "test": "npx vitest run"
   },
   "dependencies": {
-    "@repo/db": "file:../db",
-    "@repo/shared": "file:../shared",
+    "@repo/adn-internal": "file:../adn-internal",
     "@supabase/supabase-js": "^2.104.0",
-    "drizzle-orm": "^0.45.2",
+    "next": "^15.5.15",
     "zod": "^3.24.2"
   },
   "devDependencies": {
