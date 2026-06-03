@@ -16,6 +16,23 @@ export type PatchJobAuditFn = (
   },
 ) => Promise<void>;
 
+async function safeInsertPatchJobAudit(
+  insertAudit: PatchJobAuditFn,
+  db: Db,
+  input: Parameters<PatchJobAuditFn>[1],
+): Promise<void> {
+  try {
+    await insertAudit(db, input);
+  } catch (error) {
+    // A actualização do job já foi gravada; a auditoria é complementar.
+    // Falhas comuns: actor `system:adn-scheduler` em falta (migração não aplicada).
+    console.warn(
+      "[adn-internal] PATCH job: evento de auditoria ignorado (job actualizado na mesma):",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 export async function handlePatchJob(
   db: Db,
   jobId: string,
@@ -63,7 +80,7 @@ export async function handlePatchJob(
       actorKind: before.requestedByUserId ? "user" : "system",
     };
     if (nextStatus === "completed") {
-      await insertAudit(db, {
+      await safeInsertPatchJobAudit(insertAudit, db, {
         actorUserId: actorId,
         organizationId: before.organizationId,
         companyId: before.companyId,
@@ -71,7 +88,7 @@ export async function handlePatchJob(
         metadata: meta,
       });
     } else if (nextStatus === "failed") {
-      await insertAudit(db, {
+      await safeInsertPatchJobAudit(insertAudit, db, {
         actorUserId: actorId,
         organizationId: before.organizationId,
         companyId: before.companyId,

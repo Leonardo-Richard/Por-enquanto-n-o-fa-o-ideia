@@ -17,6 +17,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { classifyPopupFinalState } from "./popup-status.mjs";
 
 const DEFAULT_LOGIN_URL =
   "https://www.nfse.gov.br/EmissorNacional/Login?ReturnUrl=%2fEmissorNacional";
@@ -639,27 +640,49 @@ export async function runBrowserFlow(opts) {
     if (found > 0 && Date.now() - lastChange >= idleSettleSec * 1000) {
       break;
     }
-    /** Atalho: se popup mostra mensagem clara de «sem notas», sai sem erro. */
+    /** Atalho: popup sinalizou conclusão (sem notas ou falha de download). */
     try {
-      const semNotas = await popupSaysSemNotas(popupPage);
-      if (semNotas) {
-        const semNotasStatus = await readPopupStatus(popupPage).catch(
-          () => ({ statusText: "" }),
+      const popupState = await readPopupCompletionState(popupPage);
+      const finalKind = classifyPopupFinalState(popupState);
+
+      if (finalKind.kind === "download_zero_of_found") {
+        const popupDiagInfo = await capturePopupDiagnostics(popupPage, opts.outputDir).catch(
+          (e) => `(popup diag falhou: ${e?.message || e})`,
         );
+        await context.close().catch(() => {});
+        process.stderr.write(
+          "STDERR_CAT_EXTENSION A extensão encontrou notas mas não entregou ficheiros " +
+            `(0 baixadas de ${finalKind.foundCount} encontradas). ` +
+            "Verifique pasta de download, ADN_BROWSER_COMPACT_ZIP e permissões do Chrome. " +
+            `exit_path=download_zero_of_found\n` +
+            `[diag] popup status: disabled=${popupState.buttonDisabled} ` +
+            `text=${JSON.stringify(popupState.statusText)}\n` +
+            `[diag] popup ${popupDiagInfo}\n`,
+        );
+        emitFinalDiagnosticSnapshot(opts.outputDir, artifactSince, {
+          found,
+          totalZipsIngested,
+          totalZipsFromDownloads,
+        });
+        process.stderr.write(
+          `[adn-playwright-motor] exit_path=download_zero_of_found exit_code=12 found=${found} ` +
+            `encontradas_extensao=${finalKind.foundCount} ` +
+            `zips_extraidos=${totalZipsIngested} zips_de_downloads=${totalZipsFromDownloads}\n`,
+        );
+        process.exit(12);
+      }
+
+      if (finalKind.kind === "sem_notas") {
         process.stderr.write(
           "[adn-playwright-motor] popup sinalizou ausência de notas no período (CONFIRMADO: botão enabled + sem progresso); " +
-            `status=${JSON.stringify(semNotasStatus.statusText)} ` +
+            `status=${JSON.stringify(popupState.statusText)} ` +
             `exit_path=sem_notas xmls=${found} zips_extraidos=${totalZipsIngested} ` +
             `zips_de_downloads=${totalZipsFromDownloads}\n`,
         );
-        // Capturar screenshot do popup para o user confirmar visualmente.
-        const semNotasDiag = await capturePopupDiagnostics(
-          popupPage,
-          opts.outputDir,
-        ).catch(() => "(popup diag falhou)");
+        const semNotasDiag = await capturePopupDiagnostics(popupPage, opts.outputDir).catch(
+          () => "(popup diag falhou)",
+        );
         process.stderr.write(`[adn-playwright-motor] ${semNotasDiag}\n`);
-        // Snapshot final dos paths que monitoramos — útil para depurar se de
-        // facto a extensão diz «sem notas» mas há um ZIP esquecido algures.
         emitFinalDiagnosticSnapshot(opts.outputDir, artifactSince, {
           totalZipsIngested,
           totalZipsFromDownloads,
@@ -1702,60 +1725,18 @@ async function capturePopupDiagnostics(popupPage, outputDir) {
   return info;
 }
 
-async function popupSaysSemNotas(popupPage) {
-  /**
-   * MUITO IMPORTANTE: a extensão «Baixar NFSe» itera mês a mês e durante o
-   * processo emite mensagens transientes do tipo «Sem notas para Jan/2026» ou
-   * «Mês 8 de 12 concluído». Se reagirmos imediatamente a um «Sem notas» do
-   * `#status`, o motor sai antes da extensão acabar (caso visto: motor exit=0
-   * com 0 XMLs reais).
-   *
-   * Regras para considerar "sem notas no período" como ESTADO FINAL:
-   *   1. O texto tem de afirmar explicitamente conclusão global («concluído»,
-   *      «finalizado», «encerrado», «não foram encontradas notas no período»,
-   *      etc.) ou similar, NÃO um mês individual.
-   *   2. O botão «Iniciar Download» tem de estar ENABLED (`buttonDisabled=false`),
-   *      sinal de que a extensão não está a trabalhar.
-   *   3. NÃO pode haver um status de progresso activo do tipo
-   *      «Mês N de M», «Aguardando próximo mês», «Baixando», «Processando».
-   *
-   * Devolve `false` em qualquer dúvida — preferimos o motor esperar até ao
-   * timeout do que sair cedo demais.
-   */
+async function readPopupCompletionState(popupPage) {
   try {
-    const state = await popupPage.evaluate(() => {
-      const s = document.getElementById("status");
-      const text = s ? (s.textContent || "").trim() : "";
+    return await popupPage.evaluate(() => {
+      const st = document.getElementById("status");
+      const statusText = st ? (st.textContent || "").trim() : "";
       const fullText = (document.body.innerText || "").trim();
-      const btn = document.querySelector("#startDownload, button.start-download, button[type='submit']");
-      const disabled = btn ? !!btn.disabled : null;
-      return { statusText: text, fullText, disabled };
+      const btn = document.querySelector("#startDownloadBtn");
+      const buttonDisabled = btn ? !!btn.disabled : null;
+      return { statusText, fullText, buttonDisabled };
     });
-    const { statusText, fullText, disabled } = state;
-    if (!statusText && !fullText) return false;
-    const haystack = `${statusText}\n${fullText}`;
-
-    // Sinais de progresso → não está terminado, ignorar.
-    if (
-      /m[êe]s\s+\d+\s+de\s+\d+/i.test(haystack) ||
-      /aguardando\s+pr[oó]ximo/i.test(haystack) ||
-      /baixando|processando|carregando|iniciando/i.test(haystack)
-    ) {
-      return false;
-    }
-
-    // Se o botão ainda está disabled, a extensão ainda está a trabalhar.
-    if (disabled === true) return false;
-
-    // Sinais de conclusão global "sem notas".
-    const concluded =
-      /n[ãa]o\s+(foram\s+)?(encontradas?|h[aá])\s+notas\s+(no\s+per[ií]odo|para\s+o\s+per[ií]odo)/i.test(haystack) ||
-      /nenhuma\s+nota\s+(foi\s+)?(encontrada|emitida|recebida)\s+(no|para\s+o)\s+per[ií]odo/i.test(haystack) ||
-      /(processo|download)\s+(conclu[ií]do|finalizado).*0\s+notas/i.test(haystack) ||
-      /per[ií]odo\s+sem\s+notas/i.test(haystack);
-    return concluded;
   } catch {
-    return false;
+    return { statusText: "", fullText: "", buttonDisabled: null };
   }
 }
 
