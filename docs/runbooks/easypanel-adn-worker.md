@@ -10,7 +10,21 @@ Este runbook descreve um **segundo serviço** no Easypanel que corre `poll_jobs.
 
 1. Confirme que o portal responde em **HTTPS** (ex.: `https://auto-….easypanel.host`).
 2. **Remova** `API_INTERNAL_URL` se apontar para `http://localhost:3001` e só existir um processo na porta **3000** (imagem `Dockerfile` do repo).
-3. No mesmo serviço, mantenha pelo menos:
+3. **Postgres Supabase — evite colisão de `DATABASE_URL`:** alguns painéis injectam `DATABASE_URL` para um Postgres interno (user `postgres` / password errada → erro `28P01`). Preferir **variáveis separadas** (suportado pelo portal):
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://bvmjwzjpalkfdgaumlva.supabase.co
+   SUPABASE_DB_HOST=aws-1-sa-east-1.pooler.supabase.com
+   SUPABASE_DB_PORT=6543
+   SUPABASE_DB_POOLER=transaction
+   SUPABASE_DB_PASSWORD=<password do Supabase Connect → Session/Transaction pooler>
+   ```
+
+   Opcional: em vez de `DATABASE_URL`, use `PORTAL_DATABASE_URL=postgresql://…` (tem precedência).
+
+4. **Diagnóstico após deploy:** `GET /api/health/db` com header `Authorization: Bearer <CRON_SECRET>` — devolve `host`, `user`, `source` e se a ligação funciona (sem expor password).
+
+5. No mesmo serviço, mantenha pelo menos:
    - `DATABASE_URL`
    - `ADN_WORKER_HMAC_SECRET` (valor forte, partilhado com o worker)
    - `SUPABASE_SERVICE_ROLE_KEY`, bucket ADN, etc. (já necessários ao portal)

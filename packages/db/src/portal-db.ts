@@ -2,12 +2,20 @@ import { loadEnvConfig } from "@next/env";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createDb, type Db } from "./client";
+import {
+  normalizePostgresUrl,
+  resolveDatabaseUrlFromEnv,
+} from "./resolve-database-url";
+
+export {
+  DATABASE_URL_FALLBACK_KEYS,
+  databaseUrlFromComponents,
+  parseDatabaseUrlForDiagnostics,
+  resolveDatabaseUrlFromEnv,
+  supabaseProjectRefFromPublicUrl,
+} from "./resolve-database-url";
 
 let triedLoadRootEnv = false;
-
-function databaseUrlFromEnv(): string | undefined {
-  return process.env["DATABASE_URL"];
-}
 
 function stripBom(s: string): string {
   return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
@@ -62,9 +70,10 @@ function readDatabaseUrlFromDisk(): string | undefined {
 }
 
 function tryLoadEnvFromMonorepo() {
-  if (databaseUrlFromEnv() || triedLoadRootEnv) return;
+  if (resolveDatabaseUrlFromEnv(process.env) || triedLoadRootEnv) return;
   triedLoadRootEnv = true;
-  const dev = process.env.NODE_ENV !== "production";
+  if (process.env.NODE_ENV === "production") return;
+  const dev = true;
   let dir = process.cwd();
   for (let i = 0; i < 16; i++) {
     for (const basename of [".env", ".env.local"] as const) {
@@ -82,8 +91,8 @@ function tryLoadEnvFromMonorepo() {
 
 export function requireDatabaseUrl(): string {
   tryLoadEnvFromMonorepo();
-  let url = databaseUrlFromEnv()?.trim();
-  if (!url) {
+  let url = resolveDatabaseUrlFromEnv(process.env)?.url;
+  if (!url && process.env.NODE_ENV !== "production") {
     url = readDatabaseUrlFromDisk();
     if (url) {
       process.env["DATABASE_URL"] = url;
@@ -91,10 +100,10 @@ export function requireDatabaseUrl(): string {
   }
   if (!url) {
     throw new Error(
-      "DATABASE_URL não definido (nem em process.env nem em .env/.env.local acessível a partir do cwd).",
+      "DATABASE_URL não definido. Use PORTAL_DATABASE_URL, DATABASE_URL ou SUPABASE_DB_PASSWORD + SUPABASE_DB_HOST (+ NEXT_PUBLIC_SUPABASE_URL).",
     );
   }
-  const trimmed = url.trim();
+  const trimmed = normalizePostgresUrl(url);
   if (/^https?:\/\//i.test(trimmed)) {
     throw new Error(
       "DATABASE_URL não pode ser https://… (URL do projeto). No Supabase use a URI Postgres: postgresql://… (Connection string → Transaction pooler ou Session).",
