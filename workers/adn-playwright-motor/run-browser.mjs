@@ -1451,6 +1451,11 @@ async function waitForAuthenticatedPortal(page, timeoutMs) {
   const start = Date.now();
   let lastUrl = "";
   let lastLog = 0;
+  let chromeErrorRetries = 0;
+  const maxChromeErrorRetries = Math.max(
+    0,
+    Number.parseInt(process.env.ADN_BROWSER_CERT_ERROR_RETRIES || "2", 10) || 2,
+  );
   while (Date.now() - start < timeoutMs) {
     const url = page.url();
     if (
@@ -1458,6 +1463,31 @@ async function waitForAuthenticatedPortal(page, timeoutMs) {
       !/\/Login/i.test(url)
     ) {
       return;
+    }
+    if (/^chrome-error:\/\//i.test(url) && chromeErrorRetries < maxChromeErrorRetries) {
+      chromeErrorRetries += 1;
+      process.stderr.write(
+        `[adn-playwright-motor] waitForAuthenticatedPortal: chrome-error detectado ` +
+          `(tentativa ${chromeErrorRetries}/${maxChromeErrorRetries}). ` +
+          "Provável falha TLS/certificado — a recarregar…\n" +
+          "[hint] Confirme certificado na loja Pessoal do Windows, execute o worker como " +
+          "Administrador (policies AutoSelect) e teste login manual no mesmo perfil Chrome.\n",
+      );
+      try {
+        await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
+      } catch (e) {
+        dlog(`reload após chrome-error falhou: ${e?.message || e}`);
+        try {
+          const loginUrl =
+            (process.env.ADN_NFSE_LOGIN_URL || "").trim() || DEFAULT_LOGIN_URL;
+          await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 90_000 });
+          await clickCertificadoDigitalIfPresent(page);
+        } catch (e2) {
+          dlog(`re-login após chrome-error falhou: ${e2?.message || e2}`);
+        }
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+      continue;
     }
     /**
      * Periodicamente loga a URL actual para sabermos onde o portal ficou

@@ -459,16 +459,24 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
     #   - `Chromium` → Chromium build (Chrome for Testing IGNORA estas policies, mas
     #     mantemos para outros Chromium builds com policy management activo)
     ps_script = (
+        "$ErrorActionPreference='Stop';"
         "$rule=$env:ADN_RULE;"
+        "$reasons=@();"
         "foreach ($root in 'HKLM:','HKCU:') {"
         "  foreach ($brand in 'Google\\Chrome','Microsoft\\Edge','Chromium') {"
         "    $key=\"$root\\SOFTWARE\\Policies\\$brand\\AutoSelectCertificateForUrls\";"
         "    try {"
-        "      New-Item -Path $key -Force | Out-Null;"
-        "      Set-ItemProperty -Path $key -Name '1' -Value $rule -Type String"
-        "    } catch { }"
+        "      New-Item -Path $key -Force -ErrorAction Stop | Out-Null;"
+        "      Set-ItemProperty -Path $key -Name '1' -Value $rule -Type String -ErrorAction Stop;"
+        "      $actual=(Get-ItemProperty -Path $key -Name '1' -ErrorAction Stop).'1';"
+        "      if ($actual -ne $rule) { throw \"valor escrito difere (got=$actual)\" }"
+        "      $reasons += \"$root\\$brand ok\""
+        "    } catch {"
+        "      $reasons += \"$root\\$brand fail:$($_.Exception.Message)\""
+        "    }"
         "  }"
-        "}"
+        "};"
+        "Write-Output ($reasons -join '; ')"
     )
     env = os.environ.copy()
     env["ADN_RULE"] = rule
@@ -491,11 +499,34 @@ def _set_chrome_autoselect_policy(subject_cn: str) -> dict[str, Any]:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         return {"set": False, "reason": f"powershell_error:{type(e).__name__}"}
-    if proc.returncode == 0:
-        return {"set": True, "reason": "ok", "subjectCn": subject_cn, "pattern": pattern}
+    out = (proc.stdout or "").strip()
+    if proc.returncode == 0 and " ok" in out:
+        has_hkcu = any(tok.startswith("HKCU:") and tok.endswith("ok") for tok in out.split("; "))
+        has_hklm = any(tok.startswith("HKLM:") and tok.endswith("ok") for tok in out.split("; "))
+        scope = (
+            "machine+user"
+            if has_hklm and has_hkcu
+            else ("machine_only" if has_hklm else "user_only" if has_hkcu else "none")
+        )
+        if not has_hkcu and not has_hklm:
+            return {
+                "set": False,
+                "reason": "registry_write_failed",
+                "details": out,
+                "stderr": (proc.stderr or "")[:200],
+            }
+        return {
+            "set": True,
+            "reason": "ok",
+            "subjectCn": subject_cn,
+            "pattern": pattern,
+            "scope": scope,
+            "details": out,
+        }
     return {
         "set": False,
         "reason": f"ps_rc_{proc.returncode}",
+        "details": out,
         "stderr": (proc.stderr or "")[:200],
     }
 
