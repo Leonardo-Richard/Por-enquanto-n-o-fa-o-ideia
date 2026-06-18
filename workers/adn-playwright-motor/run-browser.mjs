@@ -1732,28 +1732,25 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
 
   /**
    * **CRÍTICO**: liga a opção "Compactar em .zip". Caso contrário, a extensão
-   * baixa **um XML individual por nota** (com nome UUID sem extensão `.xml`)
-   * e depois apaga-os após zipar (alguns ficam «Removido» no histórico do
-   * Chrome), deixando o `outputDir` sem nada que o motor possa apanhar.
+   * baixa **um XML individual por nota** via `chrome.downloads.download` (URL
+   * directa — o portal aceita navegação, mas bloqueia `fetch()` nos links
+   * Download/NFSe com HTTP 403).
    *
-   * Com `compactZip=true`, a extensão entrega **um único ZIP** com todos os
-   * XMLs lá dentro — o nosso `ingestZipDownloads` descomprime e o motor
-   * acha os XML normalmente.
+   * Com `compactZip=true`, a extensão usa `fetch()` + JSZip — falha no portal
+   * actual ("Não é possível fazer downloading do XML por esse Link").
    *
-   * Pode ser desligado por `ADN_BROWSER_COMPACT_ZIP=0` (não recomendado).
+   * Pode ser desligado por `ADN_BROWSER_COMPACT_ZIP=0` (recomendado até patch v3).
    */
   const compactZip = process.env.ADN_BROWSER_COMPACT_ZIP !== "0";
-  if (compactZip) {
-    const compactResult = await popupPage.evaluate(() => {
-      /**
-       * O checkbox pode ter id, name ou label diferente conforme a versão da
-       * extensão. Tentamos vários selectores antes de desistir.
-       */
+  motorLog(`ADN_BROWSER_COMPACT_ZIP=${process.env.ADN_BROWSER_COMPACT_ZIP ?? "(unset)"} → compactZip=${compactZip}`);
+
+  const setZipCheckbox = async (checked) => {
+    return await popupPage.evaluate((wantChecked) => {
       const candidates = [
-        '#chkZip',
-        '#compactZip',
-        '#compactarZip',
-        '#zip',
+        "#chkZip",
+        "#compactZip",
+        "#compactarZip",
+        "#zip",
         'input[type="checkbox"][name*="zip" i]',
         'input[type="checkbox"][id*="zip" i]',
         'input[type="checkbox"][id*="compact" i]',
@@ -1761,18 +1758,14 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
       for (const sel of candidates) {
         const el = document.querySelector(sel);
         if (el && el.type === "checkbox") {
-          if (!el.checked) {
-            el.checked = true;
+          if (el.checked !== wantChecked) {
+            el.checked = wantChecked;
             el.dispatchEvent(new Event("input", { bubbles: true }));
             el.dispatchEvent(new Event("change", { bubbles: true }));
           }
           return { selector: sel, checked: el.checked };
         }
       }
-      /**
-       * Fallback: procura por label contendo «compactar» / «zip» e clica no
-       * checkbox associado.
-       */
       const labels = Array.from(document.querySelectorAll("label"));
       for (const lbl of labels) {
         const txt = (lbl.textContent || "").toLowerCase();
@@ -1781,8 +1774,8 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
             lbl.querySelector('input[type="checkbox"]') ||
             (lbl.htmlFor && document.getElementById(lbl.htmlFor));
           if (cb && cb.type === "checkbox") {
-            if (!cb.checked) {
-              cb.checked = true;
+            if (cb.checked !== wantChecked) {
+              cb.checked = wantChecked;
               cb.dispatchEvent(new Event("input", { bubbles: true }));
               cb.dispatchEvent(new Event("change", { bubbles: true }));
             }
@@ -1791,9 +1784,20 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
         }
       }
       return { selector: null, checked: false };
-    });
+    }, checked);
+  };
+
+  if (compactZip) {
+    const compactResult = await setZipCheckbox(true);
     process.stderr.write(
       `[adn-playwright-motor] compactar-em-zip: selector=${JSON.stringify(compactResult.selector)} checked=${compactResult.checked}\n`,
+    );
+  } else {
+    const compactResult = await setZipCheckbox(false);
+    process.stderr.write(
+      `[adn-playwright-motor] compactar-em-zip DESLIGADO (ADN_BROWSER_COMPACT_ZIP=0): ` +
+        `selector=${JSON.stringify(compactResult.selector)} checked=${compactResult.checked} ` +
+        `(downloads individuais via chrome.downloads — evita fetch 403 do portal)\n`,
     );
   }
 
@@ -1815,6 +1819,13 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
       `status=${JSON.stringify(initial.statusText)} ` +
       `date_start=${initial.dateStartValue} date_end=${initial.dateEndValue}\n`,
   );
+  const zipState = await readPopupDetailedDiagnostics(popupPage).catch(() => null);
+  if (zipState) {
+    motorLog(
+      `popup pré-click zipChecked=${zipState.zipChecked} tipo=${zipState.tipo} ` +
+        `datas=${zipState.dateStart}..${zipState.dateEnd}`,
+    );
+  }
 
   /**
    * Click real (force=true salta verificações de visibilidade/overlay; o popup foi
