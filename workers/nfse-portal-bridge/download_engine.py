@@ -189,7 +189,7 @@ def run_playwright_motor_subprocess(
 
     stderr = proc.stderr or ""
     stdout = proc.stdout or ""
-    combined = (stderr + "\n" + stdout)[-8000:]
+    combined = (stderr + "\n" + stdout)[-24000:]
     category = map_exit_and_stderr_to_category(proc.returncode, combined)
     return (proc.returncode, combined, category)
 

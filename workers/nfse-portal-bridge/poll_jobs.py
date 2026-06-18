@@ -337,11 +337,12 @@ def process_one_job(job: dict, dsn: str, portal_url: str, secret: str, nfse: Pat
                 label = "motor_B stderr/stdout (últimas linhas)"
                 if code == 0:
                     label = "motor_B stderr (diagnóstico — exit=0)"
+                max_lines = 150 if code != 0 else 60
                 print(
                     f"[nfse-portal-bridge] {label}:",
                     flush=True,
                 )
-                for line in tail_for_console.splitlines()[-60:]:
+                for line in tail_for_console.splitlines()[-max_lines:]:
                     print(f"    {line}", flush=True)
             if code != 0:
                 job_log(jid, "motor_B", f"falha exit={code} category={cat}")

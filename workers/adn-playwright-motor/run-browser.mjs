@@ -35,6 +35,78 @@ function dlog(msg) {
   }
 }
 
+/** Logs de diagnóstico sempre visíveis (stderr do worker). */
+function motorLog(msg) {
+  process.stderr.write(`[adn-playwright-motor] ${msg}\n`);
+}
+
+/** Captura console/pageerror do popup e do portal (inclui `[ADN patch]` da extensão). */
+function attachPageConsoleLogging(page, label) {
+  page.on("console", (msg) => {
+    const type = msg.type();
+    const text = msg.text();
+    const interesting =
+      text.includes("[ADN patch]") ||
+      text.includes("portalFetch") ||
+      text.includes("Erro") ||
+      type === "error" ||
+      type === "warning" ||
+      process.env.ADN_BROWSER_DEBUG === "1";
+    if (interesting) {
+      motorLog(`${label} console.${type}: ${text.slice(0, 800)}`);
+    }
+  });
+  page.on("pageerror", (err) => {
+    motorLog(`${label} pageerror: ${err?.message || err}`);
+  });
+}
+
+function extensionPatchMarkerOnDisk(extDir) {
+  const popupJs = path.join(extDir, "popup.js");
+  if (!fs.existsSync(popupJs)) return "";
+  const raw = fs.readFileSync(popupJs, "utf8");
+  if (raw.includes("ADN_AUTOMATION_PATCH v2")) return "v2";
+  if (raw.includes("ADN_AUTOMATION_PATCH v1")) return "v1";
+  return "";
+}
+
+async function verifyExtensionPatchRuntime(popupPage, extDir) {
+  const disk = extensionPatchMarkerOnDisk(extDir);
+  let runtime = false;
+  try {
+    runtime = await popupPage.evaluate(
+      () =>
+        typeof _getNormalPortalTabId === "function" &&
+        typeof _portalFetchViaTab === "function",
+    );
+  } catch (e) {
+    motorLog(`extension patch runtime check erro: ${e?.message || e}`);
+  }
+  motorLog(
+    `extension patch disk=${disk || "NAO"} runtime=${runtime ? "SIM" : "NAO"} dir=${path.resolve(extDir)}`,
+  );
+  if (!disk) {
+    motorLog(
+      "AVISO CRITICO: extensao sem patch de automacao. Correr: " +
+        `node scripts/patch-adn-extension-automation.mjs ${path.resolve(extDir)}`,
+    );
+    motorLog(
+      "Sem patch, portalFetch no popup nao envia cookies → 0 XML, chrome://downloads vazio, exit 12.",
+    );
+  } else if (!runtime) {
+    motorLog(
+      "AVISO: patch no disco mas funcoes ausentes no popup em runtime — reinicie o worker ou apague o perfil Chrome.",
+    );
+  }
+  if (process.env.ADN_REQUIRE_EXTENSION_PATCH === "1" && (!disk || !runtime)) {
+    process.stderr.write(
+      "STDERR_CAT_EXTENSION patch ADN_AUTOMATION obrigatorio (ADN_REQUIRE_EXTENSION_PATCH=1) mas ausente.\n",
+    );
+    process.exit(12);
+  }
+  return { disk, runtime };
+}
+
 function fmtIsoDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -346,6 +418,7 @@ export async function runBrowserFlow(opts) {
    */
   const cdpDownloadDir = path.resolve(opts.outputDir);
   fs.mkdirSync(cdpDownloadDir, { recursive: true });
+  const cdpStats = { willBegin: 0, completed: 0, canceled: 0, lastSuggested: "" };
 
   /**
    * Lê o ficheiro `Preferences` REAL que o Chrome escreveu após arrancar e
@@ -370,6 +443,7 @@ export async function runBrowserFlow(opts) {
   }
 
   const portalPage = await context.newPage();
+  attachPageConsoleLogging(portalPage, "portal");
 
   /**
    * Aplica `Browser.setDownloadBehavior` ao browser inteiro via CDP. Funciona
@@ -400,6 +474,8 @@ export async function runBrowserFlow(opts) {
      * no histórico do Chrome (UUIDs sem extensão).
      */
     cdp.on("Browser.downloadWillBegin", (event) => {
+      cdpStats.willBegin += 1;
+      cdpStats.lastSuggested = event.suggestedFilename || "";
       process.stderr.write(
         `[adn-playwright-motor] CDP downloadWillBegin guid=${event.guid} ` +
           `suggested=${JSON.stringify(event.suggestedFilename)} ` +
@@ -407,6 +483,8 @@ export async function runBrowserFlow(opts) {
       );
     });
     cdp.on("Browser.downloadProgress", (event) => {
+      if (event.state === "completed") cdpStats.completed += 1;
+      if (event.state === "canceled") cdpStats.canceled += 1;
       if (event.state === "completed" || event.state === "canceled") {
         process.stderr.write(
           `[adn-playwright-motor] CDP downloadProgress guid=${event.guid} ` +
@@ -457,6 +535,8 @@ export async function runBrowserFlow(opts) {
     await portalPage
       .waitForLoadState("networkidle", { timeout: 30_000 })
       .catch(() => {});
+    await logPortalTabState(portalPage, "pos-listagem");
+    await logDownloadEnvironment(profileDir, opts.outputDir, extDir);
   } catch (e) {
     await context.close().catch(() => {});
     process.stderr.write(`STDERR_CAT_PORTAL falha ao abrir ${listingUrl}: ${e?.message || e}\n`);
@@ -504,7 +584,9 @@ export async function runBrowserFlow(opts) {
   let popupPage;
   try {
     popupPage = await context.newPage();
+    attachPageConsoleLogging(popupPage, "popup");
     await popupPage.goto(popupUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await verifyExtensionPatchRuntime(popupPage, extDir);
   } catch (e) {
     /** Captura screenshots de diagnóstico antes de fechar o contexto. */
     const diagInfo = await captureDiagnostics(context, opts.outputDir).catch(
@@ -646,18 +728,22 @@ export async function runBrowserFlow(opts) {
       );
       if (st.statusText !== lastStatusText) {
         lastStatusText = st.statusText;
+        const portal = await readPortalTabBrief(portalPage);
         process.stderr.write(
           `[adn-playwright-motor] popup status @${elapsedSec}s: ` +
             `disabled=${st.buttonDisabled} text=${JSON.stringify(st.statusText)} ` +
             `xmls=${found} zips=${totalZipsIngested}+${totalZipsFromDownloads} ` +
-            `out_recent=${outRecent} dl_recent=${dlRecent}\n`,
+            `out_recent=${outRecent} dl_recent=${dlRecent} ` +
+            `cdp_dl=${cdpStats.willBegin}/${cdpStats.completed} ` +
+            `portal=${JSON.stringify(portal)}\n`,
         );
       } else {
         process.stderr.write(
           `[adn-playwright-motor] heartbeat @${elapsedSec}s: ` +
             `xmls=${found} zips_extraidos=${totalZipsIngested} ` +
             `zips_downloads=${totalZipsFromDownloads} ` +
-            `out_recent=${outRecent} dl_recent=${dlRecent}\n`,
+            `out_recent=${outRecent} dl_recent=${dlRecent} ` +
+            `cdp_dl=${cdpStats.willBegin}/${cdpStats.completed}\n`,
         );
       }
     }
@@ -672,8 +758,16 @@ export async function runBrowserFlow(opts) {
       const finalKind = classifyPopupFinalState(popupState);
 
       if (finalKind.kind === "download_zero_of_found") {
+        const popupDiag = await readPopupDetailedDiagnostics(popupPage).catch(() => null);
+        const portalDiag = await readPortalTabBrief(portalPage).catch(() => ({}));
         const popupDiagInfo = await capturePopupDiagnostics(popupPage, opts.outputDir).catch(
           (e) => `(popup diag falhou: ${e?.message || e})`,
+        );
+        const extless = snapshotRecentFiles(opts.outputDir, artifactSince, 30).filter(
+          (f) => !/\.[a-z0-9]{1,6}$/i.test(path.basename(f.path)),
+        );
+        const crdownloads = snapshotRecentFiles(opts.outputDir, artifactSince, 10).filter((f) =>
+          f.path.toLowerCase().endsWith(".crdownload"),
         );
         await context.close().catch(() => {});
         process.stderr.write(
@@ -683,6 +777,15 @@ export async function runBrowserFlow(opts) {
             `exit_path=download_zero_of_found\n` +
             `[diag] popup status: disabled=${popupState.buttonDisabled} ` +
             `text=${JSON.stringify(popupState.statusText)}\n` +
+            `[diag] popup fullText=${JSON.stringify((popupState.fullText || "").slice(0, 1500))}\n` +
+            (popupDiag ? `[diag] popup detail: ${JSON.stringify(popupDiag)}\n` : "") +
+            `[diag] portal tab: ${JSON.stringify(portalDiag)}\n` +
+            `[diag] cdp_downloads willBegin=${cdpStats.willBegin} completed=${cdpStats.completed} ` +
+            `canceled=${cdpStats.canceled} lastSuggested=${JSON.stringify(cdpStats.lastSuggested)}\n` +
+            `[diag] outputDir sem_extensao=${extless.length} crdownload=${crdownloads.length}\n` +
+            `[diag] downloadPath=${cdpDownloadDir}\n` +
+            `[hint] Se cdp_downloads=0/0, a extensão falhou ao buscar XML (cookies). ` +
+            "Execute: node scripts/patch-adn-extension-automation.mjs <pasta-extensão>\n" +
             `[diag] popup ${popupDiagInfo}\n`,
         );
         emitFinalDiagnosticSnapshot(opts.outputDir, artifactSince, {
@@ -1647,6 +1750,7 @@ async function driveExtensionPopup(popupPage, { tipoNota, dateFrom, dateTo }) {
        * extensão. Tentamos vários selectores antes de desistir.
        */
       const candidates = [
+        '#chkZip',
         '#compactZip',
         '#compactarZip',
         '#zip',
@@ -1778,6 +1882,64 @@ async function driveExtensionPopupWithRetry(popupPage, { tipoNota, dateFrom, dat
  * Lê o `#status` actual do popup (texto curto + se o botão ficou disabled — sinal
  * que a extensão começou a processar). Tolerante a popup fechado.
  */
+async function readPortalTabBrief(portalPage) {
+  try {
+    return await portalPage.evaluate(() => ({
+      url: location.href,
+      title: document.title,
+      hasLogin: /\/Login/i.test(location.href),
+      bodySnippet: (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 120),
+    }));
+  } catch (e) {
+    return { error: e?.message || String(e) };
+  }
+}
+
+async function logPortalTabState(portalPage, label) {
+  const info = await readPortalTabBrief(portalPage);
+  motorLog(
+    `portal-tab ${label}: url=${info.url || "?"} login=${info.hasLogin} ` +
+      `snippet=${JSON.stringify(info.bodySnippet || "")}`,
+  );
+}
+
+function logDownloadEnvironment(profileDir, outputDir, extDir) {
+  motorLog(`download outputDir=${path.resolve(outputDir)}`);
+  motorLog(`download chromeProfile=${path.resolve(profileDir)}`);
+  const ingestDirs = getDownloadIngestDirs(profileDir);
+  motorLog(`download ingestDirs=${ingestDirs.join(" | ") || "(nenhum)"}`);
+  const prefsPath = path.join(profileDir, "Default", "Preferences");
+  if (fs.existsSync(prefsPath)) {
+    try {
+      const prefs = JSON.parse(fs.readFileSync(prefsPath, "utf8"));
+      motorLog(
+        `download chromePrefs.default_directory=${JSON.stringify(prefs?.download?.default_directory)} ` +
+          `prompt=${prefs?.download?.prompt_for_download}`,
+      );
+    } catch (e) {
+      motorLog(`download chromePrefs leitura falhou: ${e?.message || e}`);
+    }
+  }
+  const marker = extensionPatchMarkerOnDisk(extDir);
+  motorLog(
+    `extension popup.js patch_automation=${marker || "NAO — correr patch-adn-extension-automation.mjs"}`,
+  );
+}
+
+async function readPopupDetailedDiagnostics(popupPage) {
+  return await popupPage.evaluate(() => {
+    const status = document.getElementById("status");
+    const statusHtml = status ? status.innerHTML.slice(0, 2000) : "";
+    const statusText = status ? (status.textContent || "").trim() : "";
+    const zipChecked = !!document.getElementById("chkZip")?.checked;
+    const tipo = document.body.getAttribute("data-nfse-type") || "";
+    const dateStart = (document.getElementById("dateStart") || {}).value || "";
+    const dateEnd = (document.getElementById("dateEnd") || {}).value || "";
+    const customFolder = !!document.getElementById("chkEscolherPasta")?.checked;
+    return { statusText, statusHtml, zipChecked, tipo, dateStart, dateEnd, customFolder };
+  });
+}
+
 async function readPopupStatus(popupPage) {
   try {
     return await popupPage.evaluate(() => {

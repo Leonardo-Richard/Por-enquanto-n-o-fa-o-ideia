@@ -118,6 +118,39 @@ Se ao fim do timer (`ADN_BROWSER_WAIT_ARTIFACTS_SEC`) ainda não houver `.xml`, 
 
 Esse snapshot é incluído no `summaryJson.stderr_tail` do PATCH `failed` no portal, permitindo descobrir se o ZIP caiu fora da pasta esperada ou ficou em `.crdownload` (download interrompido por TLS, popup bloqueado, etc.).
 
+### 5.1. Exit 12 — «0 baixadas de N encontradas» (chrome://downloads vazio)
+
+Sintoma típico no log:
+
+```
+STDERR_CAT_EXTENSION ... 0 baixadas de 82 encontradas ... exit_path=download_zero_of_found
+[diag] cdp_downloads willBegin=0 completed=0
+```
+
+**Causa:** a extensão encontra notas no background, mas o `fetch()` do **popup** (origem `chrome-extension://`) no Chrome for Testing **não envia cookies** da sessão NFS-e → todos os XML falham → nenhum `chrome.downloads.download` é disparado.
+
+**Correção obrigatória no servidor** (além de `git pull`):
+
+```cmd
+node scripts/patch-adn-extension-automation.mjs C:\adn\extensao
+```
+
+Confirme no log do worker:
+
+```
+[adn-playwright-motor] extension patch disk=v2 runtime=SIM
+[adn-playwright-motor] popup console.log: [ADN patch] portalFetch via tabId=...
+[adn-playwright-motor] CDP downloadWillBegin ...
+```
+
+Se `disk=NAO` ou `runtime=NAO`, o patch não está activo — o job vai falhar sempre com exit 12.
+
+| Variável | Notas |
+| -------- | ----- |
+| `ADN_PLAYWRIGHT_CHANNEL` | **Comentar** no `.env` — usar Chromium bundled (Chrome for Testing), não Chrome estável 137+. |
+| `ADN_REQUIRE_EXTENSION_PATCH` | `1` = aborta cedo se patch ausente (opcional, diagnóstico). |
+| `ADN_BROWSER_DEBUG` | `1` = mais linhas de console do popup/portal no stderr. |
+
 ## 6. Versões Playwright / Chromium
 
 Após `npm install` em `workers/adn-playwright-motor`, registar no controlo de mudanças:

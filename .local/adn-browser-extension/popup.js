@@ -176,6 +176,67 @@ document.addEventListener('DOMContentLoaded', function () {
     return currentWindow.id;
   }
 
+
+  // ADN_AUTOMATION_PATCH v1
+  async function _getNormalPortalTabId() {
+    try {
+      const tabs = await chrome.tabs.query({ url: 'https://www.nfse.gov.br/*' });
+      const normal = tabs.find((t) => !t.incognito);
+      return normal ? normal.id : tabs[0] ? tabs[0].id : null;
+    } catch (e) {
+      console.warn('[ADN patch] _getNormalPortalTabId:', e);
+      return null;
+    }
+  }
+
+  async function _portalFetchViaTab(tabId, fetchUrl) {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async (url) => {
+        try {
+          const resp = await fetch(url, { credentials: 'include', redirect: 'follow' });
+          const ct = (resp.headers.get('content-type') || '').toLowerCase();
+          if (ct.includes('pdf') || ct.includes('octet-stream')) {
+            const buf = await resp.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let bin = '';
+            for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            return { ok: resp.ok, status: resp.status, url: resp.url, b64: btoa(bin), binary: true };
+          }
+          const text = await resp.text();
+          return { ok: resp.ok, status: resp.status, url: resp.url, text, binary: false };
+        } catch (e) {
+          return { ok: false, status: 0, url, error: e.message };
+        }
+      },
+      args: [fetchUrl],
+    });
+    const result = results?.[0]?.result;
+    if (!result || result.error) {
+      throw new Error(result?.error || 'Erro ao buscar dados do portal (aba NFS-e).');
+    }
+    if (result.binary) {
+      const bin = atob(result.b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const ab = bytes.buffer;
+      return {
+        ok: result.ok,
+        status: result.status,
+        url: result.url,
+        text: async () => new TextDecoder().decode(ab),
+        arrayBuffer: async () => ab,
+      };
+    }
+    return {
+      ok: result.ok,
+      status: result.status,
+      url: result.url,
+      text: async () => result.text,
+      arrayBuffer: async () => new TextEncoder().encode(result.text).buffer,
+    };
+  }
+
   // Fetch que funciona em contexto normal e anônimo
   // Em modo anônimo, executa o fetch dentro da aba do portal via chrome.scripting.executeScript
   async function portalFetch(url, options = {}) {
@@ -198,6 +259,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const result = results?.[0]?.result;
       if (!result || result.error) throw new Error(result?.error || 'Erro ao buscar dados do portal.');
       return { ok: result.ok, status: result.status, url: result.url, text: async () => result.text };
+    }
+    const tabIdNormal = await _getNormalPortalTabId();
+    if (tabIdNormal) {
+      return _portalFetchViaTab(tabIdNormal, url);
     }
     return fetch(url, { credentials: 'include', ...options });
   }
