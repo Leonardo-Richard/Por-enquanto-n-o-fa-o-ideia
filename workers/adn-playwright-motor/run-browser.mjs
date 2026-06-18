@@ -582,7 +582,7 @@ export async function runBrowserFlow(opts) {
       lastChange = Date.now();
     }
 
-    const movedFromDl = ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
+    const movedFromDl = ingestZipsFromUserDownloads(opts.outputDir, artifactSince, profileDir);
     if (movedFromDl > 0) {
       totalZipsFromDownloads += movedFromDl;
       lastChange = Date.now();
@@ -616,8 +616,11 @@ export async function runBrowserFlow(opts) {
        * impossível diagnosticar quando a extensão baixa para outra pasta.
        */
       const outRecent = snapshotRecentFiles(opts.outputDir, artifactSince, 50).length;
-      const dlDir = userDownloadsDir();
-      const dlRecent = dlDir ? snapshotRecentFiles(dlDir, artifactSince, 50).length : 0;
+      const ingestDirs = getDownloadIngestDirs(profileDir);
+      const dlRecent = ingestDirs.reduce(
+        (sum, d) => sum + snapshotRecentFiles(d, artifactSince, 50).length,
+        0,
+      );
       if (st.statusText !== lastStatusText) {
         lastStatusText = st.statusText;
         process.stderr.write(
@@ -747,7 +750,7 @@ export async function runBrowserFlow(opts) {
   //   3) descomprimir ZIPs novos,
   //   4) recontar XMLs.
   adoptExtensionlessDownloads(opts.outputDir, artifactSince);
-  totalZipsFromDownloads += ingestZipsFromUserDownloads(opts.outputDir, artifactSince);
+  totalZipsFromDownloads += ingestZipsFromUserDownloads(opts.outputDir, artifactSince, profileDir);
   totalZipsIngested += ingestZipDownloads(opts.outputDir, artifactSince);
   adoptExtensionlessDownloads(opts.outputDir, artifactSince);
   found = listNewXmlFilesRecursive(opts.outputDir, artifactSince).length;
@@ -854,12 +857,12 @@ function listFilesByExt(dir, sinceMs, extensions) {
  * SEMPRE rastreio de onde foi o download.
  */
 function emitFinalDiagnosticSnapshot(outputDir, sinceMs, summary) {
-  const dl = userDownloadsDir();
-  const profileDir = (process.env.ADN_CHROME_USER_DATA_DIR || "").trim();
+  const profileDirEnv = (process.env.ADN_CHROME_USER_DATA_DIR || "").trim();
+  const ingestDirs = getDownloadIngestDirs(profileDirEnv);
   const places = [
     ["outputDir", outputDir],
-    dl ? ["downloadsDir", dl] : null,
-    profileDir ? ["chromeProfile", profileDir] : null,
+    ...ingestDirs.map((d, i) => [`downloadDir${i + 1}`, d]),
+    profileDirEnv ? ["chromeProfile", profileDirEnv] : null,
   ].filter(Boolean);
   process.stderr.write(
     `[adn-playwright-motor] snapshot final: xmls=${summary.found || 0} ` +
@@ -953,6 +956,34 @@ function userDownloadsDir() {
     if (fs.existsSync(c)) return c;
   }
   return null;
+}
+
+/**
+ * Pastas onde procurar ZIPs/XML da extensão além do `outputDir` configurado.
+ * Inclui Downloads do utilizador, Downloads do perfil Playwright (`Default/Downloads`)
+ * e paths extra em `ADN_BROWSER_DOWNLOAD_FALLBACK_DIRS` (separados por `;`).
+ */
+function getDownloadIngestDirs(profileDir) {
+  const dirs = new Set();
+  const userDl = userDownloadsDir();
+  if (userDl) dirs.add(path.resolve(userDl));
+  if (profileDir) {
+    dirs.add(path.join(profileDir, "Default", "Downloads"));
+  }
+  const extra = (process.env.ADN_BROWSER_DOWNLOAD_FALLBACK_DIRS || "").trim();
+  if (extra) {
+    for (const part of extra.split(/[;|]/)) {
+      const p = part.trim();
+      if (p) dirs.add(path.resolve(p));
+    }
+  }
+  return [...dirs].filter((d) => {
+    try {
+      return fs.existsSync(d) && fs.statSync(d).isDirectory();
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -1233,9 +1264,21 @@ function adoptExtensionlessDownloads(outputDir, sinceMs) {
  * eram ignorados. Como `sinceMs` é o início do job e o lock `playwright_browser_file_lock`
  * garante exclusividade, o risco de apanhar ZIP alheio é mínimo.
  */
-function ingestZipsFromUserDownloads(outputDir, sinceMs) {
-  const dl = userDownloadsDir();
-  if (!dl) return 0;
+function ingestZipsFromUserDownloads(outputDir, sinceMs, profileDir) {
+  const ingestDirs = getDownloadIngestDirs(profileDir);
+  if (!ingestDirs.length) return 0;
+  let totalMoved = 0;
+  for (const dl of ingestDirs) {
+    totalMoved += ingestZipsFromSingleDownloadDir(outputDir, sinceMs, dl);
+  }
+  return totalMoved;
+}
+
+/**
+ * Move ZIPs/XML recentes de uma pasta de download para `outputDir`.
+ * @param {string} dl
+ */
+function ingestZipsFromSingleDownloadDir(outputDir, sinceMs, dl) {
   let entries = [];
   try {
     entries = fs.readdirSync(dl, { withFileTypes: true });
@@ -1359,7 +1402,7 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
       moved += 1;
       process.stderr.write(
         `[adn-playwright-motor] ${kind} movido de Downloads para outputDir: ` +
-          `${ent.name} -> ${destBaseName} (${st.size}B)\n`,
+          `${ent.name} -> ${destBaseName} (${st.size}B) [de ${dl}]\n`,
       );
     } catch (e) {
       dlog(`falha ao mover ${ent.name} de Downloads: ${e?.message || e}`);
@@ -1377,7 +1420,7 @@ function ingestZipsFromUserDownloads(outputDir, sinceMs) {
     (process.env.ADN_BROWSER_DEBUG === "1" || moved === 0)
   ) {
     process.stderr.write(
-      `[adn-playwright-motor] scan ~/Downloads: total=${stats.totalEntries} ` +
+      `[adn-playwright-motor] scan ${dl}: total=${stats.totalEntries} ` +
         `older=${stats.olderThanSince} ` +
         `zip=${stats.extZip} xml=${stats.extXml} ` +
         `extless_xml=${stats.extlessXml} extless_zip=${stats.extlessZip} ` +
