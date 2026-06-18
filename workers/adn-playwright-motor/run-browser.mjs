@@ -141,6 +141,8 @@ function resolveTipoNota() {
 function configureChromeDownloadPreferences(profileDir, outputDir) {
   const defaultDir = path.join(profileDir, "Default");
   const prefsPath = path.join(defaultDir, "Preferences");
+  const resolvedOutputDir = path.resolve(outputDir);
+  fs.mkdirSync(resolvedOutputDir, { recursive: true });
   fs.mkdirSync(defaultDir, { recursive: true });
 
   let prefs = {};
@@ -152,7 +154,7 @@ function configureChromeDownloadPreferences(profileDir, outputDir) {
     }
   }
   prefs.download = prefs.download || {};
-  prefs.download.default_directory = outputDir;
+  prefs.download.default_directory = resolvedOutputDir;
   prefs.download.directory_upgrade = true;
   prefs.download.prompt_for_download = false;
   prefs.download.extensions_to_open = "";
@@ -165,7 +167,7 @@ function configureChromeDownloadPreferences(profileDir, outputDir) {
 
   try {
     fs.writeFileSync(prefsPath, JSON.stringify(prefs));
-    dlog(`Preferences actualizadas (download.default_directory=${outputDir})`);
+    dlog(`Preferences actualizadas (download.default_directory=${resolvedOutputDir})`);
   } catch (e) {
     process.stderr.write(
       `STDERR_CAT_DISK falha ao escrever Preferences do Chrome: ${e?.message || e}\n`,
@@ -554,6 +556,12 @@ export async function runBrowserFlow(opts) {
     process.exit(12);
   }
 
+  /** Após iniciar o download no popup, a aba activa tem de ser a listagem NFS-e. */
+  await portalPage.bringToFront().catch(() => {});
+  process.stderr.write(
+    "[adn-playwright-motor] portal tab trazida para frente (activeTab da extensão).\n",
+  );
+
   /**
    * Aguarda XML novos no outputDir (recursivo) com janela de estabilização.
    *
@@ -573,8 +581,23 @@ export async function runBrowserFlow(opts) {
   let lastStatusLog = 0;
   let lastStatusText = "";
   const statusLogInterval = 15_000;
+  let lastPortalBringFront = 0;
+  const portalTabKeepAliveMs = Math.max(
+    1000,
+    Number.parseInt(process.env.ADN_BROWSER_PORTAL_TAB_MS || "2500", 10) || 2500,
+  );
 
   while (Date.now() < deadline) {
+    /**
+     * A extensão usa `chrome.tabs.query({ active: true })` + `scripting.executeScript`
+     * na aba da listagem NFS-e. Se o popup ou outra aba roubar o foco, os downloads
+     * falham com erros incrementais (ex.: «20 erro(s)») e nenhum ZIP chega ao outputDir.
+     */
+    const nowLoop = Date.now();
+    if (nowLoop - lastPortalBringFront >= portalTabKeepAliveMs) {
+      lastPortalBringFront = nowLoop;
+      await portalPage.bringToFront().catch(() => {});
+    }
     // Adopta ficheiros sem extensão (UUIDs puros) ANTES de tudo — renomeia
     // XMLs individuais para `.xml` e ZIPs para `.zip` para o resto do pipeline.
     const adopted = adoptExtensionlessDownloads(opts.outputDir, artifactSince);
